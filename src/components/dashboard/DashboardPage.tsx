@@ -25,6 +25,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { buildWeekMetrics, formatMetricDisplay, formatPct } from "@/utils/metricCalculations"
 import { backfillHighScores } from "@/utils/highScores"
 import { fetchTJLifetimeHighs, TJLifetimeHighs } from "@/utils/tjHighScores"
+import { fetchMMLifetimeHighs, MMLifetimeHighs } from "@/utils/mmHighScores"
 import { formatWeekDate } from "@/utils/dateUtils"
 import type {
   WeeklyData, WeeklyDataSummary, Profile, MetricTarget, HealthScore, Actionable,
@@ -126,6 +127,8 @@ export function DashboardPage() {
   const [tjPrev, setTjPrev] = useState<TjWeeklyData | null>(null)
   const [tjLifetimeHighs, setTjLifetimeHighs] = useState<TJLifetimeHighs>({})
   const [expandedTJCards, setExpandedTJCards] = useState<Set<string>>(new Set())
+  const [mmLifetimeHighs, setMmLifetimeHighs] = useState<MMLifetimeHighs>({})
+  const [expandedMMRows, setExpandedMMRows] = useState<Set<string>>(new Set())
   const [salesData, setSalesData] = useState<SalesWeeklyData | null>(null)
   const [salesPrev, setSalesPrev] = useState<SalesWeeklyData | null>(null)
   const [mmData, setMmData] = useState<MmWeeklyData | null>(null)
@@ -775,15 +778,30 @@ export function DashboardPage() {
     </div>
   )
 
-  const MMContentRow = ({ title, icon: Icon, metrics, currentData, prevData }: { title: string, icon: any, metrics: any[], currentData: any, prevData: any }) => (
-    <div className="space-y-3 p-4">
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+  const MMContentRow = ({ title, icon: Icon, metrics, currentData, prevData }: { title: string, icon: any, metrics: any[], currentData: any, prevData: any }) => {
+    const isExpanded = expandedMMRows.has(title)
+    const toggle = () => {
+      const next = new Set(expandedMMRows)
+      next.has(title) ? next.delete(title) : next.add(title)
+      setExpandedMMRows(next)
+    }
+
+    return (
+      <div className="space-y-3 p-4">
+        <button
+          onClick={toggle}
+          className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground cursor-pointer select-none"
+        >
+          <span className="flex items-center gap-2">
             <Icon className="w-3 h-3" /> {title}
-        </p>
+          </span>
+          {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </button>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-6">
             {metrics.map((m: any) => {
                 const val = tjVal(currentData, m.id)
                 const prev = tjVal(prevData, m.id)
+                const high = mmLifetimeHighs[m.id]
                 return (
                     <div key={m.id} className="space-y-1">
                         <p className="text-[10px] font-bold text-muted-foreground uppercase whitespace-nowrap">{m.name}</p>
@@ -791,12 +809,26 @@ export function DashboardPage() {
                             <p className="text-xl font-black">{gFmt(val, { unit: m.unit })}</p>
                             <Delta current={val} previous={prev} unit={m.unit} invertColor={m.invertColor} />
                         </div>
+                        {isExpanded && (
+                            <div className="flex items-center gap-1 text-[10px] text-gold font-bold pt-1 border-t border-border/30">
+                                <Trophy className="w-2.5 h-2.5" />
+                                {high ? (
+                                    <span>
+                                        {gFmt(high.value, { unit: m.unit })}
+                                        <span className="opacity-60 font-normal ml-1">· {formatWeekDate(high.week)}</span>
+                                    </span>
+                                ) : (
+                                    <span className="text-muted-foreground italic font-normal">No data yet</span>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )
             })}
         </div>
-    </div>
-  )
+      </div>
+    )
+  }
 
   const [displayWeek, setDisplayWeek] = useState<string>('')
   
@@ -912,6 +944,10 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (session) fetchTJLifetimeHighs().then(setTjLifetimeHighs)
+  }, [session])
+
+  useEffect(() => {
+    if (session) fetchMMLifetimeHighs().then(setMmLifetimeHighs)
   }, [session])
 
   useEffect(() => {
