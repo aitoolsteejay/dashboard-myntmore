@@ -68,7 +68,7 @@ function RootComponent() {
 }
 
 function AppLayout() {
-  const { user, loading, isClient, userRole } = useAuth();
+  const { user, loading, isClient, isAdmin, userRole } = useAuth();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
 
@@ -79,14 +79,17 @@ function AppLayout() {
   // Profile is still being fetched if user exists but userRole hasn't resolved yet
   const profileLoading = !!user && userRole === null;
 
-  // Guard: redirect client users away from internal pages
+  // Guard: redirect client-only users away from internal pages. A user who is also
+  // an admin (e.g. a team member who is additionally one of the agency's clients)
+  // is left alone here — they can navigate to /portal on their own via the
+  // "View as client" link instead of being forced into it on every page.
   useEffect(() => {
     if (loading || profileLoading) return;
     if (!user) return;
-    if (isClient && !path.startsWith('/portal') && !path.startsWith('/login')) {
+    if (isClient && !isAdmin && !path.startsWith('/portal') && !path.startsWith('/login')) {
       navigate({ to: '/portal' });
     }
-  }, [loading, profileLoading, user, isClient, path]);
+  }, [loading, profileLoading, user, isClient, isAdmin, path]);
 
   if (loading || profileLoading) {
     return (

@@ -9,6 +9,7 @@ import {
   LogOut,
   CalendarCheck,
   BarChart2,
+  ArrowLeftRight,
 } from "lucide-react";
 import {
   Sidebar,
@@ -39,7 +40,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const { profile, isAdmin, signOut } = useAuth();
+  const { profile, isAdmin, clientRecord, signOut } = useAuth();
 
   const visible = items.filter((i) => !i.adminOnly || isAdmin);
 
@@ -96,6 +97,14 @@ export function AppSidebar() {
               {isAdmin ? "Admin" : profile.department || "Member"}
             </div>
           </div>
+        )}
+        {isAdmin && clientRecord && (
+          <SidebarMenuButton asChild>
+            <Link to="/portal" className="flex items-center gap-2">
+              <ArrowLeftRight className="h-4 w-4" />
+              {!collapsed && <span>View as client</span>}
+            </Link>
+          </SidebarMenuButton>
         )}
         <Button
           variant="ghost"

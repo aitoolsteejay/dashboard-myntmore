@@ -16,7 +16,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Legend
 } from 'recharts'
-import { LogOut, TrendingUp, Users, FileText, BarChart2, Loader2, ArrowUpRight, ArrowDownRight, Minus, Calendar, Table2 } from 'lucide-react'
+import { LogOut, TrendingUp, Users, FileText, BarChart2, Loader2, ArrowUpRight, ArrowDownRight, Minus, Calendar, Table2, ArrowLeftRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import myntmoreLogo from '@/assets/myntmore-logo.png'
 
@@ -438,6 +438,12 @@ export function ClientPortalPage() {
             <Badge variant="outline" className="text-xs font-bold border-gold/40 text-gold bg-gold/5">
               Campaign Tracker
             </Badge>
+            {isAdmin && (
+              <Button variant="outline" size="sm" onClick={() => navigate({ to: '/dashboard' })} className="gap-1.5 font-bold">
+                <ArrowLeftRight className="w-3.5 h-3.5" />
+                Back to Dashboard
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground gap-1.5">
               <LogOut className="w-3.5 h-3.5" />
               Sign out

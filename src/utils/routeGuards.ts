@@ -2,6 +2,10 @@ import { redirect } from '@tanstack/react-router'
 import { supabase } from '@/integrations/supabase/client'
 
 // Blocks client-role users (and signed-out users) from internal/admin pages.
+// A user who is *both* an admin and linked to a client record (e.g. a team member
+// who is also one of the agency's own clients) is allowed through here — they can
+// use the "View as client" link to switch to their portal instead of being forced
+// into it.
 export async function requireAdmin({ location }: { location: { href: string } }) {
   let { data: { session } } = await supabase.auth.getSession()
   if (!session) {
@@ -17,12 +21,13 @@ export async function requireAdmin({ location }: { location: { href: string } })
     throw redirect({ to: '/login', search: { redirect: location.href } })
   }
 
-  const [{ data: roleData }, { data: clientData }] = await Promise.all([
-    supabase.from('user_roles').select('role').eq('user_id', session.user.id).maybeSingle(),
-    supabase.from('clients').select('id').eq('user_id' as any, session.user.id).maybeSingle(),
-  ])
+  const { data: roleData } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', session.user.id)
+    .maybeSingle()
 
-  if (clientData || roleData?.role !== 'admin') {
+  if (roleData?.role !== 'admin') {
     throw redirect({ to: '/portal' })
   }
 }
