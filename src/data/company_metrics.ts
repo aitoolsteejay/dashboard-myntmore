@@ -53,13 +53,14 @@ export const TJ_PODCAST_METRICS: CompanyMetric[] = [
 
 export const MM_ADS_METRICS: CompanyMetric[] = [
   { id: 'MMA01', name: 'Google Ads Clicks', type: 'number' },
-  { id: 'MMA02', name: 'Google Ads Impressions', type: 'number' },
   { id: 'MMA03', name: 'Google Ads CTR', type: 'percentage' },
   { id: 'MMA04', name: 'Google Ads Cost', type: 'number', unit: '₹' },
-  { id: 'MMA05', name: 'Meta Ads CPC', type: 'number', unit: '₹' },
+  { id: 'MMA09', name: 'Google Ads Cost per Lead', type: 'number', unit: '₹' },
+  { id: 'MMA11', name: 'Google Ads Website Visits', type: 'number' },
   { id: 'MMA06', name: 'Meta Ads Cost', type: 'number', unit: '₹' },
-  { id: 'MMA07', name: 'Meta Ads Impressions', type: 'number' },
-  { id: 'MMA08', name: 'Meta Ads Reach', type: 'number' },
+  { id: 'MMA10', name: 'Meta Ads Cost per Lead', type: 'number', unit: '₹' },
+  { id: 'MMA12', name: 'Meta Ads Website Visits', type: 'number' },
+  { id: 'MMA13', name: 'Meta Ads Cost per Booked Call', type: 'number', unit: '₹' },
 ]
 
 export const TJ_VIDEO_METRICS: CompanyMetric[] = [

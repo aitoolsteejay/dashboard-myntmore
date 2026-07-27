@@ -1723,13 +1723,14 @@ export function DashboardPage() {
                         />
                         <MMContentRow title="Ads Performance" icon={TrendingUp} metrics={[
                             { id: 'MMA01', name: 'Google Clicks' },
-                            { id: 'MMA02', name: 'Google Impressions' },
                             { id: 'MMA03', name: 'Google CTR', unit: '%' },
                             { id: 'MMA04', name: 'Google Cost', unit: '₹' },
-                            { id: 'MMA05', name: 'Meta CPC', unit: '₹' },
+                            { id: 'MMA09', name: 'Google Cost/Lead', unit: '₹' },
+                            { id: 'MMA11', name: 'Google Website Visits' },
                             { id: 'MMA06', name: 'Meta Cost', unit: '₹' },
-                            { id: 'MMA07', name: 'Meta Impressions' },
-                            { id: 'MMA08', name: 'Meta Reach' },
+                            { id: 'MMA10', name: 'Meta Cost/Lead', unit: '₹' },
+                            { id: 'MMA12', name: 'Meta Website Visits' },
+                            { id: 'MMA13', name: 'Meta Cost/Booked Call', unit: '₹' },
                           ]} currentData={isMonthlyView ? monthMmAgg.ads : (mmData as any)?.ads} prevData={isMonthlyView ? null : (prevMmData as any)?.ads}
                         />
                       </>
