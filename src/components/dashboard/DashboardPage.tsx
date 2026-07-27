@@ -1767,8 +1767,7 @@ export function DashboardPage() {
                             { id: 'MMA11', name: 'Google Website Visits' },
                             { id: 'MMA06', name: 'Meta Cost', unit: '₹' },
                             { id: 'MMA10', name: 'Meta Cost/Lead', unit: '₹' },
-                            { id: 'MMA12', name: 'Meta Website Visits' },
-                            { id: 'MMA13', name: 'Meta Cost/Booked Call', unit: '₹' },
+                            { id: 'MMA12', name: 'Meta Lead Form Filled' },
                           ]} currentData={isMonthlyView ? monthMmAgg.ads : (mmData as any)?.ads} prevData={isMonthlyView ? null : (prevMmData as any)?.ads}
                         />
                       </>

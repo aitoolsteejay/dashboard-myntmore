@@ -59,8 +59,7 @@ export const MM_ADS_METRICS: CompanyMetric[] = [
   { id: 'MMA11', name: 'Google Ads Website Visits', type: 'number' },
   { id: 'MMA06', name: 'Meta Ads Cost', type: 'number', unit: '₹' },
   { id: 'MMA10', name: 'Meta Ads Cost per Lead', type: 'number', unit: '₹' },
-  { id: 'MMA12', name: 'Meta Ads Website Visits', type: 'number' },
-  { id: 'MMA13', name: 'Meta Ads Cost per Booked Call', type: 'number', unit: '₹' },
+  { id: 'MMA12', name: 'Meta Ads Lead Form Filled', type: 'number' },
 ]
 
 export const TJ_VIDEO_METRICS: CompanyMetric[] = [

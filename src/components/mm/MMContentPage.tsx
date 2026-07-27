@@ -245,7 +245,7 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 border-b pb-1">Meta Ads</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {MM_ADS_METRICS.filter(m => ['MMA06','MMA10','MMA12','MMA13'].includes(m.id)).map(m => renderMetricCard('ads', m))}
+                    {MM_ADS_METRICS.filter(m => ['MMA06','MMA10','MMA12'].includes(m.id)).map(m => renderMetricCard('ads', m))}
                   </div>
                 </div>
             </TabsContent>
