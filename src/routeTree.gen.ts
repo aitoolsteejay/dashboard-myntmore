@@ -9,95 +9,30 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TjPersonalBrandRouteImport } from './routes/tj-personal-brand'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as SalesRouteImport } from './routes/sales'
-import { Route as ReportsRouteImport } from './routes/reports'
-import { Route as ProcessesRouteImport } from './routes/processes'
-import { Route as PortalRouteImport } from './routes/portal'
-import { Route as MonthlyTargetsRouteImport } from './routes/monthly-targets'
-import { Route as MmContentRouteImport } from './routes/mm-content'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as FinanceRouteImport } from './routes/finance'
-import { Route as DataEntryRouteImport } from './routes/data-entry'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as ClientsRouteImport } from './routes/clients'
-import { Route as ActionablesRouteImport } from './routes/actionables'
-import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SettingsTeamRouteImport } from './routes/settings.team'
-import { Route as SettingsTargetsRouteImport } from './routes/settings.targets'
-import { Route as SettingsExportRouteImport } from './routes/settings.export'
+import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
+import { Route as ActionablesRouteImport } from './routes/actionables'
+import { Route as ClientsRouteImport } from './routes/clients'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DataEntryRouteImport } from './routes/data-entry'
+import { Route as FinanceRouteImport } from './routes/finance'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as MmContentRouteImport } from './routes/mm-content'
+import { Route as MonthlyTargetsRouteImport } from './routes/monthly-targets'
+import { Route as PortalRouteImport } from './routes/portal'
+import { Route as ProcessesRouteImport } from './routes/processes'
+import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as SalesRouteImport } from './routes/sales'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as TjPersonalBrandRouteImport } from './routes/tj-personal-brand'
 import { Route as ClientsIdRouteImport } from './routes/clients.$id'
+import { Route as SettingsExportRouteImport } from './routes/settings.export'
+import { Route as SettingsTargetsRouteImport } from './routes/settings.targets'
+import { Route as SettingsTeamRouteImport } from './routes/settings.team'
 
-const TjPersonalBrandRoute = TjPersonalBrandRouteImport.update({
-  id: '/tj-personal-brand',
-  path: '/tj-personal-brand',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SalesRoute = SalesRouteImport.update({
-  id: '/sales',
-  path: '/sales',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ReportsRoute = ReportsRouteImport.update({
-  id: '/reports',
-  path: '/reports',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProcessesRoute = ProcessesRouteImport.update({
-  id: '/processes',
-  path: '/processes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PortalRoute = PortalRouteImport.update({
-  id: '/portal',
-  path: '/portal',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MonthlyTargetsRoute = MonthlyTargetsRouteImport.update({
-  id: '/monthly-targets',
-  path: '/monthly-targets',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MmContentRoute = MmContentRouteImport.update({
-  id: '/mm-content',
-  path: '/mm-content',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FinanceRoute = FinanceRouteImport.update({
-  id: '/finance',
-  path: '/finance',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DataEntryRoute = DataEntryRouteImport.update({
-  id: '/data-entry',
-  path: '/data-entry',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ClientsRoute = ClientsRouteImport.update({
-  id: '/clients',
-  path: '/clients',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ActionablesRoute = ActionablesRouteImport.update({
-  id: '/actionables',
-  path: '/actionables',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AcceptInviteRoute = AcceptInviteRouteImport.update({
@@ -105,14 +40,84 @@ const AcceptInviteRoute = AcceptInviteRouteImport.update({
   path: '/accept-invite',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const ActionablesRoute = ActionablesRouteImport.update({
+  id: '/actionables',
+  path: '/actionables',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsTeamRoute = SettingsTeamRouteImport.update({
-  id: '/team',
-  path: '/team',
+const ClientsRoute = ClientsRouteImport.update({
+  id: '/clients',
+  path: '/clients',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DataEntryRoute = DataEntryRouteImport.update({
+  id: '/data-entry',
+  path: '/data-entry',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceRoute = FinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MmContentRoute = MmContentRouteImport.update({
+  id: '/mm-content',
+  path: '/mm-content',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MonthlyTargetsRoute = MonthlyTargetsRouteImport.update({
+  id: '/monthly-targets',
+  path: '/monthly-targets',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PortalRoute = PortalRouteImport.update({
+  id: '/portal',
+  path: '/portal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProcessesRoute = ProcessesRouteImport.update({
+  id: '/processes',
+  path: '/processes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SalesRoute = SalesRouteImport.update({
+  id: '/sales',
+  path: '/sales',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TjPersonalBrandRoute = TjPersonalBrandRouteImport.update({
+  id: '/tj-personal-brand',
+  path: '/tj-personal-brand',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClientsIdRoute = ClientsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ClientsRoute,
+} as any)
+const SettingsExportRoute = SettingsExportRouteImport.update({
+  id: '/export',
+  path: '/export',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsTargetsRoute = SettingsTargetsRouteImport.update({
@@ -120,15 +125,10 @@ const SettingsTargetsRoute = SettingsTargetsRouteImport.update({
   path: '/targets',
   getParentRoute: () => SettingsRoute,
 } as any)
-const SettingsExportRoute = SettingsExportRouteImport.update({
-  id: '/export',
-  path: '/export',
+const SettingsTeamRoute = SettingsTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
   getParentRoute: () => SettingsRoute,
-} as any)
-const ClientsIdRoute = ClientsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ClientsRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -288,102 +288,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/tj-personal-brand': {
-      id: '/tj-personal-brand'
-      path: '/tj-personal-brand'
-      fullPath: '/tj-personal-brand'
-      preLoaderRoute: typeof TjPersonalBrandRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sales': {
-      id: '/sales'
-      path: '/sales'
-      fullPath: '/sales'
-      preLoaderRoute: typeof SalesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reports': {
-      id: '/reports'
-      path: '/reports'
-      fullPath: '/reports'
-      preLoaderRoute: typeof ReportsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/processes': {
-      id: '/processes'
-      path: '/processes'
-      fullPath: '/processes'
-      preLoaderRoute: typeof ProcessesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/portal': {
-      id: '/portal'
-      path: '/portal'
-      fullPath: '/portal'
-      preLoaderRoute: typeof PortalRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/monthly-targets': {
-      id: '/monthly-targets'
-      path: '/monthly-targets'
-      fullPath: '/monthly-targets'
-      preLoaderRoute: typeof MonthlyTargetsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/mm-content': {
-      id: '/mm-content'
-      path: '/mm-content'
-      fullPath: '/mm-content'
-      preLoaderRoute: typeof MmContentRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/finance': {
-      id: '/finance'
-      path: '/finance'
-      fullPath: '/finance'
-      preLoaderRoute: typeof FinanceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/data-entry': {
-      id: '/data-entry'
-      path: '/data-entry'
-      fullPath: '/data-entry'
-      preLoaderRoute: typeof DataEntryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/clients': {
-      id: '/clients'
-      path: '/clients'
-      fullPath: '/clients'
-      preLoaderRoute: typeof ClientsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/actionables': {
-      id: '/actionables'
-      path: '/actionables'
-      fullPath: '/actionables'
-      preLoaderRoute: typeof ActionablesRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/accept-invite': {
@@ -393,18 +302,116 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcceptInviteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/actionables': {
+      id: '/actionables'
+      path: '/actionables'
+      fullPath: '/actionables'
+      preLoaderRoute: typeof ActionablesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings/team': {
-      id: '/settings/team'
-      path: '/team'
-      fullPath: '/settings/team'
-      preLoaderRoute: typeof SettingsTeamRouteImport
+    '/clients': {
+      id: '/clients'
+      path: '/clients'
+      fullPath: '/clients'
+      preLoaderRoute: typeof ClientsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/data-entry': {
+      id: '/data-entry'
+      path: '/data-entry'
+      fullPath: '/data-entry'
+      preLoaderRoute: typeof DataEntryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance': {
+      id: '/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof FinanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mm-content': {
+      id: '/mm-content'
+      path: '/mm-content'
+      fullPath: '/mm-content'
+      preLoaderRoute: typeof MmContentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/monthly-targets': {
+      id: '/monthly-targets'
+      path: '/monthly-targets'
+      fullPath: '/monthly-targets'
+      preLoaderRoute: typeof MonthlyTargetsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/portal': {
+      id: '/portal'
+      path: '/portal'
+      fullPath: '/portal'
+      preLoaderRoute: typeof PortalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/processes': {
+      id: '/processes'
+      path: '/processes'
+      fullPath: '/processes'
+      preLoaderRoute: typeof ProcessesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sales': {
+      id: '/sales'
+      path: '/sales'
+      fullPath: '/sales'
+      preLoaderRoute: typeof SalesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tj-personal-brand': {
+      id: '/tj-personal-brand'
+      path: '/tj-personal-brand'
+      fullPath: '/tj-personal-brand'
+      preLoaderRoute: typeof TjPersonalBrandRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clients/$id': {
+      id: '/clients/$id'
+      path: '/$id'
+      fullPath: '/clients/$id'
+      preLoaderRoute: typeof ClientsIdRouteImport
+      parentRoute: typeof ClientsRoute
+    }
+    '/settings/export': {
+      id: '/settings/export'
+      path: '/export'
+      fullPath: '/settings/export'
+      preLoaderRoute: typeof SettingsExportRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/targets': {
@@ -414,19 +421,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsTargetsRouteImport
       parentRoute: typeof SettingsRoute
     }
-    '/settings/export': {
-      id: '/settings/export'
-      path: '/export'
-      fullPath: '/settings/export'
-      preLoaderRoute: typeof SettingsExportRouteImport
+    '/settings/team': {
+      id: '/settings/team'
+      path: '/team'
+      fullPath: '/settings/team'
+      preLoaderRoute: typeof SettingsTeamRouteImport
       parentRoute: typeof SettingsRoute
-    }
-    '/clients/$id': {
-      id: '/clients/$id'
-      path: '/$id'
-      fullPath: '/clients/$id'
-      preLoaderRoute: typeof ClientsIdRouteImport
-      parentRoute: typeof ClientsRoute
     }
   }
 }
