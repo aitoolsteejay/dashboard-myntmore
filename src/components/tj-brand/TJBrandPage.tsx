@@ -31,57 +31,30 @@ import { getPreviousWeekStart, getWeekOptions } from "@/utils/weekUtils"
 import { formatWeekDate } from "@/utils/dateUtils"
 import { useAutoSave } from "@/hooks/useAutoSave"
 import { SaveIndicator } from "@/components/ui/SaveIndicator"
-
-// The JSON columns in tj_weekly_data that hold {metricId: {value, target}} maps —
-// used to scan every week's history for each metric's all-time high.
-const TJ_METRIC_COLUMNS = ['instagram', 'youtube', 'linkedin_newsletter', 'email_newsletter', 'podcast', 'video_pipeline'] as const
+import { fetchTJLifetimeHighs, TJLifetimeHighs } from "@/utils/tjHighScores"
 
 export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState('instagram')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  
+
   const weekOptions = useMemo(() => getWeekOptions(12), [])
   const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart())
 
-  // Lifetime high (all-time best week) per metric, computed from every week of
-  // history rather than a stored table — there's no separate highscores table for
-  // TJ's own metrics (unlike per-client metrics, which use `high_scores`).
-  const [lifetimeHighs, setLifetimeHighs] = useState<Record<string, { value: number; week: string }>>({})
-
-  const fetchLifetimeHighs = async () => {
-    const { data } = await supabase
-      .from('tj_weekly_data')
-      .select(`week_start, ${TJ_METRIC_COLUMNS.join(', ')}`)
-    if (!data) return
-
-    const highs: Record<string, { value: number; week: string }> = {}
-    for (const row of data as any[]) {
-      for (const column of TJ_METRIC_COLUMNS) {
-        const metrics = row[column] as Record<string, { value?: unknown }> | null
-        if (!metrics) continue
-        for (const [metricId, field] of Object.entries(metrics)) {
-          const n = Number(field?.value)
-          if (isNaN(n)) continue
-          if (!highs[metricId] || n > highs[metricId].value) {
-            highs[metricId] = { value: n, week: row.week_start }
-          }
-        }
-      }
-    }
-    setLifetimeHighs(highs)
-  }
+  // Lifetime high (all-time best week) per metric — see fetchTJLifetimeHighs for why
+  // this is computed on the fly rather than read from a stored table.
+  const [lifetimeHighs, setLifetimeHighs] = useState<TJLifetimeHighs>({})
 
   useEffect(() => {
-    fetchLifetimeHighs()
+    fetchTJLifetimeHighs().then(setLifetimeHighs)
   }, [])
 
   const { triggerSave, saveStatus, lastSaved } = useAutoSave({
     table: 'tj_weekly_data',
     matchColumns: { week_start: selectedWeek },
     debounceMs: 1500,
-    onSaveSuccess: () => { fetchLifetimeHighs() }
+    onSaveSuccess: () => { fetchTJLifetimeHighs().then(setLifetimeHighs) }
   })
 
   const [formData, setFormData] = useState<any>({

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { AlertCircle, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Users, Target, Activity, Instagram, Youtube, Mail, Mic, ArrowRight, LayoutDashboard, Send, Handshake, IndianRupee, FileText, Star, Globe, Linkedin, ChevronDown, ChevronUp, MessageSquare } from "lucide-react"
+import { AlertCircle, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Users, Target, Activity, Instagram, Youtube, Mail, Mic, ArrowRight, LayoutDashboard, Send, Handshake, IndianRupee, FileText, Star, Globe, Linkedin, ChevronDown, ChevronUp, MessageSquare, Trophy } from "lucide-react"
 // Removed lib/notifications import
 import { Gift, Cake, Calendar, Bell, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -24,6 +24,8 @@ import { calcRateCapped, readNum } from "@/utils/readMetric"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { buildWeekMetrics, formatMetricDisplay, formatPct } from "@/utils/metricCalculations"
 import { backfillHighScores } from "@/utils/highScores"
+import { fetchTJLifetimeHighs, TJLifetimeHighs } from "@/utils/tjHighScores"
+import { formatWeekDate } from "@/utils/dateUtils"
 import type {
   WeeklyData, WeeklyDataSummary, Profile, MetricTarget, HealthScore, Actionable,
   Campaign, MyntmoreProcess, ProcessUpdate, TjWeeklyData, SalesWeeklyData,
@@ -122,6 +124,8 @@ export function DashboardPage() {
   const [alerts, setAlerts] = useState<ClientAlertRow[]>([])
   const [tjData, setTjData] = useState<TjWeeklyData | null>(null)
   const [tjPrev, setTjPrev] = useState<TjWeeklyData | null>(null)
+  const [tjLifetimeHighs, setTjLifetimeHighs] = useState<TJLifetimeHighs>({})
+  const [expandedTJCards, setExpandedTJCards] = useState<Set<string>>(new Set())
   const [salesData, setSalesData] = useState<SalesWeeklyData | null>(null)
   const [salesPrev, setSalesPrev] = useState<SalesWeeklyData | null>(null)
   const [mmData, setMmData] = useState<MmWeeklyData | null>(null)
@@ -699,32 +703,63 @@ export function DashboardPage() {
     ads: aggregateChannelRows(monthMmRows, 'ads'),
   }
 
-  const TJChannelCard = ({ title, icon: Icon, metrics, currentData, prevData }: { title: string, icon: any, metrics: any[], currentData: any, prevData: any }) => (
-    <Card className="border shadow-sm bg-card h-full">
-      <CardHeader className="py-3 border-b bg-muted/20">
-        <CardTitle className="text-sm font-black flex items-center gap-2 uppercase tracking-wider">
-          <Icon className="w-4 h-4 text-gold" /> {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-4 space-y-2">
-        <div className="grid grid-cols-1 gap-1">
-          {metrics.map((m: any) => {
-            const current = tjVal(currentData, m.id)
-            const prev = tjVal(prevData, m.id)
-            return (
-              <div key={m.id} className="flex justify-between items-center text-[11px]">
-                <span className="text-muted-foreground">{m.name}</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">{gFmt(current, { unit: m.unit })}</span>
-                  <Delta current={current} previous={prev} unit={m.unit} />
+  const TJChannelCard = ({ title, icon: Icon, metrics, currentData, prevData }: { title: string, icon: any, metrics: any[], currentData: any, prevData: any }) => {
+    const isExpanded = expandedTJCards.has(title)
+    const toggle = () => {
+      const next = new Set(expandedTJCards)
+      next.has(title) ? next.delete(title) : next.add(title)
+      setExpandedTJCards(next)
+    }
+
+    return (
+      <Card className="border shadow-sm bg-card h-full">
+        <CardHeader
+          className="py-3 border-b bg-muted/20 flex-row items-center justify-between cursor-pointer select-none"
+          onClick={toggle}
+        >
+          <CardTitle className="text-sm font-black flex items-center gap-2 uppercase tracking-wider">
+            <Icon className="w-4 h-4 text-gold" /> {title}
+          </CardTitle>
+          {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </CardHeader>
+        <CardContent className="p-4 space-y-2">
+          <div className="grid grid-cols-1 gap-1">
+            {metrics.map((m: any) => {
+              const current = tjVal(currentData, m.id)
+              const prev = tjVal(prevData, m.id)
+              const high = tjLifetimeHighs[m.id]
+              return (
+                <div key={m.id} className={cn("py-0.5", isExpanded && "border-b border-border/30 last:border-0 pb-1.5")}>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-muted-foreground">{m.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">{gFmt(current, { unit: m.unit })}</span>
+                      <Delta current={current} previous={prev} unit={m.unit} />
+                    </div>
+                  </div>
+                  {isExpanded && (
+                    <div className="flex justify-between items-center text-[10px] mt-0.5">
+                      <span className="flex items-center gap-1 text-gold font-bold">
+                        <Trophy className="w-2.5 h-2.5" /> Lifetime High
+                      </span>
+                      {high ? (
+                        <span className="font-bold text-gold">
+                          {gFmt(high.value, { unit: m.unit })}
+                          <span className="opacity-60 font-normal ml-1">· {formatWeekDate(high.week)}</span>
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground italic">No data yet</span>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      </CardContent>
-    </Card>
-  )
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   const SalesOutreachCard = ({ title, metrics, currentData }: { title: string, metrics: any[], currentData: any }) => (
     <div className="space-y-3 p-4 bg-muted/10 rounded-lg border border-border/50 flex-1 min-w-[300px]">
@@ -873,6 +908,10 @@ export function DashboardPage() {
     if (session) {
       initWeek()
     }
+  }, [session])
+
+  useEffect(() => {
+    if (session) fetchTJLifetimeHighs().then(setTjLifetimeHighs)
   }, [session])
 
   useEffect(() => {
