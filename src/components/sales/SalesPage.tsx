@@ -34,7 +34,7 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { cn } from "@/lib/utils"
 import { BackButton } from "@/components/ui/BackButton"
-import { getCurrentWeekStart, getWeekOptions } from "@/utils/weekUtils"
+import { getPreviousWeekStart, getWeekOptions } from "@/utils/weekUtils"
 import { readSalesNum } from "@/utils/readMetric"
 import { useAutoSave } from "@/hooks/useAutoSave"
 import { SaveIndicator } from "@/components/ui/SaveIndicator"
@@ -49,7 +49,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
   const [saving, setSaving] = useState(false)
   
   const weekOptions = useMemo(() => getWeekOptions(12), [])
-  const [selectedWeek, setSelectedWeek] = useState(getCurrentWeekStart())
+  const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart())
 
   const { triggerSave, saveStatus, lastSaved } = useAutoSave({
     table: 'sales_weekly_data',

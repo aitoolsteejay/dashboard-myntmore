@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { BackButton } from "@/components/ui/BackButton"
-import { getCurrentWeekStart, getWeekEnd, getWeekLabel, getWeekOptions, isLastWeekOfMonth } from "@/utils/weekUtils"
+import { getPreviousWeekStart, getWeekEnd, getWeekLabel, getWeekOptions, isLastWeekOfMonth } from "@/utils/weekUtils"
 import { readMetric, formatMetricValue } from "@/utils/dataUtils"
 import { detectAndUpdateHighScores } from '@/utils/highScores'
 import { formatWeekDate } from '@/utils/dateUtils'
@@ -50,7 +50,7 @@ export function DataEntryPage() {
   const navigate = useNavigate()
   const weekOptions = useMemo(() => getWeekOptions(12), [])
   
-  const [selectedWeek, setSelectedWeek] = useState(getCurrentWeekStart())
+  const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart())
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'content' | 'leadgen'>('content')
   

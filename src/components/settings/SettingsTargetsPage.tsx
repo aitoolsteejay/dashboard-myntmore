@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from "@/integrations/supabase/client"
 import { useAuth } from "@/lib/auth"
 import { ALL_METRICS, Metric } from "@/data/metrics"
-import { getCurrentWeekStart, getWeekOptions, getWeekEnd, getWeekLabel } from "@/utils/weekUtils"
+import { getPreviousWeekStart, getWeekOptions, getWeekEnd, getWeekLabel } from "@/utils/weekUtils"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -108,7 +108,7 @@ export function SettingsTargetsPage() {
   const [activeSection, setActiveSection] = useState<'client' | 'sales'>('client')
   const [selectedClientId, setSelectedClientId] = useState<string>('')
   const [targetType, setTargetType] = useState<'weekly' | 'monthly'>('weekly')
-  const [selectedWeekStart, setSelectedWeekStart] = useState(getCurrentWeekStart())
+  const [selectedWeekStart, setSelectedWeekStart] = useState(getPreviousWeekStart())
   const [selectedMonth, setSelectedMonth] = useState(getMonthOptions()[0].period)
   const [targetValues, setTargetValues] = useState<Record<string, number>>({})
   const [previousTargets, setPreviousTargets] = useState<Record<string, number>>({})

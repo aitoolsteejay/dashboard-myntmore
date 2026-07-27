@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
-import { getCurrentWeekStart, getWeekOptions } from "@/utils/weekUtils";
+import { getPreviousWeekStart, getWeekOptions } from "@/utils/weekUtils";
 
 type Process = {
   id: string;
@@ -40,7 +40,8 @@ export function ProcessesPage({ embedded }: { embedded?: boolean } = {}) {
   const [newProcess, setNewProcess] = useState({ title: '', description: '', category: '', owner_id: '', priority: 'medium' });
   const [updateText, setUpdateText] = useState<Record<string, string>>({});
   
-  const currentWeek = getCurrentWeekStart();
+  // Process updates are entered for the week just finished, not the one still in progress.
+  const currentWeek = getPreviousWeekStart();
 
   const fetchData = async () => {
     setLoading(true);
@@ -217,11 +218,11 @@ export function ProcessesPage({ embedded }: { embedded?: boolean } = {}) {
 
               {activeTab === 'active' && (
                 <div className="bg-muted/30 p-3 rounded-lg border">
-                  <div className="text-xs font-bold mb-2">This week's update (Week of {new Date(currentWeek).toLocaleDateString()}):</div>
-                  <Textarea 
+                  <div className="text-xs font-bold mb-2">Last week's update (Week of {new Date(currentWeek).toLocaleDateString()}):</div>
+                  <Textarea
                     value={updateText[p.id] || ''}
                     onChange={(e) => setUpdateText({...updateText, [p.id]: e.target.value})}
-                    placeholder="Enter this week's progress..."
+                    placeholder="Enter last week's progress..."
                     className="h-20 text-sm mb-2"
                   />
                   <div className="flex justify-between items-center">
