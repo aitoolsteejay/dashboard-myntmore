@@ -28,460 +28,39 @@ import { formatWeekDate } from '@/utils/dateUtils'
 import { syncAllCampaignTotals } from '@/utils/campaignSync'
 import { calcRateCapped, fmtRate } from '@/utils/readMetric'
 import { SaveIndicator } from '../ui/SaveIndicator'
-import { useAutoSave } from '../../hooks/useAutoSave'
+import { useAutoSave, SaveStatus } from '../../hooks/useAutoSave'
 import { EditCampaignModal } from '../monday/EditCampaignModal'
 import type { WeeklyData, HighScore, MetricTarget, Campaign, CampaignWeeklyData, ContextNoteWithAuthor, ClientSettings } from '@/types'
 
 type ClientSummary = { id: string; name: string; company: string | null }
 
-function formatWeekPeriod(dateStr: string) {
-    const d = new Date(dateStr)
-    const startOfYear = new Date(d.getFullYear(), 0, 1);
-    const pastDaysOfYear = (d.getTime() - startOfYear.getTime()) / 86400000;
-    const weekNumber = Math.ceil((pastDaysOfYear + startOfYear.getDay() + 1) / 7);
-    return `${d.getFullYear()}-W${String(weekNumber).padStart(2, '0')}`
+interface LeadGenCampaignEntryProps {
+  selectedClientId: string | null
+  selectedWeek: string
+  weekOptions: { weekStart: string; weekEnd: string; label: string }[]
+  weeklyData: WeeklyData | null
+  activeTab: 'content' | 'leadgen'
+  campaigns: Campaign[]
+  setCampaigns: (campaigns: Campaign[]) => void
+  campaignWeeklyData: CampaignWeeklyData[]
+  formData: Record<string, any>
+  handleMetricChange: (metricId: string, field: 'value' | 'target' | 'note', value: any) => void
+  user: { id: string } | null | undefined
+  contentSaveStatus: SaveStatus
+  fetchData: () => Promise<void>
+  toggleCampaignStatus: (campaignId: string, currentStatus: string) => Promise<void>
+  deleteCampaign: (campaignId: string, name: string) => Promise<void>
+  showInactive: boolean
+  setShowInactive: (v: boolean) => void
+  setEditingCampaign: (c: Campaign | null) => void
 }
 
-
-export function DataEntryPage() {
-  const { user, isAdmin } = useAuth()
-  const showContentTab = true
-  const showLeadGenTab = true
-  const navigate = useNavigate()
-  const weekOptions = useMemo(() => getWeekOptions(12), [])
-  
-  const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart())
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'content' | 'leadgen'>('content')
-  
-  const [clients, setClients] = useState<ClientSummary[]>([])
-  const [clientSettings, setClientSettings] = useState<ClientSettings | null>(null)
-  const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null)
-  const [previousWeeklyData, setPreviousWeeklyData] = useState<WeeklyData | null>(null)
-  const [highScores, setHighScores] = useState<HighScore[]>([])
-  const [contextNotes, setContextNotes] = useState<ContextNoteWithAuthor[]>([])
-  const [targets, setTargets] = useState<MetricTarget[]>([])
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [campaignWeeklyData, setCampaignWeeklyData] = useState<CampaignWeeklyData[]>([])
-  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
-  
-  const [weeklyTargets, setWeeklyTargets] = useState<Record<string, number>>({})
-  const [monthlyTargets, setMonthlyTargets] = useState<Record<string, number>>({})
-  
-  const [showInactive, setShowInactive] = useState(false)
-  const [formData, setFormData] = useState<Record<string, any>>({})
-  const formDataRef = React.useRef(formData)
-  useEffect(() => {
-    formDataRef.current = formData
-  }, [formData])
-
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-
-  // Tracks the currently-selected client/week so an in-flight fetchData() call can
-  // tell, once its awaits resolve, whether the user has since switched to a
-  // different client/week — and if so, discard its (now stale) results instead of
-  // clobbering the newer selection's data.
-  const selectionRef = React.useRef({ clientId: selectedClientId, week: selectedWeek })
-  useEffect(() => {
-    selectionRef.current = { clientId: selectedClientId, week: selectedWeek }
-  }, [selectedClientId, selectedWeek])
-
-  const {
-    triggerSave: triggerContentSave,
-    saveNow: saveContentNow,
-    saveStatus: contentSaveStatus,
-    lastSaved: contentLastSaved,
-    cancelPendingAutoSave: cancelContentAutoSave
-  } = useAutoSave({
-    table: 'weekly_data',
-    matchColumns: {
-      client_id: selectedClientId || '',
-      week_start: selectedWeek
-    },
-    debounceMs: 1500,
-    onSaveSuccess: (savedCols) => {
-      // Use the client/week that was actually just written, not whatever happens
-      // to be selected right now — a queued flush can complete after the user has
-      // already moved on to a different client.
-      const clientId = savedCols?.client_id || selectedClientId
-      const week = savedCols?.week_start || selectedWeek
-      if (clientId && week) {
-        const currentContent = activeTab === 'content' ? formDataRef.current : (weeklyData?.content_metrics || {})
-        const currentLeadgen = activeTab === 'leadgen' ? formDataRef.current : (weeklyData?.leadgen_metrics || {})
-
-        detectAndUpdateHighScores(
-          clientId,
-          week,
-          currentContent as Record<string, unknown>,
-          currentLeadgen as Record<string, unknown>
-        ).catch(err => console.error('High score detection failed:', err))
-      }
-    }
-  })
-
-  const buildMetricsPayload = (metrics: Metric[], source: Record<string, any>) => {
-    const payload: Record<string, any> = {}
-    metrics.forEach((metric) => {
-      if (metric.type !== 'auto') payload[metric.id] = source[metric.id] || {}
-    })
-    return payload
-  }
-
-  const queueTabSave = (
-    source: Record<string, any>,
-    tab: 'content' | 'leadgen',
-    immediate = false,
-  ) => {
-    if (!selectedClientId || !selectedWeek) return
-
-    const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
-    const payload = {
-      week_end: weekInfo?.weekEnd || getWeekEnd(selectedWeek),
-      week_label: weekInfo?.label || getWeekLabel(selectedWeek),
-      ...(tab === 'content'
-        ? {
-            content_metrics: buildMetricsPayload(CONTENT_METRICS, source),
-            content_submitted_at: new Date().toISOString(),
-          }
-        : {
-            leadgen_metrics: buildMetricsPayload(LEADGEN_METRICS, source),
-            leadgen_submitted_at: new Date().toISOString(),
-          }),
-    }
-
-    if (immediate) saveContentNow(payload)
-    else triggerContentSave(payload)
-  }
-
-  useEffect(() => {
-    const fetchClients = async () => {
-      // Always fetch all active clients for everyone
-      const { data } = await supabase
-        .from('clients')
-        .select('id, name, company')
-        .eq('status', 'active')
-        .order('name')
-      setClients(data || [])
-      if (data && data.length > 0 && !selectedClientId) setSelectedClientId(data[0].id)
-    }
-
-    fetchClients()
-  }, [])
-
-  const fetchData = async () => {
-    if (!selectedClientId || !selectedWeek) return
-    const requestedClientId = selectedClientId
-    const requestedWeek = selectedWeek
-    const isStale = () =>
-      selectionRef.current.clientId !== requestedClientId || selectionRef.current.week !== requestedWeek
-    setLoading(true)
-    try {
-      const [
-        { data: settings },
-        { data: currentData },
-        { data: prevData },
-        { data: scores },
-        { data: notesData },
-        { data: targetsData },
-        { data: campaignsData },
-        { data: campaignWeeklyDataRes }
-      ] = await Promise.all([
-        supabase.from('client_settings').select('*').eq('client_id', selectedClientId).maybeSingle(),
-        supabase.from('weekly_data').select('*').eq('client_id', selectedClientId).eq('week_start', selectedWeek).maybeSingle(),
-        supabase.from('weekly_data').select('*').eq('client_id', selectedClientId).lt('week_start', selectedWeek).order('week_start', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('high_scores').select('*').eq('client_id', selectedClientId),
-        supabase.from('client_context_notes').select(`*, author:profiles!created_by(full_name)`).eq('client_id', selectedClientId).order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
-        supabase.from('targets').select('*').eq('client_id', selectedClientId),
-        supabase.from('campaigns').select('*').eq('client_id', selectedClientId).order('created_at'),
-        supabase.from('campaign_weekly_data').select('*').eq('client_id', selectedClientId).eq('week_start', selectedWeek)
-      ])
-      
-      // Load weekly/monthly targets separately
-      const month = selectedWeek.slice(0, 7)
-      const { data: wTargets } = await supabase
-        .from('targets')
-        .select('metric_id, target_value')
-        .eq('client_id', selectedClientId)
-        .eq('target_type', 'weekly')
-        .eq('period', selectedWeek)
-      const { data: mTargets } = await supabase
-        .from('targets')
-        .select('metric_id, target_value')
-        .eq('client_id', selectedClientId)
-        .eq('target_type', 'monthly')
-        .eq('period', month)
-        
-      // Bail out if the user switched client/week while these requests were in
-      // flight — an older, slower response must never overwrite a newer selection.
-      if (isStale()) return
-
-      const wMap: Record<string, number> = {}
-      wTargets?.forEach(t => { if (t.target_value !== null) wMap[t.metric_id] = t.target_value })
-      const mMap: Record<string, number> = {}
-      mTargets?.forEach(t => { if (t.target_value !== null) mMap[t.metric_id] = t.target_value })
-
-      setWeeklyTargets(wMap)
-      setMonthlyTargets(mMap)
-
-      setClientSettings(settings)
-      setWeeklyData(currentData)
-      setPreviousWeeklyData(prevData)
-      setHighScores(scores || [])
-      setContextNotes(notesData || [])
-      setTargets(targetsData || [])
-      setCampaigns(campaignsData || [])
-      setCampaignWeeklyData(campaignWeeklyDataRes || [])
-
-      // Pre-fill form
-      const initialForm: Record<string, any> = {}
-      ALL_METRICS.forEach(m => {
-        const metrics = (m.category === 'content' ? currentData?.content_metrics : currentData?.leadgen_metrics) as Record<string, any> | null | undefined
-        const val = metrics?.[m.id]
-        initialForm[m.id] = {
-          value: val?.value ?? (m.type === 'number' || m.type === 'slider' ? 0 : m.type === 'boolean' ? false : ''),
-          target: val?.target ?? (settings?.custom_targets as Record<string, any> | null)?.[m.id] ?? 0,
-          note: val?.note ?? ''
-        }
-      })
-      formDataRef.current = initialForm
-      setFormData(initialForm)
-    } catch (error: any) {
-      if (!isStale()) toast.error(error.message)
-    } finally {
-      // Only the response matching the current selection should clear the
-      // loading indicator — a stale one finishing later must not do it on
-      // behalf of a still-in-flight newer request.
-      if (!isStale()) setLoading(false)
-    }
-  }
-
-  const handleTabChange = (tab: 'content' | 'leadgen') => {
-    if (selectedClientId && selectedWeek) {
-      queueTabSave(formDataRef.current, activeTab, true)
-    }
-    setActiveTab(tab)
-  }
-
-  useEffect(() => {
-    fetchData()
-  }, [selectedClientId, selectedWeek])
-
-  // Fix 6: Real-time sync
-  useEffect(() => {
-    if (!selectedClientId || !selectedWeek) return
-
-    const channel = supabase
-      .channel(`weekly_data_${selectedClientId}_${selectedWeek}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'weekly_data',
-          filter: `client_id=eq.${selectedClientId}`
-        },
-        (payload) => {
-          const updated = payload.new as any
-          if (updated?.week_start !== selectedWeek) return
-          // Refresh if:
-          //  a) we have never saved (contentLastSaved is null) - catches campaign syncs
-          //  b) the DB row is newer than our last save - catches team-member edits
-          const isNewer = !contentLastSaved || updated.updated_at > contentLastSaved.toISOString()
-          if (isNewer) {
-            fetchData()
-            if (contentLastSaved) {
-              // Only show toast for team-member updates, not self-triggered syncs
-              toast('↻ Data updated', { icon: 'ℹ️', duration: 3000 })
-            }
-          }
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [selectedClientId, selectedWeek, contentLastSaved])
-
-  const saveFieldAtomic = async (
-    _metricId: string,
-    _value: any,
-    _category: 'content_metrics' | 'leadgen_metrics'
-  ) => {
-    // No-op: the debounced upsert in triggerContentSave handles persistence.
-    // Previously this called a non-existent RPC `merge_metric_field` which
-    // caused every save to fail.
-    return
-  }
-
-  const handleMetricChange = (metricId: string, field: 'value' | 'target' | 'note', value: any) => {
-    const updatedFormData = {
-      ...formDataRef.current,
-      [metricId]: {
-        ...formDataRef.current[metricId],
-        [field]: value
-      }
-    }
-    formDataRef.current = updatedFormData
-    setFormData(updatedFormData)
-
-    queueTabSave(updatedFormData, activeTab)
-  }
-
-  const handleSave = async (isSubmit = false, isAutoSave = false) => {
-    // Cancel any pending auto-save first
-    cancelContentAutoSave()
-
-    if (!selectedClientId) {
-      toast.error('Please select a client.')
-      return
-    }
-    if (!selectedWeek) {
-      toast.error('Please select a week.')
-      return
-    }
-    if (!isAutoSave) setSaving(true)
-    try {
-      const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
-      
-      const contentMetrics: Record<string, any> = {}
-      const leadGenMetrics: Record<string, any> = {}
-
-      const currentFormData = formDataRef.current
-
-      CONTENT_METRICS.forEach(m => {
-        contentMetrics[m.id] = currentFormData[m.id]
-      })
-      LEADGEN_METRICS.forEach(m => {
-        leadGenMetrics[m.id] = currentFormData[m.id]
-      })
-
-      const payload: any = {
-        client_id: selectedClientId,
-        week_start: selectedWeek,
-        week_end: weekInfo?.weekEnd || getWeekEnd(selectedWeek),
-        week_label: weekInfo?.label || getWeekLabel(selectedWeek),
-      }
-
-      // Every save (draft or submit) marks the data as submitted so it shows
-      // on the dashboard immediately - there's no separate review/approval step.
-      if (activeTab === 'content') {
-        payload.content_metrics = contentMetrics
-        payload.content_submitted_at = new Date().toISOString()
-        payload.content_submitted_by = user?.id ?? null
-      } else {
-        payload.leadgen_metrics = leadGenMetrics
-        payload.leadgen_submitted_at = new Date().toISOString()
-        payload.leadgen_submitted_by = user?.id ?? null
-      }
-
-      const { error } = await supabase
-        .from('weekly_data')
-        .upsert(payload, { 
-          onConflict: 'client_id,week_start',
-          ignoreDuplicates: false
-        })
-      
-      if (error) {
-        console.error('Save error:', error)
-        toast.error(`Save failed: ${error.message}`)
-        return
-      }
-
-      // ALWAYS run high score detection and campaign totals sync safely after save
-      const currentContent = activeTab === 'content' ? contentMetrics : (weeklyData?.content_metrics as Record<string, unknown> || {})
-      const currentLeadgen = activeTab === 'leadgen' ? leadGenMetrics : (weeklyData?.leadgen_metrics as Record<string, unknown> || {})
-      
-      detectAndUpdateHighScores(selectedClientId, selectedWeek, currentContent, currentLeadgen)
-        .then(newRecords => {
-          if (isSubmit && newRecords.length > 0) {
-            toast.success(`🏆 ${newRecords.length} new record${newRecords.length > 1 ? 's' : ''}! ${newRecords.slice(0, 2).join(', ')}${newRecords.length > 2 ? '...' : ''}`)
-          }
-        })
-        .catch(e => console.warn('High score update failed:', e))
-
-      syncAllCampaignTotals(selectedClientId, selectedWeek)
-        .catch(e => console.warn('Campaign sync failed:', e))
-
-      const healthResult = await updateClientHealth(
-        selectedClientId,
-        selectedWeek,
-        activeTab === 'content' ? contentMetrics : (weeklyData?.content_metrics as Record<string, unknown> || {}),
-        activeTab === 'leadgen' ? leadGenMetrics : (weeklyData?.leadgen_metrics as Record<string, unknown> || {})
-      ).catch(e => { console.warn('Health check failed:', e); return null; })
-
-      if (isSubmit && healthResult) {
-        const delta = healthResult.prevScore ? healthResult.score - healthResult.prevScore : 0
-        toast(`Health Score: ${healthResult.score}${delta !== 0 ? ` (${delta > 0 ? '+' : ''}${delta})` : ''}`, {
-          description: "Calculated based on weekly performance targets."
-        })
-
-        toast.success("Week submitted successfully!")
-      } else {
-        if (!isAutoSave) toast.success("Draft saved")
-      }
-      
-      if (!isAutoSave) fetchData()
-    } catch (error: any) {
-      console.error('Unexpected error:', error)
-      toast.error('Save failed: ' + (error?.message ?? 'Unknown error'))
-    } finally {
-      if (!isAutoSave) setSaving(false)
-    }
-  }
-
-  const filteredMetrics = (metrics: Metric[]) => {
-    if (!clientSettings) return metrics
-    const activeIds = activeTab === 'content'
-      ? clientSettings.active_content_metrics
-      : clientSettings.active_leadgen_metrics
-    // null means not yet configured — show all metrics
-    if (activeIds === null || activeIds === undefined) return metrics
-    return metrics.filter(m => activeIds.includes(m.id))
-  }
-
-  const groupedMetrics = (metrics: Metric[]) => {
-    const groups: Record<string, Metric[]> = {}
-    const lastWeek = isLastWeekOfMonth(selectedWeek)
-    metrics.forEach(m => {
-      if (m.group === 'Delivery & Reporting' && !lastWeek) return
-      if (!groups[m.group]) groups[m.group] = []
-      groups[m.group].push(m)
-    })
-    return groups
-  }
-
-  const toggleCampaignStatus = async (campaignId: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
-    await supabase
-      .from('campaigns')
-      .update({ status: newStatus })
-      .eq('id', campaignId)
-    await fetchData()
-  }
-
-  const deleteCampaign = async (campaignId: string, name: string) => {
-    const confirmed = window.confirm(
-      `Delete campaign "${name}"? This will also delete all weekly data for this campaign. This cannot be undone.`
-    )
-    if (!confirmed) return
-
-    await supabase
-      .from('campaign_weekly_data')
-      .delete()
-      .eq('campaign_id', campaignId)
-
-    await supabase
-      .from('campaigns')
-      .delete()
-      .eq('id', campaignId)
-
-    toast.success(`Campaign "${name}" deleted.`)
-    await fetchData()
-  }
-
-  const LeadGenCampaignEntry = () => {
+function LeadGenCampaignEntry({
+  selectedClientId, selectedWeek, weekOptions, weeklyData, activeTab,
+  campaigns, setCampaigns, campaignWeeklyData, formData, handleMetricChange,
+  user, contentSaveStatus, fetchData, toggleCampaignStatus, deleteCampaign,
+  showInactive, setShowInactive, setEditingCampaign,
+}: LeadGenCampaignEntryProps) {
     const [localCampaignData, setLocalCampaignData] = useState<Record<string, any>>({})
     const localCampaignDataRef = React.useRef(localCampaignData)
     useEffect(() => {
@@ -559,9 +138,8 @@ export function DataEntryPage() {
     // keystroke syncs the value into formData via handleMetricChange, which is the
     // same save pipeline (queueTabSave/useAutoSave) every other metric on this page
     // already uses. formData is the single writer now, so there's nothing left to
-    // race with. (We don't call handleMetricChange on every keystroke because
-    // LeadGenCampaignEntry is defined inside DataEntryPage — a parent re-render
-    // remounts it, which would drop input focus after every character typed.)
+    // race with. (We debounce rather than syncing on every keystroke just to avoid
+    // an extra parent re-render per character typed.)
     const [existingConnSent, setExistingConnSent] = useState<string>('')
     const [existingConnReplied, setExistingConnReplied] = useState<string>('')
     const [existingConnHotLeads, setExistingConnHotLeads] = useState<string>('')
@@ -677,25 +255,6 @@ export function DataEntryPage() {
       else setLeadGenMode('campaigns')
     }, [hasCampaignRows, hasLegacyData, selectedWeek, selectedClientId])
 
-    // Flush all pending debounced syncs/saves when the component unmounts (tab
-    // switch). LeadGenCampaignEntry is defined inside DataEntryPage so React treats
-    // it as a new component type on every parent render, causing a remount. Without
-    // this flush, anything typed within the last debounce window would be dropped
-    // from formData right before a remount reads the (still stale) formData back in.
-    useEffect(() => {
-      return () => {
-        if (existingConnSyncTimer.current) flushExistingConn()
-        if (inmailSyncTimer.current) flushInmail()
-
-        // Flush any pending campaign saves
-        Object.keys(autosaveTimers.current).forEach(campaignId => {
-          clearTimeout(autosaveTimers.current[campaignId])
-          saveCampaignData(campaignId, true)
-        })
-      }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
-
     // When Lead Gen tab is selected and client + week are set:
     useEffect(() => {
       if (activeTab === 'leadgen' && selectedClientId && selectedWeek) {
@@ -777,6 +336,26 @@ export function DataEntryPage() {
             else console.error('Autosave failed:', error.message)
         }
     }
+
+    // Flush all pending debounced syncs/saves whenever we're about to leave the
+    // current client/week (or the component truly unmounts, e.g. navigating away
+    // from Data Entry entirely). Without this, anything typed within the last
+    // debounce window would never make it into formData/the DB. The flush
+    // functions are recreated every render and included below so the cleanup
+    // always uses the client/week it's actually leaving, not a stale one frozen
+    // from whenever this effect first ran.
+    useEffect(() => {
+      return () => {
+        if (existingConnSyncTimer.current) flushExistingConn()
+        if (inmailSyncTimer.current) flushInmail()
+
+        // Flush any pending campaign saves
+        Object.keys(autosaveTimers.current).forEach(campaignId => {
+          clearTimeout(autosaveTimers.current[campaignId])
+          saveCampaignData(campaignId, true)
+        })
+      }
+    }, [selectedClientId, selectedWeek, flushExistingConn, flushInmail, saveCampaignData])
 
     const handleCreateCampaign = async () => {
         if (!newCampaign.name) return toast.error("Campaign name is required")
@@ -1570,6 +1149,455 @@ export function DataEntryPage() {
     )
   }
 
+
+function formatWeekPeriod(dateStr: string) {
+    const d = new Date(dateStr)
+    const startOfYear = new Date(d.getFullYear(), 0, 1);
+    const pastDaysOfYear = (d.getTime() - startOfYear.getTime()) / 86400000;
+    const weekNumber = Math.ceil((pastDaysOfYear + startOfYear.getDay() + 1) / 7);
+    return `${d.getFullYear()}-W${String(weekNumber).padStart(2, '0')}`
+}
+
+
+export function DataEntryPage() {
+  const { user, isAdmin } = useAuth()
+  const showContentTab = true
+  const showLeadGenTab = true
+  const navigate = useNavigate()
+  const weekOptions = useMemo(() => getWeekOptions(12), [])
+  
+  const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart())
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'content' | 'leadgen'>('content')
+  
+  const [clients, setClients] = useState<ClientSummary[]>([])
+  const [clientSettings, setClientSettings] = useState<ClientSettings | null>(null)
+  const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null)
+  const [previousWeeklyData, setPreviousWeeklyData] = useState<WeeklyData | null>(null)
+  const [highScores, setHighScores] = useState<HighScore[]>([])
+  const [contextNotes, setContextNotes] = useState<ContextNoteWithAuthor[]>([])
+  const [targets, setTargets] = useState<MetricTarget[]>([])
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [campaignWeeklyData, setCampaignWeeklyData] = useState<CampaignWeeklyData[]>([])
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
+  
+  const [weeklyTargets, setWeeklyTargets] = useState<Record<string, number>>({})
+  const [monthlyTargets, setMonthlyTargets] = useState<Record<string, number>>({})
+  
+  const [showInactive, setShowInactive] = useState(false)
+  const [formData, setFormData] = useState<Record<string, any>>({})
+  const formDataRef = React.useRef(formData)
+  useEffect(() => {
+    formDataRef.current = formData
+  }, [formData])
+
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  // Tracks the currently-selected client/week so an in-flight fetchData() call can
+  // tell, once its awaits resolve, whether the user has since switched to a
+  // different client/week — and if so, discard its (now stale) results instead of
+  // clobbering the newer selection's data.
+  const selectionRef = React.useRef({ clientId: selectedClientId, week: selectedWeek })
+  useEffect(() => {
+    selectionRef.current = { clientId: selectedClientId, week: selectedWeek }
+  }, [selectedClientId, selectedWeek])
+
+  const {
+    triggerSave: triggerContentSave,
+    saveNow: saveContentNow,
+    saveStatus: contentSaveStatus,
+    lastSaved: contentLastSaved,
+    cancelPendingAutoSave: cancelContentAutoSave
+  } = useAutoSave({
+    table: 'weekly_data',
+    matchColumns: {
+      client_id: selectedClientId || '',
+      week_start: selectedWeek
+    },
+    debounceMs: 1500,
+    onSaveSuccess: (savedCols) => {
+      // Use the client/week that was actually just written, not whatever happens
+      // to be selected right now — a queued flush can complete after the user has
+      // already moved on to a different client.
+      const clientId = savedCols?.client_id || selectedClientId
+      const week = savedCols?.week_start || selectedWeek
+      if (clientId && week) {
+        const currentContent = activeTab === 'content' ? formDataRef.current : (weeklyData?.content_metrics || {})
+        const currentLeadgen = activeTab === 'leadgen' ? formDataRef.current : (weeklyData?.leadgen_metrics || {})
+
+        detectAndUpdateHighScores(
+          clientId,
+          week,
+          currentContent as Record<string, unknown>,
+          currentLeadgen as Record<string, unknown>
+        ).catch(err => console.error('High score detection failed:', err))
+      }
+    }
+  })
+
+  const buildMetricsPayload = (metrics: Metric[], source: Record<string, any>) => {
+    const payload: Record<string, any> = {}
+    metrics.forEach((metric) => {
+      if (metric.type !== 'auto') payload[metric.id] = source[metric.id] || {}
+    })
+    return payload
+  }
+
+  const queueTabSave = (
+    source: Record<string, any>,
+    tab: 'content' | 'leadgen',
+    immediate = false,
+  ) => {
+    if (!selectedClientId || !selectedWeek) return
+
+    const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
+    const payload = {
+      week_end: weekInfo?.weekEnd || getWeekEnd(selectedWeek),
+      week_label: weekInfo?.label || getWeekLabel(selectedWeek),
+      ...(tab === 'content'
+        ? {
+            content_metrics: buildMetricsPayload(CONTENT_METRICS, source),
+            content_submitted_at: new Date().toISOString(),
+          }
+        : {
+            leadgen_metrics: buildMetricsPayload(LEADGEN_METRICS, source),
+            leadgen_submitted_at: new Date().toISOString(),
+          }),
+    }
+
+    if (immediate) saveContentNow(payload)
+    else triggerContentSave(payload)
+  }
+
+  useEffect(() => {
+    const fetchClients = async () => {
+      // Always fetch all active clients for everyone
+      const { data } = await supabase
+        .from('clients')
+        .select('id, name, company')
+        .eq('status', 'active')
+        .order('name')
+      setClients(data || [])
+      if (data && data.length > 0 && !selectedClientId) setSelectedClientId(data[0].id)
+    }
+
+    fetchClients()
+  }, [])
+
+  const fetchData = async () => {
+    if (!selectedClientId || !selectedWeek) return
+    const requestedClientId = selectedClientId
+    const requestedWeek = selectedWeek
+    const isStale = () =>
+      selectionRef.current.clientId !== requestedClientId || selectionRef.current.week !== requestedWeek
+    setLoading(true)
+    try {
+      const [
+        { data: settings },
+        { data: currentData },
+        { data: prevData },
+        { data: scores },
+        { data: notesData },
+        { data: targetsData },
+        { data: campaignsData },
+        { data: campaignWeeklyDataRes }
+      ] = await Promise.all([
+        supabase.from('client_settings').select('*').eq('client_id', selectedClientId).maybeSingle(),
+        supabase.from('weekly_data').select('*').eq('client_id', selectedClientId).eq('week_start', selectedWeek).maybeSingle(),
+        supabase.from('weekly_data').select('*').eq('client_id', selectedClientId).lt('week_start', selectedWeek).order('week_start', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('high_scores').select('*').eq('client_id', selectedClientId),
+        supabase.from('client_context_notes').select(`*, author:profiles!created_by(full_name)`).eq('client_id', selectedClientId).order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
+        supabase.from('targets').select('*').eq('client_id', selectedClientId),
+        supabase.from('campaigns').select('*').eq('client_id', selectedClientId).order('created_at'),
+        supabase.from('campaign_weekly_data').select('*').eq('client_id', selectedClientId).eq('week_start', selectedWeek)
+      ])
+      
+      // Load weekly/monthly targets separately
+      const month = selectedWeek.slice(0, 7)
+      const { data: wTargets } = await supabase
+        .from('targets')
+        .select('metric_id, target_value')
+        .eq('client_id', selectedClientId)
+        .eq('target_type', 'weekly')
+        .eq('period', selectedWeek)
+      const { data: mTargets } = await supabase
+        .from('targets')
+        .select('metric_id, target_value')
+        .eq('client_id', selectedClientId)
+        .eq('target_type', 'monthly')
+        .eq('period', month)
+        
+      // Bail out if the user switched client/week while these requests were in
+      // flight — an older, slower response must never overwrite a newer selection.
+      if (isStale()) return
+
+      const wMap: Record<string, number> = {}
+      wTargets?.forEach(t => { if (t.target_value !== null) wMap[t.metric_id] = t.target_value })
+      const mMap: Record<string, number> = {}
+      mTargets?.forEach(t => { if (t.target_value !== null) mMap[t.metric_id] = t.target_value })
+
+      setWeeklyTargets(wMap)
+      setMonthlyTargets(mMap)
+
+      setClientSettings(settings)
+      setWeeklyData(currentData)
+      setPreviousWeeklyData(prevData)
+      setHighScores(scores || [])
+      setContextNotes(notesData || [])
+      setTargets(targetsData || [])
+      setCampaigns(campaignsData || [])
+      setCampaignWeeklyData(campaignWeeklyDataRes || [])
+
+      // Pre-fill form
+      const initialForm: Record<string, any> = {}
+      ALL_METRICS.forEach(m => {
+        const metrics = (m.category === 'content' ? currentData?.content_metrics : currentData?.leadgen_metrics) as Record<string, any> | null | undefined
+        const val = metrics?.[m.id]
+        initialForm[m.id] = {
+          value: val?.value ?? (m.type === 'number' || m.type === 'slider' ? 0 : m.type === 'boolean' ? false : ''),
+          target: val?.target ?? (settings?.custom_targets as Record<string, any> | null)?.[m.id] ?? 0,
+          note: val?.note ?? ''
+        }
+      })
+      formDataRef.current = initialForm
+      setFormData(initialForm)
+    } catch (error: any) {
+      if (!isStale()) toast.error(error.message)
+    } finally {
+      // Only the response matching the current selection should clear the
+      // loading indicator — a stale one finishing later must not do it on
+      // behalf of a still-in-flight newer request.
+      if (!isStale()) setLoading(false)
+    }
+  }
+
+  const handleTabChange = (tab: 'content' | 'leadgen') => {
+    if (selectedClientId && selectedWeek) {
+      queueTabSave(formDataRef.current, activeTab, true)
+    }
+    setActiveTab(tab)
+  }
+
+  useEffect(() => {
+    fetchData()
+  }, [selectedClientId, selectedWeek])
+
+  // Fix 6: Real-time sync
+  useEffect(() => {
+    if (!selectedClientId || !selectedWeek) return
+
+    const channel = supabase
+      .channel(`weekly_data_${selectedClientId}_${selectedWeek}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'weekly_data',
+          filter: `client_id=eq.${selectedClientId}`
+        },
+        (payload) => {
+          const updated = payload.new as any
+          if (updated?.week_start !== selectedWeek) return
+          // Refresh if:
+          //  a) we have never saved (contentLastSaved is null) - catches campaign syncs
+          //  b) the DB row is newer than our last save - catches team-member edits
+          const isNewer = !contentLastSaved || updated.updated_at > contentLastSaved.toISOString()
+          if (isNewer) {
+            fetchData()
+            if (contentLastSaved) {
+              // Only show toast for team-member updates, not self-triggered syncs
+              toast('↻ Data updated', { icon: 'ℹ️', duration: 3000 })
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [selectedClientId, selectedWeek, contentLastSaved])
+
+  const saveFieldAtomic = async (
+    _metricId: string,
+    _value: any,
+    _category: 'content_metrics' | 'leadgen_metrics'
+  ) => {
+    // No-op: the debounced upsert in triggerContentSave handles persistence.
+    // Previously this called a non-existent RPC `merge_metric_field` which
+    // caused every save to fail.
+    return
+  }
+
+  const handleMetricChange = (metricId: string, field: 'value' | 'target' | 'note', value: any) => {
+    const updatedFormData = {
+      ...formDataRef.current,
+      [metricId]: {
+        ...formDataRef.current[metricId],
+        [field]: value
+      }
+    }
+    formDataRef.current = updatedFormData
+    setFormData(updatedFormData)
+
+    queueTabSave(updatedFormData, activeTab)
+  }
+
+  const handleSave = async (isSubmit = false, isAutoSave = false) => {
+    // Cancel any pending auto-save first
+    cancelContentAutoSave()
+
+    if (!selectedClientId) {
+      toast.error('Please select a client.')
+      return
+    }
+    if (!selectedWeek) {
+      toast.error('Please select a week.')
+      return
+    }
+    if (!isAutoSave) setSaving(true)
+    try {
+      const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
+      
+      const contentMetrics: Record<string, any> = {}
+      const leadGenMetrics: Record<string, any> = {}
+
+      const currentFormData = formDataRef.current
+
+      CONTENT_METRICS.forEach(m => {
+        contentMetrics[m.id] = currentFormData[m.id]
+      })
+      LEADGEN_METRICS.forEach(m => {
+        leadGenMetrics[m.id] = currentFormData[m.id]
+      })
+
+      const payload: any = {
+        client_id: selectedClientId,
+        week_start: selectedWeek,
+        week_end: weekInfo?.weekEnd || getWeekEnd(selectedWeek),
+        week_label: weekInfo?.label || getWeekLabel(selectedWeek),
+      }
+
+      // Every save (draft or submit) marks the data as submitted so it shows
+      // on the dashboard immediately - there's no separate review/approval step.
+      if (activeTab === 'content') {
+        payload.content_metrics = contentMetrics
+        payload.content_submitted_at = new Date().toISOString()
+        payload.content_submitted_by = user?.id ?? null
+      } else {
+        payload.leadgen_metrics = leadGenMetrics
+        payload.leadgen_submitted_at = new Date().toISOString()
+        payload.leadgen_submitted_by = user?.id ?? null
+      }
+
+      const { error } = await supabase
+        .from('weekly_data')
+        .upsert(payload, { 
+          onConflict: 'client_id,week_start',
+          ignoreDuplicates: false
+        })
+      
+      if (error) {
+        console.error('Save error:', error)
+        toast.error(`Save failed: ${error.message}`)
+        return
+      }
+
+      // ALWAYS run high score detection and campaign totals sync safely after save
+      const currentContent = activeTab === 'content' ? contentMetrics : (weeklyData?.content_metrics as Record<string, unknown> || {})
+      const currentLeadgen = activeTab === 'leadgen' ? leadGenMetrics : (weeklyData?.leadgen_metrics as Record<string, unknown> || {})
+      
+      detectAndUpdateHighScores(selectedClientId, selectedWeek, currentContent, currentLeadgen)
+        .then(newRecords => {
+          if (isSubmit && newRecords.length > 0) {
+            toast.success(`🏆 ${newRecords.length} new record${newRecords.length > 1 ? 's' : ''}! ${newRecords.slice(0, 2).join(', ')}${newRecords.length > 2 ? '...' : ''}`)
+          }
+        })
+        .catch(e => console.warn('High score update failed:', e))
+
+      syncAllCampaignTotals(selectedClientId, selectedWeek)
+        .catch(e => console.warn('Campaign sync failed:', e))
+
+      const healthResult = await updateClientHealth(
+        selectedClientId,
+        selectedWeek,
+        activeTab === 'content' ? contentMetrics : (weeklyData?.content_metrics as Record<string, unknown> || {}),
+        activeTab === 'leadgen' ? leadGenMetrics : (weeklyData?.leadgen_metrics as Record<string, unknown> || {})
+      ).catch(e => { console.warn('Health check failed:', e); return null; })
+
+      if (isSubmit && healthResult) {
+        const delta = healthResult.prevScore ? healthResult.score - healthResult.prevScore : 0
+        toast(`Health Score: ${healthResult.score}${delta !== 0 ? ` (${delta > 0 ? '+' : ''}${delta})` : ''}`, {
+          description: "Calculated based on weekly performance targets."
+        })
+
+        toast.success("Week submitted successfully!")
+      } else {
+        if (!isAutoSave) toast.success("Draft saved")
+      }
+      
+      if (!isAutoSave) fetchData()
+    } catch (error: any) {
+      console.error('Unexpected error:', error)
+      toast.error('Save failed: ' + (error?.message ?? 'Unknown error'))
+    } finally {
+      if (!isAutoSave) setSaving(false)
+    }
+  }
+
+  const filteredMetrics = (metrics: Metric[]) => {
+    if (!clientSettings) return metrics
+    const activeIds = activeTab === 'content'
+      ? clientSettings.active_content_metrics
+      : clientSettings.active_leadgen_metrics
+    // null means not yet configured — show all metrics
+    if (activeIds === null || activeIds === undefined) return metrics
+    return metrics.filter(m => activeIds.includes(m.id))
+  }
+
+  const groupedMetrics = (metrics: Metric[]) => {
+    const groups: Record<string, Metric[]> = {}
+    const lastWeek = isLastWeekOfMonth(selectedWeek)
+    metrics.forEach(m => {
+      if (m.group === 'Delivery & Reporting' && !lastWeek) return
+      if (!groups[m.group]) groups[m.group] = []
+      groups[m.group].push(m)
+    })
+    return groups
+  }
+
+  const toggleCampaignStatus = async (campaignId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
+    await supabase
+      .from('campaigns')
+      .update({ status: newStatus })
+      .eq('id', campaignId)
+    await fetchData()
+  }
+
+  const deleteCampaign = async (campaignId: string, name: string) => {
+    const confirmed = window.confirm(
+      `Delete campaign "${name}"? This will also delete all weekly data for this campaign. This cannot be undone.`
+    )
+    if (!confirmed) return
+
+    await supabase
+      .from('campaign_weekly_data')
+      .delete()
+      .eq('campaign_id', campaignId)
+
+    await supabase
+      .from('campaigns')
+      .delete()
+      .eq('id', campaignId)
+
+    toast.success(`Campaign "${name}" deleted.`)
+    await fetchData()
+  }
+
+
   const renderContentQualitative = () => (
     <div className="mt-8 border-t pt-8">
       <h2 className="text-xl font-black tracking-tight uppercase mb-4">Qualitative</h2>
@@ -1820,7 +1848,26 @@ export function DataEntryPage() {
               {renderContentQualitative()}
             </TabsContent>
             <TabsContent value="leadgen" forceMount>
-              <LeadGenCampaignEntry />
+              <LeadGenCampaignEntry
+                selectedClientId={selectedClientId}
+                selectedWeek={selectedWeek}
+                weekOptions={weekOptions}
+                weeklyData={weeklyData}
+                activeTab={activeTab}
+                campaigns={campaigns}
+                setCampaigns={setCampaigns}
+                campaignWeeklyData={campaignWeeklyData}
+                formData={formData}
+                handleMetricChange={handleMetricChange}
+                user={user}
+                contentSaveStatus={contentSaveStatus}
+                fetchData={fetchData}
+                toggleCampaignStatus={toggleCampaignStatus}
+                deleteCampaign={deleteCampaign}
+                showInactive={showInactive}
+                setShowInactive={setShowInactive}
+                setEditingCampaign={setEditingCampaign}
+              />
               {renderLeadgenQualitative()}
             </TabsContent>
 
