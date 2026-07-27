@@ -12,7 +12,7 @@ import { AlertCircle, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Use
 import { Gift, Cake, Calendar, Bell, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { getCurrentWeekStart, getPreviousWeekStart, getWeekLabel, getWeekOptions, getWeeksInSameMonth } from "@/utils/weekUtils"
+import { getCurrentWeekStart, getPreviousWeekStart, getWeekLabel, getWeekOptions, getWeeksInSameMonth, isLastWeekOfMonth } from "@/utils/weekUtils"
 import { CampaignMonthTable } from "../monday/CampaignMonthTable"
 import { EditCampaignModal } from "../monday/EditCampaignModal"
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS } from "@/data/metrics"
@@ -491,24 +491,30 @@ export function DashboardPage() {
           </TableHeader>
           <TableBody>
             {ALL_METRICS.filter(m => m.type !== 'textarea').map(m => {
+              // Delivery & Reporting metrics (EOM Report Sent, etc.) are only collected once,
+              // on the last week of the month — the form hides them for every other week, so
+              // they'd otherwise show as a false "❌" for weeks they were never meant to cover.
+              const isMonthlyOnly = m.group === 'Delivery & Reporting'
+
               return (
                 <TableRow key={m.id} className="h-8 hover:bg-muted/5">
                   <TableCell className="py-1 text-[11px] font-medium border-r">{m.name}</TableCell>
                   {weeks.map((week, idx) => {
                     const built = buildWeekMetrics(week)
-                    const val = built?.[m.id as keyof typeof built] ?? null
-                    
+                    const rawVal = built?.[m.id as keyof typeof built] ?? null
+                    const val = isMonthlyOnly && !isLastWeekOfMonth(week.week_start) ? null : rawVal
+
                     const prevBuilt = idx > 0 ? buildWeekMetrics(weeks[idx-1]) : null
                     const prevVal = prevBuilt?.[m.id as keyof typeof prevBuilt] ?? null
-                    
+
                     let color = 'inherit'
                     if (['L12', 'L14', 'L17'].includes(m.id) && val !== null && prevVal !== null) {
                       color = Number(val) > Number(prevVal) ? '#22C55E' : Number(val) < Number(prevVal) ? '#EF4444' : 'inherit'
                     }
 
                     return (
-                      <TableCell 
-                        key={week.week_start} 
+                      <TableCell
+                        key={week.week_start}
                         className={cn(
                           "py-1 text-center text-[11px] font-bold",
                           (val === 0 || val === '0') && "text-muted-foreground/30"
@@ -520,7 +526,7 @@ export function DashboardPage() {
                     )
                   })}
                   <TableCell className="py-1 text-center text-[11px] font-black bg-gold/5">
-                    {['L12', 'L14', 'L17'].includes(m.id) ? '-' : formatDashboardValue(monthlyTotals[m.id], m.id)}
+                    {isMonthlyOnly || ['L12', 'L14', 'L17'].includes(m.id) ? '-' : formatDashboardValue(monthlyTotals[m.id], m.id)}
                   </TableCell>
                 </TableRow>
               )
