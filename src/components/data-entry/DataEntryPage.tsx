@@ -255,7 +255,9 @@ function LeadGenCampaignEntry({
       else setLeadGenMode('campaigns')
     }, [hasCampaignRows, hasLegacyData, selectedWeek, selectedClientId])
 
-    // When Lead Gen tab is selected and client + week are set:
+    // When Lead Gen tab is selected and client + week are set, keep the rollup
+    // numbers fresh. This is a passive view action (not a save), so it must never
+    // mark the week as submitted -- leave markSubmitted at its default (false).
     useEffect(() => {
       if (activeTab === 'leadgen' && selectedClientId && selectedWeek) {
         syncAllCampaignTotals(selectedClientId, selectedWeek)
@@ -326,7 +328,8 @@ function LeadGenCampaignEntry({
 
             if (error) throw error
 
-            await syncAllCampaignTotals(selectedClientId!, effectiveWeek)
+            // A real campaign save just happened, so this week is genuinely submitted.
+            await syncAllCampaignTotals(selectedClientId!, effectiveWeek, true)
 
             setSaveStatus(prev => ({ ...prev, [campaignId]: 'saved' }))
             if (!silent) toast.success("Campaign data saved")
@@ -1517,7 +1520,8 @@ export function DataEntryPage() {
         })
         .catch(e => console.warn('High score update failed:', e))
 
-      syncAllCampaignTotals(selectedClientId, selectedWeek)
+      // Save Draft/Submit Week just ran, so this is a genuine submission.
+      syncAllCampaignTotals(selectedClientId, selectedWeek, true)
         .catch(e => console.warn('Campaign sync failed:', e))
 
       const healthResult = await updateClientHealth(

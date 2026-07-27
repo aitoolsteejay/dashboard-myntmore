@@ -56,8 +56,9 @@ export function EditCampaignWeekModal({ campaign, weekData, weekStart, weekLabel
 
       if (error) { toast.error('Save failed: ' + error.message); setSaving(false); return }
 
-      // Re-sync campaign totals into weekly_data
-      await syncAllCampaignTotals(campaign.client_id, weekStart)
+      // Re-sync campaign totals into weekly_data. This is a genuine user save, so
+      // it's fine (and correct) for this to mark the week as submitted.
+      await syncAllCampaignTotals(campaign.client_id, weekStart, true)
 
       toast.success('Campaign week data saved.')
       onSave()

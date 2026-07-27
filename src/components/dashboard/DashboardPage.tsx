@@ -265,6 +265,8 @@ export function DashboardPage() {
       next.add(id)
       setExpandedClients(next)
       if (displayWeek) {
+        // Merely expanding a card to view it -- keep the rollup numbers fresh, but
+        // this must never mark the week as submitted (default markSubmitted=false).
         await syncAllCampaignTotals(id, displayWeek)
         await reloadClientWeekData(id, displayWeek)
       }

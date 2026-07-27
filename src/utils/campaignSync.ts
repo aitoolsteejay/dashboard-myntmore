@@ -4,18 +4,25 @@ import { getWeeksInSameMonth, getWeekOptions } from "@/utils/weekUtils"
 // Prevents concurrent syncs for the same client+week from clobbering each other
 const _syncInFlight = new Set<string>()
 
-export const syncAllCampaignTotals = async (clientId: string, weekStart: string) => {
+// markSubmitted must only be true when this call is a direct consequence of a real
+// user save (submitting a campaign week, or the Save Draft/Submit Week buttons).
+// It defaults to false because this function is also called from purely passive
+// contexts -- opening the Lead Gen tab, expanding a client's dashboard card -- just
+// to keep the rollup numbers fresh. Those must never flip a week to "submitted":
+// doing so previously created a fake, zero-value "submission" for a week nobody
+// had actually touched, the instant anyone merely looked at it.
+export const syncAllCampaignTotals = async (clientId: string, weekStart: string, markSubmitted = false) => {
   const key = `${clientId}:${weekStart}`
   if (_syncInFlight.has(key)) return
   _syncInFlight.add(key)
   try {
-    await _syncAllCampaignTotalsInner(clientId, weekStart)
+    await _syncAllCampaignTotalsInner(clientId, weekStart, markSubmitted)
   } finally {
     _syncInFlight.delete(key)
   }
 }
 
-const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string) => {
+const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string, markSubmitted: boolean) => {
   // Fetch all campaign data for this client + week
   const { data: campaignRows } = await supabase
     .from('campaign_weekly_data')
@@ -69,7 +76,9 @@ const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string) 
   const weekOptions = getWeekOptions(52)
   const weekInfo = weekOptions.find((w: any) => w.weekStart === weekStart)
 
-  // Write back to weekly_data
+  // Write back to weekly_data. leadgen_submitted_at is only included (and so only
+  // ever updated) when this sync was triggered by a genuine save -- see the
+  // markSubmitted doc comment on syncAllCampaignTotals above.
   const { error } = await supabase
     .from('weekly_data')
     .upsert({
@@ -88,7 +97,7 @@ const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string) 
         return `${fmt(start)} – ${fmt(end)} ${end.getFullYear()}`
       })(),
       leadgen_metrics: merged,
-      leadgen_submitted_at: new Date().toISOString(),
+      ...(markSubmitted ? { leadgen_submitted_at: new Date().toISOString() } : {}),
     }, { onConflict: 'client_id,week_start' })
 
   if (error) {
