@@ -139,7 +139,7 @@ export function DashboardPage() {
   const [processesUpdates, setProcessesUpdates] = useState<ProcessUpdate[]>([])
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
   const [loadingClients, setLoadingClients] = useState<Set<string>>(new Set())
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['alerts']))
   const [loading, setLoading] = useState(true)
   const [isMonthlyView, setIsMonthlyView] = useState(false)
   const [monthTjRows, setMonthTjRows] = useState<any[]>([])
