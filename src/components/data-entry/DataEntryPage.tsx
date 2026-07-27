@@ -547,106 +547,92 @@ export function DataEntryPage() {
       }))
     }
 
-    // Existing Connections State
+    // Existing Connections / InMail Outreach fields are ordinary Lead Gen metrics
+    // (L19/L20/L22/existing_connections_notes and L01/L02/L03/L04/L06) — they used to
+    // have their own debounced read-modify-write straight to Supabase, entirely
+    // separate from formData. That meant the next tab-level autosave (or simply
+    // clicking Submit Week, which always rewrites the *whole* leadgen_metrics column
+    // from formData) clobbered these fields back to their stale pre-edit values,
+    // silently wiping out what was just typed — this is why the data kept vanishing.
+    //
+    // Local state below keeps typing responsive; a short pause after the last
+    // keystroke syncs the value into formData via handleMetricChange, which is the
+    // same save pipeline (queueTabSave/useAutoSave) every other metric on this page
+    // already uses. formData is the single writer now, so there's nothing left to
+    // race with. (We don't call handleMetricChange on every keystroke because
+    // LeadGenCampaignEntry is defined inside DataEntryPage — a parent re-render
+    // remounts it, which would drop input focus after every character typed.)
     const [existingConnSent, setExistingConnSent] = useState<string>('')
     const [existingConnReplied, setExistingConnReplied] = useState<string>('')
     const [existingConnHotLeads, setExistingConnHotLeads] = useState<string>('')
     const [existingConnNotes, setExistingConnNotes] = useState<string>('')
-    const [existingConnSaveStatus, setExistingConnSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-    const existingConnTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-    const existingConnRef = React.useRef({ sent: existingConnSent, replied: existingConnReplied, hotLeads: existingConnHotLeads, notes: existingConnNotes })
+    const existingConnRef = React.useRef({ sent: '', replied: '', hotLeads: '', notes: '' })
+    const existingConnSyncTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
     useEffect(() => {
         existingConnRef.current = { sent: existingConnSent, replied: existingConnReplied, hotLeads: existingConnHotLeads, notes: existingConnNotes }
     }, [existingConnSent, existingConnReplied, existingConnHotLeads, existingConnNotes])
 
     useEffect(() => {
-        const lm = weeklyData?.leadgen_metrics as any
-        setExistingConnSent(lm?.L19?.value ?? '')
-        setExistingConnReplied(lm?.L20?.value ?? '')
-        setExistingConnHotLeads(lm?.L22?.value ?? '')
-        setExistingConnNotes(lm?.existing_connections_notes?.value ?? '')
+        setExistingConnSent(formData.L19?.value ?? '')
+        setExistingConnReplied(formData.L20?.value ?? '')
+        setExistingConnHotLeads(formData.L22?.value ?? '')
+        setExistingConnNotes(formData.existing_connections_notes?.value ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [weeklyData])
 
-    // InMail Outreach State
-    const [inmailTargeted, setInmailTargeted] = useState<string>('')
-    const [inmailSent, setInmailSent] = useState<string>('')
-    const [inmailAccepted, setInmailAccepted] = useState<string>('')
-    const [inmailDeclined, setInmailDeclined] = useState<string>('')
-    const [inmailHotLeads, setInmailHotLeads] = useState<string>('')
-    const [inmailSaveStatus, setInmailSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-    const inmailTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-    const inmailRef = React.useRef({ targeted: inmailTargeted, sent: inmailSent, accepted: inmailAccepted, declined: inmailDeclined, hotLeads: inmailHotLeads })
-
-    useEffect(() => {
-        inmailRef.current = { targeted: inmailTargeted, sent: inmailSent, accepted: inmailAccepted, declined: inmailDeclined, hotLeads: inmailHotLeads }
-    }, [inmailTargeted, inmailSent, inmailAccepted, inmailDeclined, inmailHotLeads])
-
-    useEffect(() => {
-        const lm = weeklyData?.leadgen_metrics as any
-        setInmailTargeted(lm?.L01?.value ?? '')
-        setInmailSent(lm?.L02?.value ?? '')
-        setInmailAccepted(lm?.L03?.value ?? '')
-        setInmailDeclined(lm?.L04?.value ?? '')
-        setInmailHotLeads(lm?.L06?.value ?? '')
-    }, [weeklyData])
-
-    // Reset campaign save states when client or week changes
-    useEffect(() => {
-      setExistingConnSaveStatus('idle')
-      setInmailSaveStatus('idle')
-      setSaveStatus({})
-    }, [selectedClientId, selectedWeek])
+    const flushExistingConn = () => {
+        if (existingConnSyncTimer.current) clearTimeout(existingConnSyncTimer.current)
+        existingConnSyncTimer.current = null
+        const c = existingConnRef.current
+        handleMetricChange('L19', 'value', c.sent)
+        handleMetricChange('L20', 'value', c.replied)
+        handleMetricChange('L22', 'value', c.hotLeads)
+        handleMetricChange('existing_connections_notes', 'value', c.notes)
+    }
 
     const handleExistingConnChange = (field: 'sent'|'replied'|'hotLeads'|'notes', val: string) => {
         if (field === 'sent') setExistingConnSent(val)
         if (field === 'replied') setExistingConnReplied(val)
         if (field === 'hotLeads') setExistingConnHotLeads(val)
         if (field === 'notes') setExistingConnNotes(val)
-        existingConnRef.current = {
-          ...existingConnRef.current,
-          [field]: val
-        }
+        existingConnRef.current = { ...existingConnRef.current, [field]: val }
 
-        if (existingConnTimer.current) clearTimeout(existingConnTimer.current)
-        setExistingConnSaveStatus('saving')
+        if (existingConnSyncTimer.current) clearTimeout(existingConnSyncTimer.current)
+        existingConnSyncTimer.current = setTimeout(flushExistingConn, 600)
+    }
 
-        existingConnTimer.current = setTimeout(async () => {
-            try {
-                const current = existingConnRef.current
-                const { data: existing } = await supabase
-                    .from('weekly_data')
-                    .select('leadgen_metrics')
-                    .eq('client_id', selectedClientId as string)
-                    .eq('week_start', selectedWeek)
-                    .maybeSingle()
+    // InMail Outreach State — same pattern as Existing Connections above.
+    const [inmailTargeted, setInmailTargeted] = useState<string>('')
+    const [inmailSent, setInmailSent] = useState<string>('')
+    const [inmailAccepted, setInmailAccepted] = useState<string>('')
+    const [inmailDeclined, setInmailDeclined] = useState<string>('')
+    const [inmailHotLeads, setInmailHotLeads] = useState<string>('')
+    const inmailRef = React.useRef({ targeted: '', sent: '', accepted: '', declined: '', hotLeads: '' })
+    const inmailSyncTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
-                const currentMetrics = (existing?.leadgen_metrics as any) ?? {}
-                const updatedMetrics = {
-                    ...currentMetrics,
-                    L19: { value: current.sent === '' ? 0 : Number(current.sent) },
-                    L20: { value: current.replied === '' ? 0 : Number(current.replied) },
-                    L22: { value: current.hotLeads === '' ? 0 : Number(current.hotLeads) },
-                    existing_connections_notes: { value: current.notes || '' },
-                }
+    useEffect(() => {
+        inmailRef.current = { targeted: inmailTargeted, sent: inmailSent, accepted: inmailAccepted, declined: inmailDeclined, hotLeads: inmailHotLeads }
+    }, [inmailTargeted, inmailSent, inmailAccepted, inmailDeclined, inmailHotLeads])
 
-                const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
-                await supabase
-                    .from('weekly_data')
-                    .upsert({
-                        client_id: selectedClientId as string,
-                        week_start: selectedWeek,
-                        week_end: weekInfo?.weekEnd ?? '',
-                        week_label: weekInfo?.label ?? '',
-                        leadgen_metrics: updatedMetrics,
-                        leadgen_submitted_at: new Date().toISOString(),
-                    }, { onConflict: 'client_id,week_start' })
+    useEffect(() => {
+        setInmailTargeted(formData.L01?.value ?? '')
+        setInmailSent(formData.L02?.value ?? '')
+        setInmailAccepted(formData.L03?.value ?? '')
+        setInmailDeclined(formData.L04?.value ?? '')
+        setInmailHotLeads(formData.L06?.value ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [weeklyData])
 
-                setExistingConnSaveStatus('saved')
-            } catch (err) {
-                setExistingConnSaveStatus('error')
-            }
-        }, 2000)
+    const flushInmail = () => {
+        if (inmailSyncTimer.current) clearTimeout(inmailSyncTimer.current)
+        inmailSyncTimer.current = null
+        const c = inmailRef.current
+        handleMetricChange('L01', 'value', c.targeted)
+        handleMetricChange('L02', 'value', c.sent)
+        handleMetricChange('L03', 'value', c.accepted)
+        handleMetricChange('L04', 'value', c.declined)
+        handleMetricChange('L06', 'value', c.hotLeads)
     }
 
     const handleInmailChange = (field: 'targeted'|'sent'|'accepted'|'declined'|'hotLeads', val: string) => {
@@ -655,53 +641,16 @@ export function DataEntryPage() {
         if (field === 'accepted') setInmailAccepted(val)
         if (field === 'declined') setInmailDeclined(val)
         if (field === 'hotLeads') setInmailHotLeads(val)
-        inmailRef.current = {
-          ...inmailRef.current,
-          [field]: val
-        }
+        inmailRef.current = { ...inmailRef.current, [field]: val }
 
-        if (inmailTimer.current) clearTimeout(inmailTimer.current)
-        setInmailSaveStatus('saving')
-
-        inmailTimer.current = setTimeout(async () => {
-            try {
-                const current = inmailRef.current
-                const { data: existing } = await supabase
-                    .from('weekly_data')
-                    .select('leadgen_metrics')
-                    .eq('client_id', selectedClientId as string)
-                    .eq('week_start', selectedWeek)
-                    .maybeSingle()
-
-                const currentMetrics = (existing?.leadgen_metrics as any) ?? {}
-                const updatedMetrics = {
-                    ...currentMetrics,
-                    L01: { value: current.targeted || '' },
-                    L02: { value: current.sent === '' ? 0 : Number(current.sent) },
-                    L03: { value: current.accepted === '' ? 0 : Number(current.accepted) },
-                    L04: { value: current.declined === '' ? 0 : Number(current.declined) },
-                    L06: { value: current.hotLeads === '' ? 0 : Number(current.hotLeads) },
-                }
-
-                const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
-                await supabase
-                    .from('weekly_data')
-                    .upsert({
-                        client_id: selectedClientId as string,
-                        week_start: selectedWeek,
-                        week_end: weekInfo?.weekEnd ?? '',
-                        week_label: weekInfo?.label ?? '',
-                        leadgen_metrics: updatedMetrics,
-                        leadgen_submitted_at: new Date().toISOString(),
-                    }, { onConflict: 'client_id,week_start' })
-
-                setInmailSaveStatus('saved')
-            } catch (err) {
-                setInmailSaveStatus('error')
-            }
-        }, 2000)
+        if (inmailSyncTimer.current) clearTimeout(inmailSyncTimer.current)
+        inmailSyncTimer.current = setTimeout(flushInmail, 600)
     }
 
+    // Reset campaign save states when client or week changes
+    useEffect(() => {
+      setSaveStatus({})
+    }, [selectedClientId, selectedWeek])
 
     // Read helper for legacy fields stored as { value } or raw
     const readLegacy = (id: string): any => {
@@ -728,61 +677,15 @@ export function DataEntryPage() {
       else setLeadGenMode('campaigns')
     }, [hasCampaignRows, hasLegacyData, selectedWeek, selectedClientId])
 
-    // Keep a ref to the latest weeklyData leadgen_metrics so the flush-on-unmount
-    // cleanup can merge with existing saved data rather than overwriting it.
-    const weeklyDataLeadgenRef = React.useRef<any>(null)
-    useEffect(() => {
-      weeklyDataLeadgenRef.current = weeklyData?.leadgen_metrics ?? {}
-    }, [weeklyData])
-
-    // Flush all pending debounced saves when the component unmounts (tab switch).
-    // LeadGenCampaignEntry is defined inside DataEntryPage so React treats it as a
-    // new component type on every parent render, causing a remount. Without this
-    // flush, anything typed within the last 2 s is silently discarded.
+    // Flush all pending debounced syncs/saves when the component unmounts (tab
+    // switch). LeadGenCampaignEntry is defined inside DataEntryPage so React treats
+    // it as a new component type on every parent render, causing a remount. Without
+    // this flush, anything typed within the last debounce window would be dropped
+    // from formData right before a remount reads the (still stale) formData back in.
     useEffect(() => {
       return () => {
-        if (!selectedClientId || !selectedWeek) return
-        const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
-        const baseMetrics = weeklyDataLeadgenRef.current ?? {}
-
-        if (existingConnTimer.current) {
-          clearTimeout(existingConnTimer.current)
-          const c = existingConnRef.current
-          supabase.from('weekly_data').upsert({
-            client_id: selectedClientId,
-            week_start: selectedWeek,
-            week_end: weekInfo?.weekEnd ?? '',
-            week_label: weekInfo?.label ?? '',
-            leadgen_metrics: {
-              ...baseMetrics,
-              L19: { value: c.sent === '' ? 0 : Number(c.sent) },
-              L20: { value: c.replied === '' ? 0 : Number(c.replied) },
-              L22: { value: c.hotLeads === '' ? 0 : Number(c.hotLeads) },
-              existing_connections_notes: { value: c.notes || '' },
-            },
-            leadgen_submitted_at: new Date().toISOString(),
-          }, { onConflict: 'client_id,week_start' })
-        }
-
-        if (inmailTimer.current) {
-          clearTimeout(inmailTimer.current)
-          const c = inmailRef.current
-          supabase.from('weekly_data').upsert({
-            client_id: selectedClientId,
-            week_start: selectedWeek,
-            week_end: weekInfo?.weekEnd ?? '',
-            week_label: weekInfo?.label ?? '',
-            leadgen_metrics: {
-              ...baseMetrics,
-              L01: { value: c.targeted || '' },
-              L02: { value: c.sent === '' ? 0 : Number(c.sent) },
-              L03: { value: c.accepted === '' ? 0 : Number(c.accepted) },
-              L04: { value: c.declined === '' ? 0 : Number(c.declined) },
-              L06: { value: c.hotLeads === '' ? 0 : Number(c.hotLeads) },
-            },
-            leadgen_submitted_at: new Date().toISOString(),
-          }, { onConflict: 'client_id,week_start' })
-        }
+        if (existingConnSyncTimer.current) flushExistingConn()
+        if (inmailSyncTimer.current) flushInmail()
 
         // Flush any pending campaign saves
         Object.keys(autosaveTimers.current).forEach(campaignId => {
@@ -1060,9 +963,9 @@ export function DataEntryPage() {
                         <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Client Level Outreach</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        {existingConnSaveStatus === 'saving' && <span className="text-xs text-muted-foreground">Saving…</span>}
-                        {existingConnSaveStatus === 'saved' && <span className="text-xs text-green-600 font-bold">✓ Saved</span>}
-                        {existingConnSaveStatus === 'error' && <span className="text-xs text-red-600 font-bold">⚠ Error</span>}
+                        {contentSaveStatus === 'saving' && <span className="text-xs text-muted-foreground">Saving…</span>}
+                        {contentSaveStatus === 'saved' && <span className="text-xs text-green-600 font-bold">✓ Saved</span>}
+                        {contentSaveStatus === 'error' && <span className="text-xs text-red-600 font-bold">⚠ Error</span>}
                     </div>
                 </div>
                 <div className="p-6">
@@ -1125,9 +1028,9 @@ export function DataEntryPage() {
                         <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Client Level Outreach</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        {inmailSaveStatus === 'saving' && <span className="text-xs text-muted-foreground">Saving…</span>}
-                        {inmailSaveStatus === 'saved' && <span className="text-xs text-green-600 font-bold">✓ Saved</span>}
-                        {inmailSaveStatus === 'error' && <span className="text-xs text-red-600 font-bold">⚠ Error</span>}
+                        {contentSaveStatus === 'saving' && <span className="text-xs text-muted-foreground">Saving…</span>}
+                        {contentSaveStatus === 'saved' && <span className="text-xs text-green-600 font-bold">✓ Saved</span>}
+                        {contentSaveStatus === 'error' && <span className="text-xs text-red-600 font-bold">⚠ Error</span>}
                     </div>
                 </div>
                 <div className="p-6">

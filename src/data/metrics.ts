@@ -79,6 +79,7 @@ export const LEADGEN_METRICS: Metric[] = [
   { id: 'L20', name: 'Existing Connections Answered', type: 'number', category: 'leadgen', group: 'Existing Connections', hasTarget: false, hasNote: false },
   { id: 'L21', name: 'Existing Connections Rate', type: 'auto', category: 'leadgen', group: 'Existing Connections', autoFormula: 'L20/L19*100', dependsOn: ['L20','L19'], hasTarget: true, hasNote: false, unit: '%' },
   { id: 'L22', name: 'Existing Connections Hot Leads', type: 'number', category: 'leadgen', group: 'Existing Connections', hasTarget: false, hasNote: false },
+  { id: 'existing_connections_notes', name: 'Existing Connections Notes', type: 'textarea', category: 'leadgen', group: 'Existing Connections', hasTarget: false, hasNote: false },
   // Pipeline & Conversion
   { id: 'L24', name: 'Meetings Booked', type: 'number', category: 'leadgen', group: 'Pipeline & Conversion', hasTarget: true, hasNote: false },
   { id: 'L25', name: 'Meetings Attended', type: 'number', category: 'leadgen', group: 'Pipeline & Conversion', hasTarget: false, hasNote: false },
