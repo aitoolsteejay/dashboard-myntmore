@@ -16,7 +16,8 @@ import {
   Instagram,
   Youtube,
   Mic,
-  Video
+  Video,
+  Trophy
 } from "lucide-react"
 import {
   TJ_INSTAGRAM_METRICS,
@@ -27,8 +28,13 @@ import {
 } from "@/data/company_metrics"
 import { BackButton } from "@/components/ui/BackButton"
 import { getPreviousWeekStart, getWeekOptions } from "@/utils/weekUtils"
+import { formatWeekDate } from "@/utils/dateUtils"
 import { useAutoSave } from "@/hooks/useAutoSave"
 import { SaveIndicator } from "@/components/ui/SaveIndicator"
+
+// The JSON columns in tj_weekly_data that hold {metricId: {value, target}} maps —
+// used to scan every week's history for each metric's all-time high.
+const TJ_METRIC_COLUMNS = ['instagram', 'youtube', 'linkedin_newsletter', 'email_newsletter', 'podcast', 'video_pipeline'] as const
 
 export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
   const { user } = useAuth()
@@ -38,10 +44,44 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
   
   const weekOptions = useMemo(() => getWeekOptions(12), [])
   const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart())
+
+  // Lifetime high (all-time best week) per metric, computed from every week of
+  // history rather than a stored table — there's no separate highscores table for
+  // TJ's own metrics (unlike per-client metrics, which use `high_scores`).
+  const [lifetimeHighs, setLifetimeHighs] = useState<Record<string, { value: number; week: string }>>({})
+
+  const fetchLifetimeHighs = async () => {
+    const { data } = await supabase
+      .from('tj_weekly_data')
+      .select(`week_start, ${TJ_METRIC_COLUMNS.join(', ')}`)
+    if (!data) return
+
+    const highs: Record<string, { value: number; week: string }> = {}
+    for (const row of data as any[]) {
+      for (const column of TJ_METRIC_COLUMNS) {
+        const metrics = row[column] as Record<string, { value?: unknown }> | null
+        if (!metrics) continue
+        for (const [metricId, field] of Object.entries(metrics)) {
+          const n = Number(field?.value)
+          if (isNaN(n)) continue
+          if (!highs[metricId] || n > highs[metricId].value) {
+            highs[metricId] = { value: n, week: row.week_start }
+          }
+        }
+      }
+    }
+    setLifetimeHighs(highs)
+  }
+
+  useEffect(() => {
+    fetchLifetimeHighs()
+  }, [])
+
   const { triggerSave, saveStatus, lastSaved } = useAutoSave({
     table: 'tj_weekly_data',
     matchColumns: { week_start: selectedWeek },
-    debounceMs: 1500
+    debounceMs: 1500,
+    onSaveSuccess: () => { fetchLifetimeHighs() }
   })
 
   const [formData, setFormData] = useState<any>({
@@ -50,7 +90,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
     newsletter_podcast: {},
     video_pipeline: {}
   })
-  
+
   const [channelOwners, setChannelOwners] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -146,7 +186,8 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
 
   const renderMetricCard = (section: string, metric: CompanyMetric) => {
     const data = formData[section][metric.id] || { value: '', target: '' }
-    
+    const lifetimeHigh = lifetimeHighs[metric.id]
+
     // Auto-calc for Total Posts
     if (metric.id === 'TJI04' && section === 'instagram') {
         const total = (parseFloat(formData.instagram.TJI01?.value) || 0) + 
@@ -190,13 +231,20 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
             <div className="flex gap-2 pt-2 border-t border-border/30">
               <div className="flex-1 space-y-1">
                 <Label className="text-[9px] uppercase font-bold opacity-50">Target</Label>
-                <Input 
-                  type="number" 
-                  value={data.target} 
+                <Input
+                  type="number"
+                  value={data.target}
                   onChange={e => updateMetric(section, metric.id, 'target', e.target.value)}
                   className="h-8 text-xs font-bold"
                 />
               </div>
+            </div>
+          )}
+          {lifetimeHigh && (
+            <div className="flex items-center gap-1 text-[11px] text-gold font-bold pt-1 border-t border-border/30">
+              <Trophy className="w-3 h-3" />
+              <span>{lifetimeHigh.value}</span>
+              <span className="opacity-60 font-normal">· {formatWeekDate(lifetimeHigh.week)}</span>
             </div>
           )}
         </CardContent>
