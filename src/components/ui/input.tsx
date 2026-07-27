@@ -3,7 +3,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
-  ({ className, type, ...props }, ref) => {
+  ({ className, type, onWheel, ...props }, ref) => {
     return (
       <input
         type={type}
@@ -12,6 +12,15 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           className,
         )}
         ref={ref}
+        onWheel={(e) => {
+          // Browsers silently increment/decrement a focused <input type="number">
+          // when the page is scrolled over it. Blurring on wheel stops that so
+          // scrolling the page never changes a value the user didn't mean to touch.
+          if (type === "number") {
+            (e.target as HTMLElement).blur();
+          }
+          onWheel?.(e);
+        }}
         {...props}
       />
     );
