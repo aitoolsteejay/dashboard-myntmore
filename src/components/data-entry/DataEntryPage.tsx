@@ -78,6 +78,15 @@ export function DataEntryPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  // Tracks the currently-selected client/week so an in-flight fetchData() call can
+  // tell, once its awaits resolve, whether the user has since switched to a
+  // different client/week — and if so, discard its (now stale) results instead of
+  // clobbering the newer selection's data.
+  const selectionRef = React.useRef({ clientId: selectedClientId, week: selectedWeek })
+  useEffect(() => {
+    selectionRef.current = { clientId: selectedClientId, week: selectedWeek }
+  }, [selectedClientId, selectedWeek])
+
   const {
     triggerSave: triggerContentSave,
     saveNow: saveContentNow,
@@ -91,14 +100,19 @@ export function DataEntryPage() {
       week_start: selectedWeek
     },
     debounceMs: 1500,
-    onSaveSuccess: () => {
-      if (selectedClientId && selectedWeek) {
+    onSaveSuccess: (savedCols) => {
+      // Use the client/week that was actually just written, not whatever happens
+      // to be selected right now — a queued flush can complete after the user has
+      // already moved on to a different client.
+      const clientId = savedCols?.client_id || selectedClientId
+      const week = savedCols?.week_start || selectedWeek
+      if (clientId && week) {
         const currentContent = activeTab === 'content' ? formDataRef.current : (weeklyData?.content_metrics || {})
         const currentLeadgen = activeTab === 'leadgen' ? formDataRef.current : (weeklyData?.leadgen_metrics || {})
 
         detectAndUpdateHighScores(
-          selectedClientId,
-          selectedWeek,
+          clientId,
+          week,
           currentContent as Record<string, unknown>,
           currentLeadgen as Record<string, unknown>
         ).catch(err => console.error('High score detection failed:', err))
@@ -157,6 +171,10 @@ export function DataEntryPage() {
 
   const fetchData = async () => {
     if (!selectedClientId || !selectedWeek) return
+    const requestedClientId = selectedClientId
+    const requestedWeek = selectedWeek
+    const isStale = () =>
+      selectionRef.current.clientId !== requestedClientId || selectionRef.current.week !== requestedWeek
     setLoading(true)
     try {
       const [
@@ -194,11 +212,15 @@ export function DataEntryPage() {
         .eq('target_type', 'monthly')
         .eq('period', month)
         
+      // Bail out if the user switched client/week while these requests were in
+      // flight — an older, slower response must never overwrite a newer selection.
+      if (isStale()) return
+
       const wMap: Record<string, number> = {}
       wTargets?.forEach(t => { if (t.target_value !== null) wMap[t.metric_id] = t.target_value })
       const mMap: Record<string, number> = {}
       mTargets?.forEach(t => { if (t.target_value !== null) mMap[t.metric_id] = t.target_value })
-      
+
       setWeeklyTargets(wMap)
       setMonthlyTargets(mMap)
 
@@ -225,9 +247,12 @@ export function DataEntryPage() {
       formDataRef.current = initialForm
       setFormData(initialForm)
     } catch (error: any) {
-      toast.error(error.message)
+      if (!isStale()) toast.error(error.message)
     } finally {
-      setLoading(false)
+      // Only the response matching the current selection should clear the
+      // loading indicator — a stale one finishing later must not do it on
+      // behalf of a still-in-flight newer request.
+      if (!isStale()) setLoading(false)
     }
   }
 

@@ -14,7 +14,7 @@ interface AutoSaveOptions {
   table: string
   matchColumns: Record<string, string>  // e.g. { client_id: 'abc', week_start: '2026-05-11' }
   debounceMs?: number                   // default 1500ms
-  onSaveSuccess?: () => void
+  onSaveSuccess?: (cols: Record<string, string>) => void
   onSaveError?: (err: string) => void
   saveFn?: (payload: Record<string, any>) => Promise<void> // Custom save logic (e.g. RPC)
 }
@@ -36,7 +36,10 @@ export function useAutoSave(options: AutoSaveOptions) {
   const [pendingData, setPendingData] = useState<Record<string, any> | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isSavingRef = useRef(false)
-  const pendingAfterSave = useRef<Record<string, any> | null>(null)
+  // Carries the match columns (client_id/week_start) alongside the queued data so a
+  // save that was in flight for one client can never flush another client's edits
+  // into its own row once it completes. See save()'s finally block below.
+  const pendingAfterSave = useRef<{ data: Record<string, any>; cols: Record<string, any> } | null>(null)
 
   // Reset save status when match columns change
   useEffect(() => {
@@ -44,17 +47,17 @@ export function useAutoSave(options: AutoSaveOptions) {
     setLastSaved(null)
   }, [JSON.stringify(matchColumns)])
 
-  const save = useCallback(async (data: Record<string, any>) => {
-    // Guard: Ensure all matchColumns have values (not empty, undefined or null)
-    const hasMissingKeys = Object.entries(matchColumns).some(([key, val]) => !val)
+  const save = useCallback(async (data: Record<string, any>, cols: Record<string, any> = matchColumns) => {
+    // Guard: Ensure all cols have values (not empty, undefined or null)
+    const hasMissingKeys = Object.entries(cols).some(([key, val]) => !val)
     if (hasMissingKeys) {
-      console.warn('Auto-save skipped: missing match column values', matchColumns)
+      console.warn('Auto-save skipped: missing match column values', cols)
       return
     }
 
-    // If currently saving, queue the latest data for after
+    // If currently saving, queue the latest data (with the columns it belongs to) for after
     if (isSavingRef.current) {
-      pendingAfterSave.current = data
+      pendingAfterSave.current = { data, cols }
       return
     }
 
@@ -63,7 +66,7 @@ export function useAutoSave(options: AutoSaveOptions) {
 
     try {
       const payload: Record<string, any> = {
-        ...matchColumns,
+        ...cols,
         ...data,
       }
 
@@ -74,7 +77,7 @@ export function useAutoSave(options: AutoSaveOptions) {
         const { error } = await (supabase as any)
           .from(table)
           .upsert(payload, {
-            onConflict: Object.keys(matchColumns).join(','),
+            onConflict: Object.keys(cols).join(','),
             ignoreDuplicates: false  // always update
           })
 
@@ -84,7 +87,7 @@ export function useAutoSave(options: AutoSaveOptions) {
       setSaveStatus('saved')
       setLastSaved(new Date())
       setPendingData(null)
-      onSaveSuccess?.()
+      onSaveSuccess?.(cols)
 
     } catch (err: any) {
       setSaveStatus('error')
@@ -93,11 +96,12 @@ export function useAutoSave(options: AutoSaveOptions) {
     } finally {
       isSavingRef.current = false
 
-      // If data changed while we were saving, save again immediately
+      // If data changed while we were saving, save again immediately — using the
+      // columns that data was queued for, not whatever client/week is selected now.
       if (pendingAfterSave.current) {
         const next = pendingAfterSave.current
         pendingAfterSave.current = null
-        setTimeout(() => save(next), 100)
+        setTimeout(() => save(next.data, next.cols), 100)
       }
     }
   }, [table, matchColumns, onSaveSuccess, onSaveError])
