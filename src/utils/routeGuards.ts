@@ -28,6 +28,30 @@ export async function requireAdmin({ location }: { location: { href: string } })
     .maybeSingle()
 
   if (roleData?.role !== 'admin') {
+    throw redirect({ to: '/dashboard' })
+  }
+}
+
+// Allows both admins and internal team members into the operational dashboard.
+// Client portal accounts also carry the "member" enum, so role alone cannot
+// distinguish them. Their profile department is explicitly set to "client".
+export async function requireInternalUser({ location }: { location: { href: string } }) {
+  let { data: { session } } = await supabase.auth.getSession()
+  if (!session) {
+    const { data } = await supabase.auth.refreshSession()
+    session = data.session
+  }
+  if (!session) {
+    throw redirect({ to: '/login', search: { redirect: location.href } })
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('department')
+    .eq('id', session.user.id)
+    .maybeSingle()
+
+  if (profileError || !profile || profile.department === 'client') {
     throw redirect({ to: '/portal' })
   }
 }

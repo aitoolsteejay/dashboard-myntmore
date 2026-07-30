@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { ClientsPage } from '../components/clients/ClientsPage'
-import { requireAdmin } from '@/utils/routeGuards'
+import { requireInternalUser } from '@/utils/routeGuards'
 
 export const Route = createFileRoute('/clients')({
-  beforeLoad: requireAdmin,
+  beforeLoad: requireInternalUser,
   component: ClientsPage,
 })

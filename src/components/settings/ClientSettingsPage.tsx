@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Globe, Unlink, UserPlus } from 'lucide-react'
+import { Globe, KeyRound, RefreshCw, Unlink, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 
 type ClientPortalRow = {
@@ -24,6 +24,9 @@ export function ClientSettingsPage() {
   const [isPortalModalOpen, setIsPortalModalOpen] = useState(false)
   const [portalForm, setPortalForm] = useState({ email: '', password: '', clientId: '' })
   const [portalLoading, setPortalLoading] = useState(false)
+  const [resetClient, setResetClient] = useState<ClientPortalRow | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
 
   const fetchClients = async () => {
     setLoading(true)
@@ -76,6 +79,47 @@ export function ClientSettingsPage() {
     }
   }
 
+  const openCreateLogin = (client?: ClientPortalRow) => {
+    setPortalForm({ email: '', password: '', clientId: client?.id || '' })
+    setIsPortalModalOpen(true)
+  }
+
+  const openResetPassword = (client: ClientPortalRow) => {
+    setResetClient(client)
+    setNewPassword('')
+  }
+
+  const handleResetPassword = async () => {
+    if (!resetClient?.user_id) return
+    if (newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters.')
+      return
+    }
+
+    setResetLoading(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const { data, error } = await supabase.functions.invoke('create-portal-user', {
+        body: {
+          action: 'reset_password',
+          userId: resetClient.user_id,
+          newPassword,
+        },
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token}` },
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+
+      toast.success(`Password updated for ${resetClient.name}.`)
+      setResetClient(null)
+      setNewPassword('')
+    } catch (error: any) {
+      toast.error('Failed to reset password: ' + error.message)
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
   const handleUnlinkPortalUser = async (clientId: string) => {
     if (!window.confirm('Remove portal access for this client?')) return
     const { error } = await (supabase as any)
@@ -102,7 +146,7 @@ export function ClientSettingsPage() {
           </p>
         </div>
         <Button
-          onClick={() => setIsPortalModalOpen(true)}
+          onClick={() => openCreateLogin()}
           className="bg-gold font-bold text-black hover:bg-gold/90"
         >
           <UserPlus className="mr-2 h-4 w-4" /> Create Portal Account
@@ -135,17 +179,38 @@ export function ClientSettingsPage() {
                 <TableCell className="text-xs text-muted-foreground">
                   {client.user_id ? `${window.location.origin}/portal` : '-'}
                 </TableCell>
-                <TableCell className="text-right">
-                  {client.user_id && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleUnlinkPortalUser(client.id)}
-                      className="gap-1.5 text-xs text-red-500 hover:bg-red-50 hover:text-red-700"
-                    >
-                      <Unlink className="h-3.5 w-3.5" /> Remove
-                    </Button>
-                  )}
+                <TableCell>
+                  <div className="flex justify-end gap-1">
+                    {client.user_id ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openResetPassword(client)}
+                          className="gap-1.5 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                        >
+                          <KeyRound className="h-3.5 w-3.5" /> Reset Password
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleUnlinkPortalUser(client.id)}
+                          className="gap-1.5 text-xs text-red-500 hover:bg-red-50 hover:text-red-700"
+                        >
+                          <Unlink className="h-3.5 w-3.5" /> Remove
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openCreateLogin(client)}
+                        className="gap-1.5 text-xs font-bold text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" /> Create Login
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -227,6 +292,44 @@ export function ClientSettingsPage() {
               className="bg-gold font-black text-black"
             >
               {portalLoading ? 'Creating...' : 'Create & Link Account →'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(resetClient)} onOpenChange={open => !open && setResetClient(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-amber-500" /> Reset Client Password
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Set a new portal password for{' '}
+              <span className="font-bold text-foreground">{resetClient?.name}</span>.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="font-bold">New Password</Label>
+              <Input
+                type="password"
+                placeholder="Minimum 8 characters"
+                value={newPassword}
+                onChange={event => setNewPassword(event.target.value)}
+                onKeyDown={event => event.key === 'Enter' && handleResetPassword()}
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetClient(null)}>Cancel</Button>
+            <Button
+              onClick={handleResetPassword}
+              disabled={resetLoading || newPassword.length < 8}
+              className="gap-2 bg-amber-500 font-bold text-white hover:bg-amber-600"
+            >
+              {resetLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+              Set Password
             </Button>
           </DialogFooter>
         </DialogContent>
