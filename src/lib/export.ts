@@ -152,9 +152,7 @@ function buildTjSheet(rows: any[]) {
     .map((row: any) => {
       const ig = asRecord(row.instagram)
       const yt = asRecord(row.youtube)
-      const nl = asRecord(row.linkedin_newsletter)
       const em = asRecord(row.email_newsletter)
-      const pod = asRecord(row.podcast)
       const vid = asRecord(row.video_pipeline)
 
       const base: Record<string, unknown> = {
@@ -163,7 +161,7 @@ function buildTjSheet(rows: any[]) {
       }
       for (const m of TJ_INSTAGRAM_METRICS)  base[`[IG] ${m.name}`]      = readField(ig, m.id)
       for (const m of TJ_YOUTUBE_METRICS)    base[`[YT] ${m.name}`]      = readField(yt, m.id)
-      for (const m of TJ_PODCAST_METRICS)    base[`[Newsletter] ${m.name}`] = readField({ ...nl, ...em, ...pod }, m.id)
+      for (const m of TJ_PODCAST_METRICS)    base[`[Newsletter] ${m.name}`] = readField(em, m.id)
       for (const m of TJ_VIDEO_METRICS)      base[`[Video] ${m.name}`]   = readField(vid, m.id)
       return base
     })
@@ -486,7 +484,7 @@ export async function generateWeeklySummary(weekStart: string) {
     text += `\nTJ PERSONAL BRAND\n────────────────────────────\n`
     text += `IG: ${tj.instagram?.TJI11?.value || '-'} followers (+${tj.instagram?.TJI10?.value || '0'})\n`
     text += `YT: ${tj.youtube?.TJY07?.value || '-'} subs (+${tj.youtube?.TJY06?.value || '0'})\n`
-    text += `News: ${tj.linkedin_newsletter?.TJP01?.value || '-'} LinkedIn subs\n`
+    text += `News: ${tj.email_newsletter?.TJP08?.value || '-'} emails sent\n`
   }
 
   if (salesData) {

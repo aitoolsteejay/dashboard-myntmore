@@ -109,7 +109,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
         setFormData({
           instagram: row.instagram || {},
           youtube: row.youtube || {},
-          newsletter_podcast: { ...(row.linkedin_newsletter || {}), ...(row.email_newsletter || {}), ...(row.podcast || {}) },
+          newsletter_podcast: row.email_newsletter || {},
           video_pipeline: row.video_pipeline || {}
         })
       } else {
@@ -146,7 +146,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
         week_label: weekInfo?.label || '',
         instagram: updated.instagram,
         youtube: updated.youtube,
-        linkedin_newsletter: { TJP01: updated.newsletter_podcast?.TJP01, TJP05: updated.newsletter_podcast?.TJP05, TJP06: updated.newsletter_podcast?.TJP06, TJP07: updated.newsletter_podcast?.TJP07 },
+        linkedin_newsletter: {},
         email_newsletter: { TJP08: updated.newsletter_podcast?.TJP08, TJP09: updated.newsletter_podcast?.TJP09, TJP10: updated.newsletter_podcast?.TJP10, TJP11: updated.newsletter_podcast?.TJP11, TJP12: updated.newsletter_podcast?.TJP12, TJP13: updated.newsletter_podcast?.TJP13 },
         podcast: {},
         video_pipeline: updated.video_pipeline,
@@ -265,7 +265,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
             borderRadius: '20px',
             fontSize: '12px'
           }}>
-            {channelOwners[activeTab === 'pipeline' ? 'video_pipeline' : activeTab === 'podcast' ? 'linkedin_newsletter' : activeTab] ?? 'Unassigned'}
+            {channelOwners[activeTab === 'pipeline' ? 'video_pipeline' : activeTab === 'podcast' ? 'email_newsletter' : activeTab] ?? 'Unassigned'}
           </span>
           {user && (
             <a
@@ -295,12 +295,6 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
                 </div>
             </TabsContent>
             <TabsContent value="podcast" className="mt-0 space-y-6">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 border-b pb-1">LinkedIn Newsletter</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {TJ_PODCAST_METRICS.filter(m => ['TJP01','TJP05','TJP06','TJP07'].includes(m.id)).map(m => renderMetricCard('newsletter_podcast', m))}
-                  </div>
-                </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 border-b pb-1">Email Newsletter</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">

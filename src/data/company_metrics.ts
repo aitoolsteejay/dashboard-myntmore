@@ -36,10 +36,6 @@ export const TJ_YOUTUBE_METRICS: CompanyMetric[] = [
 ]
 
 export const TJ_PODCAST_METRICS: CompanyMetric[] = [
-  { id: 'TJP01', name: 'LinkedIn Newsletter Subs', type: 'number', hasTarget: true },
-  { id: 'TJP05', name: 'LinkedIn Newsletter Impressions', type: 'number' },
-  { id: 'TJP06', name: 'LinkedIn Newsletter Members Reached', type: 'number' },
-  { id: 'TJP07', name: 'LinkedIn Newsletter Views', type: 'number' },
   { id: 'TJP08', name: 'Emails Sent', type: 'number' },
   { id: 'TJP09', name: 'Delivery Rate', type: 'percentage' },
   { id: 'TJP10', name: 'Open Rate', type: 'percentage' },

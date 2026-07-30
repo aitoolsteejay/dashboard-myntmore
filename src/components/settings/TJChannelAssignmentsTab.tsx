@@ -24,7 +24,6 @@ import { sortAlphabetically } from '@/utils/sort'
 const CHANNELS = [
   { key: 'instagram',           label: 'Instagram',            icon: '📱' },
   { key: 'youtube',             label: 'YouTube',              icon: '▶️' },
-  { key: 'linkedin_newsletter', label: 'LinkedIn Newsletter',  icon: '📧' },
   { key: 'email_newsletter',    label: 'Email Newsletter',     icon: '✉️' },
   { key: 'video_pipeline',      label: 'Video Pipeline',       icon: '🎬' },
 ]

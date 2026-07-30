@@ -12,7 +12,6 @@ import { sortAlphabetically } from "@/utils/sort"
 import {
   CompanyMetric,
   TJ_INSTAGRAM_METRICS,
-  TJ_PODCAST_METRICS,
   TJ_YOUTUBE_METRICS,
 } from "@/data/company_metrics"
 
@@ -112,7 +111,6 @@ const SALES_TARGET_METRIC_IDS = ['SO50', 'SO51', 'SO53', 'SO55'] // only non-aut
 const TJ_TARGET_GROUPS = [
   { title: 'Instagram', metrics: TJ_INSTAGRAM_METRICS.filter(metric => metric.hasTarget) },
   { title: 'YouTube', metrics: TJ_YOUTUBE_METRICS.filter(metric => metric.hasTarget) },
-  { title: 'Newsletter', metrics: TJ_PODCAST_METRICS.filter(metric => metric.hasTarget) },
 ]
 const TJ_TARGET_METRIC_IDS = TJ_TARGET_GROUPS.flatMap(group => group.metrics.map(metric => metric.id))
 
@@ -385,7 +383,7 @@ export function SettingsTargetsPage() {
   const loadTjActuals = async (weekStart: string) => {
     const { data } = await supabase
       .from('tj_weekly_data')
-      .select('instagram, youtube, linkedin_newsletter, email_newsletter, podcast')
+      .select('instagram, youtube')
       .eq('week_start', weekStart)
       .maybeSingle()
 
@@ -397,9 +395,6 @@ export function SettingsTargetsPage() {
     const sources = [
       data.instagram,
       data.youtube,
-      data.linkedin_newsletter,
-      data.email_newsletter,
-      data.podcast,
     ] as Array<Record<string, any> | null>
     const actuals: Record<string, number> = {}
 
@@ -567,7 +562,7 @@ export function SettingsTargetsPage() {
                 </Select>
               </div>
               <p className="text-xs text-muted-foreground pb-2">
-                Weekly targets and actuals for TJ's Instagram, YouTube, and newsletter channels.
+                Weekly targets and actuals for TJ's Instagram and YouTube channels.
               </p>
             </div>
           </Card>
