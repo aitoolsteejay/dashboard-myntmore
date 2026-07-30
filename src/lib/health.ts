@@ -3,7 +3,13 @@ import { supabase } from "@/integrations/supabase/client"
 export function calculateHealthScore(
   contentMetrics: Record<string, any>,
   leadgenMetrics: Record<string, any>,
-  targets: Record<string, any>
+  targets: Record<string, any>,
+  options: {
+    contentEnabled?: boolean
+    leadgenEnabled?: boolean
+    activeContentMetrics?: string[] | null
+    activeLeadgenMetrics?: string[] | null
+  } = {},
 ): { score: number; breakdown: Record<string, number> } {
 
   const get = (metrics: any, id: string) => 
@@ -15,47 +21,49 @@ export function calculateHealthScore(
   const pct = (actual: number, tgt: number) => 
     tgt > 0 ? Math.min((actual / tgt) * 100, 100) : 0
 
-  // Acceptance Rate - 20 points
-  const acceptanceRate = get(leadgenMetrics, 'L12')
-  const acceptanceScore = Math.min(acceptanceRate, 100) * 0.20
+  const contentEnabled = options.contentEnabled ?? true
+  const leadgenEnabled = options.leadgenEnabled ?? true
+  const contentActive = (id: string) =>
+    contentEnabled && (options.activeContentMetrics == null || options.activeContentMetrics.includes(id))
+  const leadgenActive = (id: string) =>
+    leadgenEnabled && (options.activeLeadgenMetrics == null || options.activeLeadgenMetrics.includes(id))
 
-  // Positive Replies Achievement - 25 points
+  const acceptanceRate = get(leadgenMetrics, 'L12')
   const positiveReplies = get(leadgenMetrics, 'L15')
   const positiveTarget = target('L15')
-  const positiveScore = pct(positiveReplies, positiveTarget) * 0.25
-
-  // Meetings Booked Achievement - 20 points
   const meetings = get(leadgenMetrics, 'L24')
   const meetingsTarget = target('L24')
-  const meetingsScore = pct(meetings, meetingsTarget) * 0.20
-
-  // Posts Published Achievement - 15 points
   const posts = get(contentMetrics, 'C09')
   const postsTarget = target('C09')
-  const postsScore = pct(posts, postsTarget) * 0.15
-
-  // Impressions Achievement - 10 points
   const impressions = get(contentMetrics, 'C10')
   const impressionsTarget = target('C10')
-  const impressionsScore = pct(impressions, impressionsTarget) * 0.10
-
-  // Happiness Index - 10 points (0–10 scale → 0–100)
   const happiness = get(leadgenMetrics, 'L30')
-  const happinessScore = (happiness / 10) * 100 * 0.10
 
-  const total = acceptanceScore + positiveScore + meetingsScore + 
-                postsScore + impressionsScore + happinessScore
+  const components = [
+    { key: 'acceptanceRate', enabled: leadgenActive('L12'), weight: 20, achievement: Math.min(acceptanceRate, 100) },
+    { key: 'positiveReplies', enabled: leadgenActive('L15'), weight: 25, achievement: pct(positiveReplies, positiveTarget) },
+    { key: 'meetingsBooked', enabled: leadgenActive('L24'), weight: 20, achievement: pct(meetings, meetingsTarget) },
+    { key: 'postsPublished', enabled: contentActive('C09'), weight: 15, achievement: pct(posts, postsTarget) },
+    { key: 'impressions', enabled: contentActive('C10'), weight: 10, achievement: pct(impressions, impressionsTarget) },
+    { key: 'happiness', enabled: leadgenActive('L30'), weight: 10, achievement: Math.min((happiness / 10) * 100, 100) },
+  ]
+  const enabledComponents = components.filter(component => component.enabled)
+  const totalWeight = enabledComponents.reduce((sum, component) => sum + component.weight, 0)
+  const weightedTotal = enabledComponents.reduce(
+    (sum, component) => sum + component.achievement * component.weight,
+    0,
+  )
+  const score = totalWeight > 0 ? Math.round(weightedTotal / totalWeight) : 0
+  const breakdown = Object.fromEntries(components.map(component => [
+    component.key,
+    component.enabled && totalWeight > 0
+      ? Math.round((component.achievement * component.weight) / totalWeight)
+      : 0,
+  ]))
 
   return {
-    score: Math.round(total),
-    breakdown: {
-      acceptanceRate: Math.round(acceptanceScore),
-      positiveReplies: Math.round(positiveScore),
-      meetingsBooked: Math.round(meetingsScore),
-      postsPublished: Math.round(postsScore),
-      impressions: Math.round(impressionsScore),
-      happiness: Math.round(happinessScore)
-    }
+    score,
+    breakdown,
   }
 }
 
@@ -79,7 +87,18 @@ export async function updateClientHealth(
     targetsData?.forEach(t => targets[t.metric_id] = t.target_value ?? 0)
 
     // 2. Calculate score
-    const { score, breakdown } = calculateHealthScore(contentMetrics, leadgenMetrics, targets)
+    const { data: settings } = await supabase
+      .from('client_settings')
+      .select('content_enabled, leadgen_enabled, active_content_metrics, active_leadgen_metrics')
+      .eq('client_id', clientId)
+      .maybeSingle()
+
+    const { score, breakdown } = calculateHealthScore(contentMetrics, leadgenMetrics, targets, {
+      contentEnabled: settings?.content_enabled ?? true,
+      leadgenEnabled: settings?.leadgen_enabled ?? true,
+      activeContentMetrics: settings?.active_content_metrics,
+      activeLeadgenMetrics: settings?.active_leadgen_metrics,
+    })
 
     // 3. Fetch previous score
     const { data: prev } = await supabase
@@ -119,7 +138,9 @@ export async function updateClientHealth(
     }
 
     // 6. Check Happiness Alerts
-    await checkHappinessAlert(clientId, weekStart)
+    if (settings?.leadgen_enabled ?? true) {
+      await checkHappinessAlert(clientId, weekStart)
+    }
 
     return { score, prevScore: prev?.health_score }
   } catch (err) {
@@ -232,4 +253,3 @@ export async function checkHappinessAlert(clientId: string, currentWeekStart: st
     console.error("Happiness alert check failed", err)
   }
 }
-

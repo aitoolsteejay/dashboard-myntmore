@@ -1561,8 +1561,8 @@ export function DataEntryPage() {
     return metrics.filter(m => activeIds.includes(m.id))
   }
 
-  const contentEnabled = clientSettings?.active_content_metrics?.length !== 0
-  const leadgenEnabled = clientSettings?.active_leadgen_metrics?.length !== 0
+  const contentEnabled = clientSettings?.content_enabled ?? true
+  const leadgenEnabled = clientSettings?.leadgen_enabled ?? true
 
   useEffect(() => {
     if (!clientSettings) return

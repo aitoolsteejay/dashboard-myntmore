@@ -452,24 +452,30 @@ export type Database = {
           active_content_metrics: string[] | null
           active_leadgen_metrics: string[] | null
           client_id: string | null
+          content_enabled: boolean
           custom_targets: Json | null
           id: string
+          leadgen_enabled: boolean
           updated_at: string | null
         }
         Insert: {
           active_content_metrics?: string[] | null
           active_leadgen_metrics?: string[] | null
           client_id?: string | null
+          content_enabled?: boolean
           custom_targets?: Json | null
           id?: string
+          leadgen_enabled?: boolean
           updated_at?: string | null
         }
         Update: {
           active_content_metrics?: string[] | null
           active_leadgen_metrics?: string[] | null
           client_id?: string | null
+          content_enabled?: boolean
           custom_targets?: Json | null
           id?: string
+          leadgen_enabled?: boolean
           updated_at?: string | null
         }
         Relationships: [

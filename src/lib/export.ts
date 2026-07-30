@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client"
-import * as XLSX from 'xlsx'
+import writeExcelFile from 'write-excel-file/browser'
 import { CONTENT_METRICS, LEADGEN_METRICS } from "@/data/metrics"
 import {
   TJ_INSTAGRAM_METRICS, TJ_YOUTUBE_METRICS, TJ_PODCAST_METRICS, TJ_VIDEO_METRICS,
@@ -44,21 +44,27 @@ function pct(num: number | null, den: number | null): string {
   return (Math.min(r, 100)).toFixed(1) + '%'
 }
 
-function autoWidth(ws: XLSX.WorkSheet) {
-  const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1')
-  const cols: { wch: number }[] = []
-  for (let C = range.s.c; C <= range.e.c; C++) {
-    let max = 10
-    for (let R = range.s.r; R <= range.e.r; R++) {
-      const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]
-      if (cell?.v != null) {
-        const len = String(cell.v).length
-        if (len > max) max = len
-      }
-    }
-    cols.push({ wch: Math.min(max + 2, 40) })
-  }
-  ws['!cols'] = cols
+type ExportCell = string | number | boolean | Date | null
+
+function objectRowsToSheet(rows: Record<string, unknown>[]) {
+  if (rows.length === 0) return { data: [] as ExportCell[][], columns: [] as { width: number }[] }
+  const headers = Object.keys(rows[0])
+  const data: ExportCell[][] = [
+    headers.map(header => header),
+    ...rows.map(row => headers.map(header => {
+      const value = row[header]
+      return value instanceof Date || ['string', 'number', 'boolean'].includes(typeof value)
+        ? value as ExportCell
+        : value == null ? null : String(value)
+    })),
+  ]
+  const columns = headers.map((header, columnIndex) => ({
+    width: Math.min(
+      Math.max(header.length + 2, ...data.slice(1).map(row => String(row[columnIndex] ?? '').length + 2), 10),
+      40,
+    ),
+  }))
+  return { data, columns }
 }
 
 // ─── sheet builders ──────────────────────────────────────────────────────────
@@ -388,71 +394,20 @@ export async function generateLifetimeExport(options: {
   const allClients = clients ?? []
   const displayClients = clientId ? allClients.filter(c => c.id === clientId) : allClients
 
-  const wb = XLSX.utils.book_new()
-
-  // Sheet 1 - Client Weekly Data
   const clientRows = buildClientSheet(weeklyData ?? [], displayClients, healthScores ?? [])
-  if (clientRows.length > 0) {
-    const ws = XLSX.utils.json_to_sheet(clientRows)
-    autoWidth(ws)
-    XLSX.utils.book_append_sheet(wb, ws, 'Client Weekly Data')
-  }
-
-  // Sheet 2 - Health Scores
   const healthRows = buildHealthSheet(
     clientId
       ? (healthScores ?? []).filter(h => h.client_id === clientId)
       : healthScores ?? [],
     displayClients,
   )
-  if (healthRows.length > 0) {
-    const ws = XLSX.utils.json_to_sheet(healthRows)
-    autoWidth(ws)
-    XLSX.utils.book_append_sheet(wb, ws, 'Health Scores')
-  }
-
-  // Sheet 3 - TJ Brand (not filtered by client)
-  if (!clientId && (tjData ?? []).length > 0) {
-    const tjRows = buildTjSheet(tjData ?? [])
-    const ws = XLSX.utils.json_to_sheet(tjRows)
-    autoWidth(ws)
-    XLSX.utils.book_append_sheet(wb, ws, 'TJ Brand')
-  }
-
-  // Sheet 4 - MM Content (not filtered by client)
-  if (!clientId && (mmData ?? []).length > 0) {
-    const mmRows = buildMmSheet(mmData ?? [])
-    const ws = XLSX.utils.json_to_sheet(mmRows)
-    autoWidth(ws)
-    XLSX.utils.book_append_sheet(wb, ws, 'MM Content')
-  }
-
-  // Sheet 5 - Sales (not filtered by client)
-  if (!clientId && (salesData ?? []).length > 0) {
-    const salesRows = buildSalesSheet(salesData ?? [])
-    const ws = XLSX.utils.json_to_sheet(salesRows)
-    autoWidth(ws)
-    XLSX.utils.book_append_sheet(wb, ws, 'Sales & Outreach')
-  }
-
-  // Sheet 6 - Targets
+  const tjRows = !clientId ? buildTjSheet(tjData ?? []) : []
+  const mmRows = !clientId ? buildMmSheet(mmData ?? []) : []
+  const salesRows = !clientId ? buildSalesSheet(salesData ?? []) : []
   const targetRows = buildTargetsSheet(targets ?? [], displayClients)
-  if (targetRows.length > 0) {
-    const ws = XLSX.utils.json_to_sheet(targetRows)
-    autoWidth(ws)
-    XLSX.utils.book_append_sheet(wb, ws, 'Targets')
-  }
-
-  // Sheet 7 - High Scores
   const hsRows = buildHighScoresSheet(highScores ?? [], displayClients)
-  if (hsRows.length > 0) {
-    const ws = XLSX.utils.json_to_sheet(hsRows)
-    autoWidth(ws)
-    XLSX.utils.book_append_sheet(wb, ws, 'High Scores')
-  }
 
-  // Summary sheet (always first)
-  const summaryData = [
+  const summaryData: ExportCell[][] = [
     ['Export Summary', ''],
     ['Generated At', new Date().toLocaleString('en-IN')],
     ['Up To Date', upToDate],
@@ -470,16 +425,21 @@ export async function generateLifetimeExport(options: {
     ['Targets', targetRows.length],
     ['High Scores', hsRows.length],
   ]
-  const summaryWs = XLSX.utils.aoa_to_sheet(summaryData)
-  summaryWs['!cols'] = [{ wch: 24 }, { wch: 24 }]
-  XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary')
-  // Move Summary to first position
-  wb.SheetNames = ['Summary', ...wb.SheetNames.filter(s => s !== 'Summary')]
+  const sheets = [
+    { data: summaryData, sheet: 'Summary', columns: [{ width: 24 }, { width: 24 }] },
+    ...(clientRows.length ? [{ ...objectRowsToSheet(clientRows), sheet: 'Client Weekly Data' }] : []),
+    ...(healthRows.length ? [{ ...objectRowsToSheet(healthRows), sheet: 'Health Scores' }] : []),
+    ...(tjRows.length ? [{ ...objectRowsToSheet(tjRows), sheet: 'TJ Brand' }] : []),
+    ...(mmRows.length ? [{ ...objectRowsToSheet(mmRows), sheet: 'MM Content' }] : []),
+    ...(salesRows.length ? [{ ...objectRowsToSheet(salesRows), sheet: 'Sales & Outreach' }] : []),
+    ...(targetRows.length ? [{ ...objectRowsToSheet(targetRows), sheet: 'Targets' }] : []),
+    ...(hsRows.length ? [{ ...objectRowsToSheet(hsRows), sheet: 'High Scores' }] : []),
+  ]
 
   // Trigger download
   const clientLabel = clientId ? `_${displayClients[0]?.name?.replace(/\s+/g, '-') ?? clientId}` : ''
   const fileName = `myntmore-export${clientLabel}_upto-${upToDate}.xlsx`
-  XLSX.writeFile(wb, fileName)
+  await writeExcelFile(sheets).toFile(fileName)
 }
 
 // ─── legacy weekly text summary (kept for backward compat) ──────────────────

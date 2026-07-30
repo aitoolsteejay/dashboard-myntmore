@@ -6,6 +6,59 @@ import { fmt, fmtPct } from './format'
 
 export const readMetricValue = readNum
 
+function evaluateArithmetic(expression: string): number {
+  let index = 0
+  const input = expression.replace(/\s+/g, '')
+
+  const parseNumber = (): number => {
+    const start = index
+    while (index < input.length && /[0-9.]/.test(input[index])) index++
+    if (start === index) throw new Error('Expected number')
+    const value = Number(input.slice(start, index))
+    if (!Number.isFinite(value)) throw new Error('Invalid number')
+    return value
+  }
+
+  const parseFactor = (): number => {
+    if (input[index] === '(') {
+      index++
+      const value = parseExpression()
+      if (input[index] !== ')') throw new Error('Missing closing parenthesis')
+      index++
+      return value
+    }
+    if (input[index] === '-') {
+      index++
+      return -parseFactor()
+    }
+    return parseNumber()
+  }
+
+  const parseTerm = (): number => {
+    let value = parseFactor()
+    while (input[index] === '*' || input[index] === '/') {
+      const operator = input[index++]
+      const right = parseFactor()
+      value = operator === '*' ? value * right : value / right
+    }
+    return value
+  }
+
+  const parseExpression = (): number => {
+    let value = parseTerm()
+    while (input[index] === '+' || input[index] === '-') {
+      const operator = input[index++]
+      const right = parseTerm()
+      value = operator === '+' ? value + right : value - right
+    }
+    return value
+  }
+
+  const result = parseExpression()
+  if (index !== input.length) throw new Error('Unexpected token')
+  return result
+}
+
 // Format a metric value for display
 export function formatMetricDisplay(
   val: number | string | boolean | null,
@@ -71,8 +124,7 @@ export function buildWeekMetrics(weekRow: any) {
           const depVal = result[depId] ?? 0
           expr = expr.replace(new RegExp(`\\b${depId}\\b`, 'g'), String(depVal))
         })
-        // Safely evaluate the arithmetic expression
-        formulaVal = Number(eval(expr))
+        formulaVal = evaluateArithmetic(expr)
         val = isFinite(formulaVal) ? formulaVal : null
       } catch {
         val = null
@@ -113,4 +165,3 @@ export function buildWeekMetrics(weekRow: any) {
 
   return result
 }
-

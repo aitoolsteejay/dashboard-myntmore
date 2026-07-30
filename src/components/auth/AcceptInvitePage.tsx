@@ -58,12 +58,22 @@ export function AcceptInvitePage({ token }: { token?: string }) {
     }
 
     // Update profile + mark invite accepted
-    await supabase
+    const { error: profileError } = await supabase
       .from("profiles")
-      .update({ full_name: invite.full_name, department: 'both' })
+      .update({ full_name: invite.full_name, department: invite.department })
       .eq("id", data.user.id);
+    if (profileError) {
+      setBusy(false);
+      toast.error("Account created, but the profile could not be activated: " + profileError.message);
+      return;
+    }
 
-    await (supabase as any).rpc("accept_invite", { _token: token });
+    const { error: acceptError } = await (supabase as any).rpc("accept_invite", { _token: token });
+    if (acceptError) {
+      setBusy(false);
+      toast.error("Account created, but the invite could not be marked accepted: " + acceptError.message);
+      return;
+    }
 
     setBusy(false);
     toast.success("Account created. Please sign in.");

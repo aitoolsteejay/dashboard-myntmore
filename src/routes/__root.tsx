@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/sonner";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { hasSupabaseConfig } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
   const navigate = useNavigate()
@@ -57,6 +58,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  if (!hasSupabaseConfig) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="max-w-lg rounded-lg border p-8 text-center">
+          <h1 className="text-xl font-semibold">Dashboard configuration missing</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY, then restart the application.
+          </p>
+        </div>
+      </div>
+    )
+  }
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

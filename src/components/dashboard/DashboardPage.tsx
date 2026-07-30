@@ -34,6 +34,11 @@ import type {
 } from '@/types'
 
 // Helpers replaced by @/utils/dataUtils
+function asDashboardRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
 
 // --- DeliverableAlertRow sub-component ---
 interface DeliverableAlertItem {
@@ -157,12 +162,15 @@ export function DashboardPage() {
   const [clientSettings, setClientSettings] = useState<Record<string, {
     active_content_metrics: string[] | null
     active_leadgen_metrics: string[] | null
+    content_enabled: boolean
+    leadgen_enabled: boolean
   }>>({})
 
   const isServiceEnabled = (clientId: string, category: 'content' | 'leadgen') => {
     const settings = clientSettings[clientId]
-    const ids = category === 'content' ? settings?.active_content_metrics : settings?.active_leadgen_metrics
-    return ids?.length !== 0
+    return category === 'content'
+      ? settings?.content_enabled ?? true
+      : settings?.leadgen_enabled ?? true
   }
 
   const activeMetricsFor = (clientId: string, category: 'content' | 'leadgen') => {
@@ -910,7 +918,7 @@ export function DashboardPage() {
         supabase.from('tj_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', weekStart.slice(0, 7) + '-31'),
         supabase.from('sales_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', weekStart.slice(0, 7) + '-31'),
         supabase.from('mm_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', weekStart.slice(0, 7) + '-31'),
-        supabase.from('client_settings').select('client_id, active_content_metrics, active_leadgen_metrics'),
+        supabase.from('client_settings').select('client_id, active_content_metrics, active_leadgen_metrics, content_enabled, leadgen_enabled'),
       ])
 
       setClients(clientsData || [])
@@ -1006,6 +1014,11 @@ export function DashboardPage() {
     for (const client of clients) {
       const clientTargets = targetMap[client.id]
       if (!clientTargets || Object.keys(clientTargets).length === 0) continue
+      const relevantTargetIds = Object.keys(clientTargets).filter(metricId => {
+        const metric = ALL_METRICS.find(candidate => candidate.id === metricId)
+        return metric && activeMetricsFor(client.id, metric.category).some(active => active.id === metricId)
+      })
+      if (relevantTargetIds.length === 0) continue
 
       const weekRow = weeklyData.find(w => w.client_id === client.id) ?? null
 
@@ -1017,7 +1030,8 @@ export function DashboardPage() {
       const built = (buildWeekMetrics(weekRow) ?? {}) as Record<string, number | null>
       const lacking: typeof results[0]['lacking'] = []
 
-      for (const [metricId, targetValue] of Object.entries(clientTargets)) {
+      for (const metricId of relevantTargetIds) {
+        const targetValue = clientTargets[metricId]
         const metric = ALL_METRICS.find(m => m.id === metricId)
         if (!metric) continue
         if (!activeMetricsFor(client.id, metric.category).some(active => active.id === metricId)) continue
@@ -1065,8 +1079,10 @@ export function DashboardPage() {
 
   // Section 5: Team Submission Status logic
   const teamSubmissionStatus = profiles.map(p => {
-    const assignedClients = clients.filter(c => c.content_manager_id === p.id || c.leadgen_manager_id === p.id)
-    const clientIds = assignedClients.map(c => c.id)
+    const assignedClients = clients.filter(c =>
+      (c.content_manager_id === p.id && isServiceEnabled(c.id, 'content')) ||
+      (c.leadgen_manager_id === p.id && isServiceEnabled(c.id, 'leadgen'))
+    )
     
     // Check if data is submitted for each assigned client
     const submittedClients = assignedClients.filter(c => {
@@ -1789,7 +1805,7 @@ export function DashboardPage() {
                         <MMContentRow title="Other Channels (Quora/Reddit)" icon={MessageSquare} metrics={[
                             { id: 'MMO01', name: 'Quora Engagement' },
                             { id: 'MMO05', name: 'Reddit Engagement' },
-                          ]} currentData={isMonthlyView ? { ...monthMmAgg.quora, ...monthMmAgg.reddit } : { ...mmData?.quora, ...mmData?.reddit }} prevData={isMonthlyView ? null : { ...prevMmData?.quora, ...prevMmData?.reddit }}
+                          ]} currentData={isMonthlyView ? { ...monthMmAgg.quora, ...monthMmAgg.reddit } : { ...asDashboardRecord(mmData?.quora), ...asDashboardRecord(mmData?.reddit) }} prevData={isMonthlyView ? null : { ...asDashboardRecord(prevMmData?.quora), ...asDashboardRecord(prevMmData?.reddit) }}
                         />
                         <MMContentRow title="Ads Performance" icon={TrendingUp} metrics={[
                             { id: 'MMA01', name: 'Google Clicks' },

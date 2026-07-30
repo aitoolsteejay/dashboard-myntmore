@@ -6,6 +6,27 @@ import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
+import type { Database } from '@/integrations/supabase/types'
+import { updateClientHealth } from '@/lib/health'
+
+type ClientSettingsInsert = Database['public']['Tables']['client_settings']['Insert']
+
+async function refreshRecentHealthScores(clientId: string) {
+  const { data, error } = await supabase
+    .from('weekly_data')
+    .select('week_start, content_metrics, leadgen_metrics')
+    .eq('client_id', clientId)
+    .order('week_start', { ascending: false })
+    .limit(12)
+  if (error) throw error
+
+  await Promise.all((data ?? []).map(row => updateClientHealth(
+    clientId,
+    row.week_start,
+    row.content_metrics as Record<string, any> ?? {},
+    row.leadgen_metrics as Record<string, any> ?? {},
+  )))
+}
 
 interface ClientRow {
   id: string
@@ -19,6 +40,8 @@ interface Settings {
   client_id: string | null
   active_content_metrics: string[] | null
   active_leadgen_metrics: string[] | null
+  content_enabled: boolean
+  leadgen_enabled: boolean
 }
 
 export function MetricFieldsTab() {
@@ -32,7 +55,7 @@ export function MetricFieldsTab() {
     const load = async () => {
       const [{ data: clientsData }, { data: settingsData }] = await Promise.all([
         supabase.from('clients').select('id, name, company, status').eq('status', 'active').order('name'),
-        supabase.from('client_settings').select('id, client_id, active_content_metrics, active_leadgen_metrics'),
+        supabase.from('client_settings').select('id, client_id, active_content_metrics, active_leadgen_metrics, content_enabled, leadgen_enabled'),
       ])
       if (clientsData) {
         setClients(clientsData)
@@ -50,56 +73,92 @@ export function MetricFieldsTab() {
 
   const handleToggle = async (clientId: string, metricId: string, category: 'content' | 'leadgen') => {
     const settings = settingsMap[clientId]
-    if (!settings) return
     const field = category === 'content' ? 'active_content_metrics' : 'active_leadgen_metrics'
     const allMetricIds = (category === 'content' ? CONTENT_METRICS : LEADGEN_METRICS).map(m => m.id)
     // null means all active — initialise from full list before mutating
-    const current = settings[field] ?? allMetricIds
+    const current = settings?.[field] ?? allMetricIds
     const updated = current.includes(metricId)
       ? current.filter((m: string) => m !== metricId)
       : [...current, metricId]
 
     setSettingsMap(prev => ({
       ...prev,
-      [clientId]: { ...prev[clientId], [field]: updated }
+      [clientId]: {
+        ...(prev[clientId] ?? {
+          id: '',
+          client_id: clientId,
+          active_content_metrics: null,
+          active_leadgen_metrics: null,
+          content_enabled: true,
+          leadgen_enabled: true,
+        }),
+        [field]: updated,
+      }
     }))
 
-    const { error } = await (supabase as any)
+    const update: ClientSettingsInsert = { client_id: clientId }
+    if (category === 'content') update.active_content_metrics = updated
+    else update.active_leadgen_metrics = updated
+    const { data, error } = await supabase
       .from('client_settings')
-      .update({ [field]: updated })
-      .eq('id', settings.id)
+      .upsert(update, { onConflict: 'client_id' })
+      .select('id, client_id, active_content_metrics, active_leadgen_metrics, content_enabled, leadgen_enabled')
+      .single()
 
     if (error) {
       toast.error('Failed to save: ' + error.message)
       setSettingsMap(prev => ({
         ...prev,
-        [clientId]: { ...prev[clientId], [field]: current }
+        [clientId]: {
+          ...(prev[clientId] ?? {
+            id: '',
+            client_id: clientId,
+            active_content_metrics: null,
+            active_leadgen_metrics: null,
+            content_enabled: true,
+            leadgen_enabled: true,
+          }),
+          [field]: current,
+        }
       }))
+    } else {
+      setSettingsMap(prev => ({ ...prev, [clientId]: data as Settings }))
+      try {
+        await refreshRecentHealthScores(clientId)
+      } catch (healthError) {
+        console.error('Failed to refresh health scores after metric change:', healthError)
+        toast.warning('Metric saved, but recent health scores could not be refreshed.')
+      }
     }
   }
 
   const handleServiceToggle = async (clientId: string, category: 'content' | 'leadgen', enabled: boolean) => {
-    const field = category === 'content' ? 'active_content_metrics' : 'active_leadgen_metrics'
-    const metricIds = (category === 'content' ? CONTENT_METRICS : LEADGEN_METRICS).map(m => m.id)
+    const field = category === 'content' ? 'content_enabled' : 'leadgen_enabled'
     const current = settingsMap[clientId]
-    const updated = enabled ? metricIds : []
 
     setSettingsMap(prev => ({
       ...prev,
       [clientId]: {
-        ...(prev[clientId] ?? { id: '', client_id: clientId, active_content_metrics: null, active_leadgen_metrics: null }),
-        [field]: updated,
+        ...(prev[clientId] ?? {
+          id: '',
+          client_id: clientId,
+          active_content_metrics: null,
+          active_leadgen_metrics: null,
+          content_enabled: true,
+          leadgen_enabled: true,
+        }),
+        [field]: enabled,
       },
     }))
 
-    const update = category === 'content'
-      ? { client_id: clientId, active_content_metrics: updated }
-      : { client_id: clientId, active_leadgen_metrics: updated }
+    const update: ClientSettingsInsert = { client_id: clientId }
+    if (category === 'content') update.content_enabled = enabled
+    else update.leadgen_enabled = enabled
 
     const { data, error } = await supabase
       .from('client_settings')
       .upsert(update, { onConflict: 'client_id' })
-      .select('id, client_id, active_content_metrics, active_leadgen_metrics')
+      .select('id, client_id, active_content_metrics, active_leadgen_metrics, content_enabled, leadgen_enabled')
       .single()
 
     if (error) {
@@ -114,7 +173,13 @@ export function MetricFieldsTab() {
     }
 
     setSettingsMap(prev => ({ ...prev, [clientId]: data as Settings }))
-    toast.success(`${category === 'content' ? 'Content' : 'Lead Gen'} ${enabled ? 'enabled' : 'disabled'}`)
+    try {
+      await refreshRecentHealthScores(clientId)
+      toast.success(`${category === 'content' ? 'Content' : 'Lead Gen'} ${enabled ? 'enabled' : 'disabled'}`)
+    } catch (healthError) {
+      console.error('Failed to refresh health scores after service change:', healthError)
+      toast.warning('Service saved, but recent health scores could not be refreshed.')
+    }
   }
 
   if (loading) return (
@@ -130,8 +195,8 @@ export function MetricFieldsTab() {
   // null means "not yet configured" — treat as all active
   const allIds = metrics.map(m => m.id)
   const activeIds: string[] = settings?.[activeField] ?? allIds
-  const contentEnabled = (settings?.active_content_metrics ?? CONTENT_METRICS.map(m => m.id)).length > 0
-  const leadgenEnabled = (settings?.active_leadgen_metrics ?? LEADGEN_METRICS.map(m => m.id)).length > 0
+  const contentEnabled = settings?.content_enabled ?? true
+  const leadgenEnabled = settings?.leadgen_enabled ?? true
   const categoryEnabled = activeCategory === 'content' ? contentEnabled : leadgenEnabled
 
   // Group metrics by group
