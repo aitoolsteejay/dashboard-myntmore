@@ -18,6 +18,7 @@ import {
   BarChart2, TrendingUp, Table2, Users, Calendar, Filter, ChevronDown, X, Info
 } from "lucide-react"
 import type { WeeklyData, MetricTarget } from "@/types"
+import { sortAlphabetically } from "@/utils/sort"
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -129,7 +130,7 @@ export function ReportsPage() {
   // Load clients once
   useEffect(() => {
     supabase.from('clients').select('id, name, company').eq('status', 'active').order('name')
-      .then(({ data }) => { if (data) setClients(data) })
+      .then(({ data }) => { if (data) setClients(sortAlphabetically(data, client => client.name)) })
   }, [])
 
   // Compute date range from preset

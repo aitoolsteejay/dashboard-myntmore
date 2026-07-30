@@ -27,6 +27,7 @@ import { backfillHighScores } from "@/utils/highScores"
 import { fetchTJLifetimeHighs, TJLifetimeHighs } from "@/utils/tjHighScores"
 import { fetchMMLifetimeHighs, MMLifetimeHighs } from "@/utils/mmHighScores"
 import { formatWeekDate } from "@/utils/dateUtils"
+import { sortAlphabetically } from "@/utils/sort"
 import type {
   WeeklyData, WeeklyDataSummary, Profile, MetricTarget, HealthScore, Actionable,
   Campaign, MyntmoreProcess, ProcessUpdate, TjWeeklyData, SalesWeeklyData,
@@ -921,7 +922,7 @@ export function DashboardPage() {
         supabase.from('client_settings').select('client_id, active_content_metrics, active_leadgen_metrics, content_enabled, leadgen_enabled'),
       ])
 
-      setClients(clientsData || [])
+      setClients(sortAlphabetically(clientsData || [], client => client.name))
       setHealthScores(healthData || [])
       setAlerts(alertsData || [])
       setWeeklyData(weeklyDataRes || [])
@@ -933,7 +934,7 @@ export function DashboardPage() {
       setSalesPrev(salesPrevRes)
       setMmData(mmDataRes)
       setPrevMmData(prevMmDataRes)
-      setProfiles(profilesData || [])
+      setProfiles(sortAlphabetically(profilesData || [], profile => profile.full_name))
       setActionables(actionablesData || [])
       setTargets(targetsData || [])
       setMonthlyTargets(monthlyTargetsData || [])

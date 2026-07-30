@@ -31,6 +31,7 @@ import { SaveIndicator } from '../ui/SaveIndicator'
 import { useAutoSave, SaveStatus } from '../../hooks/useAutoSave'
 import { EditCampaignModal } from '../monday/EditCampaignModal'
 import type { WeeklyData, HighScore, MetricTarget, Campaign, CampaignWeeklyData, ContextNoteWithAuthor, ClientSettings } from '@/types'
+import { sortAlphabetically } from '@/utils/sort'
 
 type ClientSummary = { id: string; name: string; company: string | null }
 
@@ -378,7 +379,7 @@ function LeadGenCampaignEntry({
 
             if (error) throw error
             toast.success("Campaign created")
-            setCampaigns([...campaigns, data])
+            setCampaigns(sortAlphabetically([...campaigns, data], campaign => campaign.name))
             setLocalCampaignData({ ...localCampaignData, [data.id]: { conn_requests_sent: '', accepted: '', answered: '', positive_replies: '', negative_replies: '', meetings_booked: '', notes: '' } })
             setShowNewCampaignForm(false)
             setNewCampaign({ name: '', icp_description: '', message_narrative: '', started_date: new Date().toISOString().split('T')[0] })
@@ -1281,8 +1282,9 @@ export function DataEntryPage() {
         .select('id, name, company')
         .eq('status', 'active')
         .order('name')
-      setClients(data || [])
-      if (data && data.length > 0 && !selectedClientId) setSelectedClientId(data[0].id)
+      const sortedClients = sortAlphabetically(data || [], client => client.name)
+      setClients(sortedClients)
+      if (sortedClients.length > 0 && !selectedClientId) setSelectedClientId(sortedClients[0].id)
     }
 
     fetchClients()
@@ -1349,7 +1351,7 @@ export function DataEntryPage() {
       setHighScores(scores || [])
       setContextNotes(notesData || [])
       setTargets(targetsData || [])
-      setCampaigns(campaignsData || [])
+      setCampaigns(sortAlphabetically(campaignsData || [], campaign => campaign.name))
       setCampaignWeeklyData(campaignWeeklyDataRes || [])
 
       // Pre-fill form

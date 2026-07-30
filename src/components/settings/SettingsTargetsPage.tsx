@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { sortAlphabetically } from "@/utils/sort"
 
 interface TargetRowProps {
   metric: Metric
@@ -162,7 +163,7 @@ export function SettingsTargetsPage() {
   useEffect(() => {
     const fetchClients = async () => {
       const { data } = await supabase.from('clients').select('id, name, company').eq('status', 'active').order('name')
-      setClients(data || [])
+      setClients(sortAlphabetically(data || [], client => client.name))
       if (data && data.length > 0) setSelectedClientId(data[0].id)
     }
     fetchClients()

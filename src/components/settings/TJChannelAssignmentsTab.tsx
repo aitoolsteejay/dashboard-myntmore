@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
+import { sortAlphabetically } from '@/utils/sort'
 
 const CHANNELS = [
   { key: 'instagram',           label: 'Instagram',            icon: '📱' },
@@ -58,7 +59,7 @@ export function TJChannelAssignmentsTab() {
         .order('full_name')
       
       if (teamData) {
-        setTeam(teamData)
+        setTeam(sortAlphabetically(teamData, member => member.full_name))
       }
       
       setLoading(false)

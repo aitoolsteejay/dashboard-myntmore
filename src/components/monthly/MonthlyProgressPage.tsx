@@ -7,6 +7,7 @@ import { buildWeekMetrics } from '@/utils/metricCalculations'
 import { cn } from '@/lib/utils'
 import { ChevronLeft, ChevronRight, ChevronDown, Target, TrendingUp, AlertTriangle, CheckCircle2, Minus, ExternalLink } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
+import { sortAlphabetically } from '@/utils/sort'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -203,7 +204,7 @@ export function MonthlyProgressPage() {
   useEffect(() => {
     supabase.from('clients').select('id, name').eq('status', 'active').order('name')
       .then(({ data }) => {
-        setClients(data ?? [])
+        setClients(sortAlphabetically(data ?? [], client => client.name))
         if (data && data.length > 0) setSelectedClientId(data[0].id)
       })
   }, [])

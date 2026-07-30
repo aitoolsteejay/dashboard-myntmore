@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from "@/integrations/supabase/client"
+import { sortAlphabetically } from "@/utils/sort"
 import { useAuth } from "@/lib/auth"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -71,7 +72,7 @@ export function ClientsPage() {
         return
       }
 
-      setClients(clientsData || [])
+      setClients(sortAlphabetically(clientsData || [], client => client.name))
 
       // Fetch health scores (latest for each client)
       const { data: healthData } = await supabase
@@ -91,14 +92,14 @@ export function ClientsPage() {
         health: latestHealth[c.id] || null
       }))
 
-      setClients(enrichedClients)
+      setClients(sortAlphabetically(enrichedClients, client => client.name))
 
       // Fetch profiles for managers
       const { data: profilesData } = await supabase
         .from('profiles')
         .select('*')
       
-      setProfiles(profilesData || [])
+      setProfiles(sortAlphabetically(profilesData || [], profile => profile.full_name))
     } catch (error: any) {
       toast.error(error.message)
     } finally {

@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import type { Database } from '@/integrations/supabase/types'
 import { updateClientHealth } from '@/lib/health'
+import { sortAlphabetically } from '@/utils/sort'
 
 type ClientSettingsInsert = Database['public']['Tables']['client_settings']['Insert']
 
@@ -58,8 +59,9 @@ export function MetricFieldsTab() {
         supabase.from('client_settings').select('id, client_id, active_content_metrics, active_leadgen_metrics, content_enabled, leadgen_enabled'),
       ])
       if (clientsData) {
-        setClients(clientsData)
-        if (clientsData.length > 0) setSelectedClient(clientsData[0].id)
+        const sortedClients = sortAlphabetically(clientsData, client => client.name)
+        setClients(sortedClients)
+        if (sortedClients.length > 0) setSelectedClient(sortedClients[0].id)
       }
       if (settingsData) {
         const map: Record<string, Settings> = {}

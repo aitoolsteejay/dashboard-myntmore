@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { getPreviousWeekStart, getWeekOptions } from "@/utils/weekUtils";
+import { sortAlphabetically } from "@/utils/sort";
 
 type Process = {
   id: string;
@@ -59,7 +60,7 @@ export function ProcessesPage({ embedded }: { embedded?: boolean } = {}) {
 
       setProcesses((pData || []) as any);
       setUpdates((uData || []) as any);
-      setProfiles(profData || []);
+      setProfiles(sortAlphabetically(profData || [], profile => profile.full_name));
       
       const currentUpdates: Record<string, string> = {};
       (uData || []).forEach((u: any) => {

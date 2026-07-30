@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
     const newUserId = authData.user.id
 
     await admin.from('profiles').upsert({
-      id: newUserId, email, full_name: clientRow.name, invite_status: 'active',
+      id: newUserId, email, full_name: clientRow.name, department: 'client', invite_status: 'active',
     })
     await admin.from('user_roles').insert({ user_id: newUserId, role: 'member' })
     await admin.from('clients').update({ user_id: newUserId }).eq('id', clientId)

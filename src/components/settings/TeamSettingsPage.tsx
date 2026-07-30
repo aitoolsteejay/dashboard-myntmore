@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { UserPlus, Copy, Check, RefreshCw, Ban, Shield, Trash2, KeyRound, Globe, Link2, Unlink } from "lucide-react"
+import { sortAlphabetically } from "@/utils/sort"
 
 export function TeamSettingsPage() {
   const { user: currentUser } = useAuth()
@@ -43,7 +44,7 @@ export function TeamSettingsPage() {
 
   const fetchClients = async () => {
     const { data } = await supabase.from('clients').select('id, name, company, user_id').eq('status', 'active').order('name')
-    setClients(data || [])
+    setClients(sortAlphabetically((data || []) as any[], client => client.name))
   }
 
   const handleCreatePortalUser = async () => {
@@ -95,15 +96,22 @@ export function TeamSettingsPage() {
         { data: profilesData },
         { data: rolesData },
         { data: assignmentsData },
-        { data: invitesData }
+        { data: invitesData },
+        { data: portalClientsData },
       ] = await Promise.all([
         supabase.from('profiles').select('*'),
         supabase.from('user_roles').select('*'),
         supabase.from('client_assignments').select('user_id'),
-        supabase.from('invites').select('*').order('created_at', { ascending: false })
+        supabase.from('invites').select('*').order('created_at', { ascending: false }),
+        (supabase as any).from('clients').select('user_id').not('user_id', 'is', null),
       ])
 
-      const enrichedTeam = (profilesData || []).map(p => {
+      const portalUserIds = new Set(
+        (portalClientsData || []).map((client: { user_id: string | null }) => client.user_id).filter(Boolean),
+      )
+      const enrichedTeam = (profilesData || [])
+        .filter(profile => profile.department !== 'client' && !portalUserIds.has(profile.id))
+        .map(p => {
         const role = rolesData?.find(r => r.user_id === p.id) as any
         const assignmentsCount = assignmentsData?.filter(a => a.user_id === p.id).length || 0
         return {
@@ -112,9 +120,9 @@ export function TeamSettingsPage() {
           roleDisabled: role?.disabled || false,
           assignmentsCount
         }
-      })
+        })
 
-      setTeam(enrichedTeam)
+      setTeam(sortAlphabetically(enrichedTeam, member => member.full_name))
       setInvites(invitesData || [])
     } catch (error: any) {
       toast.error(error.message)

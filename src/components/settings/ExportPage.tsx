@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner"
 import { Link } from "@tanstack/react-router"
 import { cn } from "@/lib/utils"
+import { sortAlphabetically } from "@/utils/sort"
 
 function getWeekOptions(count = 12) {
   return Array.from({ length: count }, (_, i) => {
@@ -65,7 +66,7 @@ export function ExportPage() {
       .select('id, name')
       .eq('status', 'active')
       .order('name')
-      .then(({ data }) => setClients(data ?? []))
+      .then(({ data }) => setClients(sortAlphabetically(data ?? [], client => client.name)))
   }, [])
 
   const handleLifetimeExport = async () => {

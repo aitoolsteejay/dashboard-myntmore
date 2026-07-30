@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from "@/integrations/supabase/client"
+import { sortAlphabetically } from "@/utils/sort"
 import { useAuth } from "@/lib/auth"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -157,8 +158,8 @@ export function ActionablesPage() {
       }))
 
       setActionables(processed)
-      setClients(clientsData || [])
-      setProfiles(profilesData || [])
+      setClients(sortAlphabetically(clientsData || [], client => client.name))
+      setProfiles(sortAlphabetically(profilesData || [], profile => profile.full_name))
     } catch (error: any) {
       toast.error(error.message)
     } finally {

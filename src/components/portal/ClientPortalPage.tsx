@@ -19,6 +19,7 @@ import {
 import { LogOut, TrendingUp, Users, FileText, BarChart2, Loader2, ArrowUpRight, ArrowDownRight, Minus, Calendar, Table2, ArrowLeftRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import myntmoreLogo from '@/assets/myntmore-logo.png'
+import { sortAlphabetically } from '@/utils/sort'
 
 // ─── Reports tab helpers ────────────────────────────────────────────────────
 
@@ -279,7 +280,7 @@ export function ClientPortalPage() {
       return { ...c, byWeek }
     })
 
-    setCampaigns(enriched)
+    setCampaigns(sortAlphabetically(enriched, campaign => campaign.name))
   }
 
   const fetchData = async () => {
