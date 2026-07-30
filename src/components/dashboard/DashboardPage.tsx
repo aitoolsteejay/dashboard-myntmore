@@ -1785,6 +1785,8 @@ export function DashboardPage() {
                             { id: 'MML05', name: 'New Followers' },
                             { id: 'MML06', name: 'Total Followers' },
                             { id: 'MML07', name: 'Page Views' },
+                            { id: 'MML08', name: 'Articles Published' },
+                            { id: 'MML09', name: 'Article Impressions' },
                           ]} currentData={isMonthlyView ? monthMmAgg.linkedin : mmData?.linkedin} prevData={isMonthlyView ? null : prevMmData?.linkedin}
                         />
                         <MMContentRow title="Instagram Presence" icon={Instagram} metrics={[
@@ -1805,9 +1807,10 @@ export function DashboardPage() {
                             { id: 'MMW05', name: 'Blogs Published' },
                           ]} currentData={isMonthlyView ? monthMmAgg.website : mmData?.website} prevData={isMonthlyView ? null : prevMmData?.website}
                         />
-                        <MMContentRow title="Other Channels (Quora/Reddit)" icon={MessageSquare} metrics={[
+                        <MMContentRow title="Other Channels" icon={MessageSquare} metrics={[
                             { id: 'MMO01', name: 'Quora Engagement' },
                             { id: 'MMO05', name: 'Reddit Engagement' },
+                            { id: 'MMO06', name: 'Medium Blogs Published' },
                           ]} currentData={isMonthlyView ? { ...monthMmAgg.quora, ...monthMmAgg.reddit } : { ...asDashboardRecord(mmData?.quora), ...asDashboardRecord(mmData?.reddit) }} prevData={isMonthlyView ? null : { ...asDashboardRecord(prevMmData?.quora), ...asDashboardRecord(prevMmData?.reddit) }}
                         />
                         <MMContentRow title="Ads Performance" icon={TrendingUp} metrics={[

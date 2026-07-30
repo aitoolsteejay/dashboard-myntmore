@@ -230,9 +230,10 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
                 </div>
             </TabsContent>
             <TabsContent value="other" className="mt-0 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {renderMetricCard('quora', MM_OTHER_METRICS[0])}
                     {renderMetricCard('reddit', MM_OTHER_METRICS[1])}
+                    {renderMetricCard('quora', MM_OTHER_METRICS[2])}
                 </div>
             </TabsContent>
             <TabsContent value="ads" className="mt-0 space-y-6">

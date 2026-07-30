@@ -71,6 +71,8 @@ export const MM_LINKEDIN_METRICS: CompanyMetric[] = [
   { id: 'MML05', name: 'New Followers', type: 'number', hasTarget: true },
   { id: 'MML06', name: 'Total Followers', type: 'number' },
   { id: 'MML07', name: 'Page Views', type: 'number' },
+  { id: 'MML08', name: 'LinkedIn Articles Published', type: 'number' },
+  { id: 'MML09', name: 'LinkedIn Article Impressions', type: 'number' },
 ]
 
 export const MM_INSTAGRAM_METRICS: CompanyMetric[] = [
@@ -97,4 +99,5 @@ export const MM_WEBSITE_METRICS: CompanyMetric[] = [
 export const MM_OTHER_METRICS: CompanyMetric[] = [
   { id: 'MMO01', name: 'Quora Engagement', type: 'number', hasTarget: true },
   { id: 'MMO05', name: 'Reddit Engagement', type: 'number', hasTarget: true },
+  { id: 'MMO06', name: 'Medium Blogs Published', type: 'number' },
 ]

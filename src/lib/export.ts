@@ -185,8 +185,10 @@ function buildMmSheet(rows: any[]) {
       for (const m of MM_INSTAGRAM_METRICS)  base[`[IG] ${m.name}`]  = readField(ig, m.id)
       for (const m of MM_WEBSITE_METRICS)    base[`[Web] ${m.name}`] = readField(web, m.id)
       for (const m of MM_OTHER_METRICS) {
-        const prefix = m.id.startsWith('MMO0') && parseInt(m.id.slice(3)) <= 4 ? '[Quora]' : '[Reddit]'
-        base[`${prefix} ${m.name}`] = readField(m.id.startsWith('MMO0') && parseInt(m.id.slice(3)) <= 4 ? qr : rd, m.id)
+        const isMedium = m.id === 'MMO06'
+        const isQuora = m.id === 'MMO01'
+        const prefix = isMedium ? '[Medium]' : isQuora ? '[Quora]' : '[Reddit]'
+        base[`${prefix} ${m.name}`] = readField(isQuora || isMedium ? qr : rd, m.id)
       }
       return base
     })
