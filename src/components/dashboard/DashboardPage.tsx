@@ -154,6 +154,25 @@ export function DashboardPage() {
   const [monthMmRows, setMonthMmRows] = useState<any[]>([])
   const [weeklyBreakdownClients, setWeeklyBreakdownClients] = useState<Set<string>>(new Set())
   const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [clientSettings, setClientSettings] = useState<Record<string, {
+    active_content_metrics: string[] | null
+    active_leadgen_metrics: string[] | null
+  }>>({})
+
+  const isServiceEnabled = (clientId: string, category: 'content' | 'leadgen') => {
+    const settings = clientSettings[clientId]
+    const ids = category === 'content' ? settings?.active_content_metrics : settings?.active_leadgen_metrics
+    return ids?.length !== 0
+  }
+
+  const activeMetricsFor = (clientId: string, category: 'content' | 'leadgen') => {
+    const metrics = category === 'content' ? CONTENT_METRICS : LEADGEN_METRICS
+    const ids = category === 'content'
+      ? clientSettings[clientId]?.active_content_metrics
+      : clientSettings[clientId]?.active_leadgen_metrics
+    if (ids === null || ids === undefined) return metrics
+    return metrics.filter(metric => ids.includes(metric.id))
+  }
 
   const handleDismissNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id))
@@ -864,6 +883,7 @@ export function DashboardPage() {
         { data: monthTjRes },
         { data: monthSalesRes },
         { data: monthMmRes },
+        { data: clientSettingsRes },
       ] = await Promise.all([
         supabase.from('clients').select('*, content_manager:profiles!content_manager_id(full_name), leadgen_manager:profiles!leadgen_manager_id(full_name)').eq('status', 'active').order('name'),
         supabase.from('client_health_scores').select('*').order('week_start', { ascending: false }),
@@ -890,6 +910,7 @@ export function DashboardPage() {
         supabase.from('tj_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', weekStart.slice(0, 7) + '-31'),
         supabase.from('sales_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', weekStart.slice(0, 7) + '-31'),
         supabase.from('mm_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', weekStart.slice(0, 7) + '-31'),
+        supabase.from('client_settings').select('client_id, active_content_metrics, active_leadgen_metrics'),
       ])
 
       setClients(clientsData || [])
@@ -914,6 +935,11 @@ export function DashboardPage() {
       setMonthTjRows(monthTjRes || [])
       setMonthSalesRows(monthSalesRes || [])
       setMonthMmRows(monthMmRes || [])
+      setClientSettings(Object.fromEntries(
+        (clientSettingsRes || [])
+          .filter(row => row.client_id)
+          .map(row => [row.client_id as string, row])
+      ))
 
       // Backfill high scores for all clients - scans full history and self-heals stale/missing records
       Promise.all(
@@ -994,6 +1020,7 @@ export function DashboardPage() {
       for (const [metricId, targetValue] of Object.entries(clientTargets)) {
         const metric = ALL_METRICS.find(m => m.id === metricId)
         if (!metric) continue
+        if (!activeMetricsFor(client.id, metric.category).some(active => active.id === metricId)) continue
         if (metric.type === 'textarea' || metric.type === 'boolean' || metric.type === 'slider') continue
 
         let actual: number | null = null
@@ -1020,7 +1047,7 @@ export function DashboardPage() {
       if (a.notSubmitted !== b.notSubmitted) return a.notSubmitted ? -1 : 1
       return (a.worstPct ?? -1) - (b.worstPct ?? -1)
     })
-  }, [clients, weeklyData, targets, displayWeek])
+  }, [clients, weeklyData, targets, displayWeek, clientSettings])
 
   const handleResolveAlert = async (alertId: string) => {
     try {
@@ -1044,8 +1071,8 @@ export function DashboardPage() {
     // Check if data is submitted for each assigned client
     const submittedClients = assignedClients.filter(c => {
         const data = weeklyData.find(w => w.client_id === c.id)
-        const contentNeeded = c.content_manager_id === p.id
-        const leadgenNeeded = c.leadgen_manager_id === p.id
+        const contentNeeded = c.content_manager_id === p.id && isServiceEnabled(c.id, 'content')
+        const leadgenNeeded = c.leadgen_manager_id === p.id && isServiceEnabled(c.id, 'leadgen')
         
         const contentDone = !contentNeeded || !!data?.content_submitted_at
         const leadgenDone = !leadgenNeeded || !!data?.leadgen_submitted_at
@@ -1325,38 +1352,38 @@ export function DashboardPage() {
                                             score === '-' ? "bg-muted text-muted-foreground" : Number(score) >= 75 ? "bg-status-on text-white" : Number(score) >= 50 ? "bg-status-risk text-white" : "bg-status-off text-white"
                                         )}>{score}</Badge>
                                       </div>
-                                      <div className="text-center w-12 shrink-0">
+                                      {isServiceEnabled(client.id, 'content') && <div className="text-center w-12 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Posts</p>
                                         <p className="text-sm font-black">{formatDashboardValue(built?.C09, 'C09')}</p>
-                                      </div>
-                                      <div className="text-center w-14 shrink-0">
+                                      </div>}
+                                      {isServiceEnabled(client.id, 'content') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Impr.</p>
                                         <p className="text-sm font-black">{formatDashboardValue(built?.C10, 'C10')}</p>
-                                      </div>
-                                      <div className="text-center w-14 shrink-0">
+                                      </div>}
+                                      {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Conn Req</p>
                                         <p className="text-sm font-black">{formatDashboardValue(built?.L10, 'L10')}</p>
-                                      </div>
-                                      <div className="text-center w-14 shrink-0">
+                                      </div>}
+                                      {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Acc Rate</p>
                                         <p className={cn("text-sm font-black", acceptanceRate !== null && acceptanceRate !== undefined ? "text-foreground" : "text-muted-foreground")}>{acceptanceRate !== null && acceptanceRate !== undefined ? formatPct(acceptanceRate as number) : '-'}</p>
-                                      </div>
-                                      <div className="text-center w-14 shrink-0">
+                                      </div>}
+                                      {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Hot Leads</p>
                                         <p className="text-sm font-black">{formatDashboardValue(built?.L22 ?? mv(currentData, 'leadgen_metrics', 'L23'), 'L22')}</p>
-                                      </div>
-                                      <div className="text-center w-12 shrink-0">
+                                      </div>}
+                                      {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-12 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Booked</p>
                                         <p className="text-sm font-black text-gold">{formatDashboardValue(built?.L24, 'L24')}</p>
-                                      </div>
+                                      </div>}
                                     </>
                                   )
                                 })()}
                                  <div className="text-center w-14 shrink-0">
                                   <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Status</p>
                                   <div className="flex justify-center gap-1 mt-1">
-                                      <div className={cn("w-2 h-2 rounded-full", !!currentData?.content_submitted_at ? "bg-status-on" : "bg-muted")} title="Content Data" />
-                                      <div className={cn("w-2 h-2 rounded-full", !!currentData?.leadgen_submitted_at ? "bg-status-on" : "bg-muted")} title="Lead Gen Data" />
+                                      {isServiceEnabled(client.id, 'content') && <div className={cn("w-2 h-2 rounded-full", !!currentData?.content_submitted_at ? "bg-status-on" : "bg-muted")} title="Content Data" />}
+                                      {isServiceEnabled(client.id, 'leadgen') && <div className={cn("w-2 h-2 rounded-full", !!currentData?.leadgen_submitted_at ? "bg-status-on" : "bg-muted")} title="Lead Gen Data" />}
                                   </div>
                                 </div>
                                 <div className="shrink-0">
@@ -1386,13 +1413,13 @@ export function DashboardPage() {
                                 )}
                                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                                   {/* Content Metrics */}
-                                  <div className="space-y-4">
+                                  {isServiceEnabled(client.id, 'content') && <div className="space-y-4">
                                     <div className="flex items-center gap-2 pb-2 border-b border-muted sticky top-0 bg-background z-20">
                                       <FileText className="w-4 h-4 text-gold" />
                                       <h4 className="text-xs font-black uppercase tracking-widest">Content Metrics</h4>
                                     </div>
                                     <MetricTable
-                                      metrics={CONTENT_METRICS.filter(m => m.group !== 'Qualitative')}
+                                      metrics={activeMetricsFor(client.id, 'content').filter(m => m.group !== 'Qualitative')}
                                       currentData={currentData}
                                       prevData={prevData}
                                       category="content_metrics"
@@ -1401,16 +1428,16 @@ export function DashboardPage() {
                                       clientMtdTotals={clientMtdTotals}
                                       clientHighScores={highScores.filter(h => h.client_id === client.id)}
                                     />
-                                  </div>
+                                  </div>}
 
                                   {/* Lead Gen Metrics */}
-                                  <div className="space-y-4">
+                                  {isServiceEnabled(client.id, 'leadgen') && <div className="space-y-4">
                                     <div className="flex items-center gap-2 pb-2 border-b border-muted sticky top-0 bg-background z-20">
                                       <Users className="w-4 h-4 text-gold" />
                                       <h4 className="text-xs font-black uppercase tracking-widest">Lead Gen Metrics</h4>
                                     </div>
                                     <MetricTable
-                                      metrics={LEADGEN_METRICS.filter(m => m.group !== 'Qualitative')}
+                                      metrics={activeMetricsFor(client.id, 'leadgen').filter(m => m.group !== 'Qualitative')}
                                       currentData={currentData}
                                       prevData={prevData}
                                       category="leadgen_metrics"
@@ -1419,19 +1446,24 @@ export function DashboardPage() {
                                       clientMtdTotals={clientMtdTotals}
                                       clientHighScores={highScores.filter(h => h.client_id === client.id)}
                                     />
-                                  </div>
+                                  </div>}
                                 </div>
                                 
-                                <DashboardCampaignsSection clientId={client.id} displayWeek={displayWeek} onEditCampaign={setEditingCampaign} />
+                                {isServiceEnabled(client.id, 'leadgen') && (
+                                  <DashboardCampaignsSection clientId={client.id} displayWeek={displayWeek} onEditCampaign={setEditingCampaign} />
+                                )}
 
                                 {/* Qualitative Cards */}
                                 <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  {[
+                                    {[
                                     { label: "What's Working (Content)", icon: <CheckCircle2 className="w-3 h-3 text-status-on" />, value: sv(currentData, 'content_metrics', 'C24') },
                                     { label: "What's Not Working (Content)", icon: <AlertTriangle className="w-3 h-3 text-status-risk" />, value: sv(currentData, 'content_metrics', 'C25') },
                                     { label: "What's Working (Lead Gen)", icon: <CheckCircle2 className="w-3 h-3 text-status-on" />, value: sv(currentData, 'leadgen_metrics', 'L28') },
                                     { label: "What's Not Working / Blockers", icon: <AlertTriangle className="w-3 h-3 text-status-risk" />, value: sv(currentData, 'leadgen_metrics', 'L29') },
-                                  ].map(({ label, icon, value }) => {
+                                  ].filter(item => item.label.includes('Content')
+                                    ? isServiceEnabled(client.id, 'content')
+                                    : isServiceEnabled(client.id, 'leadgen')
+                                  ).map(({ label, icon, value }) => {
                                     const noteId = `${client.id}-${label}`
                                     const isOpen = expandedClients.has(noteId)
                                     return (
@@ -1456,7 +1488,7 @@ export function DashboardPage() {
                                       </div>
                                     )
                                   })}
-                                  <div className="p-4 bg-background border rounded-lg shadow-sm">
+                                  {isServiceEnabled(client.id, 'leadgen') && <div className="p-4 bg-background border rounded-lg shadow-sm">
                                     <p className="text-[10px] font-black uppercase text-muted-foreground mb-3 flex items-center gap-1.5">
                                       <Target className="w-3 h-3 text-gold" /> Happiness Index & Notes
                                     </p>
@@ -1474,7 +1506,7 @@ export function DashboardPage() {
                                         Overall client sentiment for this week.
                                       </p>
                                     </div>
-                                  </div>
+                                  </div>}
                                   </div>
 
                                   {/* Aha Moments */}
@@ -1489,14 +1521,14 @@ export function DashboardPage() {
                                     return (
                                       <div className="mt-8 flex items-center justify-between gap-4 rounded-lg border bg-muted/20 px-5 py-3">
                                         <div className="flex items-center gap-8">
-                                          <div>
+                                          {isServiceEnabled(client.id, 'content') && <div>
                                             <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Total Posts This Week</p>
                                             <p className="text-lg font-black">{formatDashboardValue(totalPosts, 'C09')}</p>
-                                          </div>
-                                          <div>
+                                          </div>}
+                                          {isServiceEnabled(client.id, 'leadgen') && <div>
                                             <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Total Connection Requests Sent This Week</p>
                                             <p className="text-lg font-black">{formatDashboardValue(totalConnReq, 'L10')}</p>
-                                          </div>
+                                          </div>}
                                         </div>
                                         <Badge className={cn(
                                           "font-black text-[11px] px-3 py-1",

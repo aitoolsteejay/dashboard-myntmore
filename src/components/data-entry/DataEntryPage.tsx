@@ -1561,6 +1561,15 @@ export function DataEntryPage() {
     return metrics.filter(m => activeIds.includes(m.id))
   }
 
+  const contentEnabled = clientSettings?.active_content_metrics?.length !== 0
+  const leadgenEnabled = clientSettings?.active_leadgen_metrics?.length !== 0
+
+  useEffect(() => {
+    if (!clientSettings) return
+    if (activeTab === 'content' && !contentEnabled && leadgenEnabled) setActiveTab('leadgen')
+    if (activeTab === 'leadgen' && !leadgenEnabled && contentEnabled) setActiveTab('content')
+  }, [clientSettings, activeTab, contentEnabled, leadgenEnabled])
+
   const groupedMetrics = (metrics: Metric[]) => {
     const groups: Record<string, Metric[]> = {}
     const lastWeek = isLastWeekOfMonth(selectedWeek)
@@ -1822,7 +1831,7 @@ export function DataEntryPage() {
                 </SheetContent>
             </Sheet>
             <div className="flex gap-2">
-                <Button onClick={() => handleSave(true)} disabled={saving || loading} className="bg-gold text-black hover:bg-gold/90 font-bold">
+                <Button onClick={() => handleSave(true)} disabled={saving || loading || (!contentEnabled && !leadgenEnabled)} className="bg-gold text-black hover:bg-gold/90 font-bold">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
                     Submit Week
                 </Button>
@@ -1832,10 +1841,10 @@ export function DataEntryPage() {
 
       <Tabs value={activeTab} onValueChange={(v: any) => handleTabChange(v)} className="space-y-6">
         <TabsList className="bg-muted/50 p-1 h-auto grid grid-cols-2 max-w-md mx-auto">
-          <TabsTrigger value="content" className="py-2.5 font-bold data-[state=active]:bg-gold data-[state=active]:text-black">
+          <TabsTrigger value="content" disabled={!contentEnabled} className="py-2.5 font-bold data-[state=active]:bg-gold data-[state=active]:text-black">
             Content
           </TabsTrigger>
-          <TabsTrigger value="leadgen" className="py-2.5 font-bold data-[state=active]:bg-gold data-[state=active]:text-black">
+          <TabsTrigger value="leadgen" disabled={!leadgenEnabled} className="py-2.5 font-bold data-[state=active]:bg-gold data-[state=active]:text-black">
             Lead Gen
           </TabsTrigger>
         </TabsList>
@@ -1844,6 +1853,10 @@ export function DataEntryPage() {
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <Loader2 className="w-10 h-10 animate-spin text-gold" />
             <p className="text-muted-foreground font-medium">Loading metrics data...</p>
+          </div>
+        ) : !contentEnabled && !leadgenEnabled ? (
+          <div className="rounded-lg border border-dashed py-20 text-center text-muted-foreground">
+            No services are enabled for this client. Enable Content or Lead Gen in Settings → Metric Fields.
           </div>
         ) : (
           <>

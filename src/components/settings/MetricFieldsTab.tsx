@@ -78,6 +78,45 @@ export function MetricFieldsTab() {
     }
   }
 
+  const handleServiceToggle = async (clientId: string, category: 'content' | 'leadgen', enabled: boolean) => {
+    const field = category === 'content' ? 'active_content_metrics' : 'active_leadgen_metrics'
+    const metricIds = (category === 'content' ? CONTENT_METRICS : LEADGEN_METRICS).map(m => m.id)
+    const current = settingsMap[clientId]
+    const updated = enabled ? metricIds : []
+
+    setSettingsMap(prev => ({
+      ...prev,
+      [clientId]: {
+        ...(prev[clientId] ?? { id: '', client_id: clientId, active_content_metrics: null, active_leadgen_metrics: null }),
+        [field]: updated,
+      },
+    }))
+
+    const update = category === 'content'
+      ? { client_id: clientId, active_content_metrics: updated }
+      : { client_id: clientId, active_leadgen_metrics: updated }
+
+    const { data, error } = await supabase
+      .from('client_settings')
+      .upsert(update, { onConflict: 'client_id' })
+      .select('id, client_id, active_content_metrics, active_leadgen_metrics')
+      .single()
+
+    if (error) {
+      toast.error('Failed to save: ' + error.message)
+      setSettingsMap(prev => {
+        const next = { ...prev }
+        if (current) next[clientId] = current
+        else delete next[clientId]
+        return next
+      })
+      return
+    }
+
+    setSettingsMap(prev => ({ ...prev, [clientId]: data as Settings }))
+    toast.success(`${category === 'content' ? 'Content' : 'Lead Gen'} ${enabled ? 'enabled' : 'disabled'}`)
+  }
+
   if (loading) return (
     <div className="space-y-4">
       <Skeleton className="h-10 w-full" />
@@ -91,6 +130,9 @@ export function MetricFieldsTab() {
   // null means "not yet configured" — treat as all active
   const allIds = metrics.map(m => m.id)
   const activeIds: string[] = settings?.[activeField] ?? allIds
+  const contentEnabled = (settings?.active_content_metrics ?? CONTENT_METRICS.map(m => m.id)).length > 0
+  const leadgenEnabled = (settings?.active_leadgen_metrics ?? LEADGEN_METRICS.map(m => m.id)).length > 0
+  const categoryEnabled = activeCategory === 'content' ? contentEnabled : leadgenEnabled
 
   // Group metrics by group
   const grouped = metrics.reduce<Record<string, typeof metrics>>((acc, m) => {
@@ -120,6 +162,28 @@ export function MetricFieldsTab() {
       {selectedClient && (
         <Card>
           <CardHeader className="pb-3">
+            <div className="grid gap-3 sm:grid-cols-2 mb-5">
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div>
+                  <p className="font-bold">Content</p>
+                  <p className="text-xs text-muted-foreground">Show content data and metrics</p>
+                </div>
+                <Switch
+                  checked={contentEnabled}
+                  onCheckedChange={(enabled) => handleServiceToggle(selectedClient, 'content', enabled)}
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div>
+                  <p className="font-bold">Lead Gen</p>
+                  <p className="text-xs text-muted-foreground">Show lead-gen data and metrics</p>
+                </div>
+                <Switch
+                  checked={leadgenEnabled}
+                  onCheckedChange={(enabled) => handleServiceToggle(selectedClient, 'leadgen', enabled)}
+                />
+              </div>
+            </div>
             <div className="flex items-center justify-between flex-wrap gap-3">
               <CardTitle className="text-lg">
                 {clients.find(c => c.id === selectedClient)?.name} - Metric Fields
@@ -149,7 +213,11 @@ export function MetricFieldsTab() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6">
+            {!categoryEnabled ? (
+              <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                {activeCategory === 'content' ? 'Content' : 'Lead Gen'} is disabled for this client.
+              </div>
+            ) : <div className="space-y-6">
               {Object.entries(grouped).map(([group, groupMetrics]) => (
                 <div key={group}>
                   <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-2 border-b pb-1">{group}</p>
@@ -170,7 +238,7 @@ export function MetricFieldsTab() {
                   </div>
                 </div>
               ))}
-            </div>
+            </div>}
           </CardContent>
         </Card>
       )}
