@@ -9,6 +9,12 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { sortAlphabetically } from "@/utils/sort"
+import {
+  CompanyMetric,
+  TJ_INSTAGRAM_METRICS,
+  TJ_PODCAST_METRICS,
+  TJ_YOUTUBE_METRICS,
+} from "@/data/company_metrics"
 
 interface TargetRowProps {
   metric: Metric
@@ -103,10 +109,16 @@ const COLD_EMAIL_INTERNAL_METRICS = [
   { id: 'SO55', name: 'Replied with OOO', auto: false },
 ]
 const SALES_TARGET_METRIC_IDS = ['SO50', 'SO51', 'SO53', 'SO55'] // only non-auto ones get targets
+const TJ_TARGET_GROUPS = [
+  { title: 'Instagram', metrics: TJ_INSTAGRAM_METRICS.filter(metric => metric.hasTarget) },
+  { title: 'YouTube', metrics: TJ_YOUTUBE_METRICS.filter(metric => metric.hasTarget) },
+  { title: 'Newsletters & Podcast', metrics: TJ_PODCAST_METRICS.filter(metric => metric.hasTarget) },
+]
+const TJ_TARGET_METRIC_IDS = TJ_TARGET_GROUPS.flatMap(group => group.metrics.map(metric => metric.id))
 
 export function SettingsTargetsPage() {
   const { user } = useAuth()
-  const [activeSection, setActiveSection] = useState<'client' | 'sales'>('client')
+  const [activeSection, setActiveSection] = useState<'client' | 'sales' | 'tj'>('client')
   const [selectedClientId, setSelectedClientId] = useState<string>('')
   const [targetType, setTargetType] = useState<'weekly' | 'monthly'>('weekly')
   const [selectedWeekStart, setSelectedWeekStart] = useState(getPreviousWeekStart())
@@ -120,6 +132,9 @@ export function SettingsTargetsPage() {
   const [salesTargetValues, setSalesTargetValues] = useState<Record<string, number>>({})
   const [salesActuals, setSalesActuals] = useState<Record<string, number>>({})
   const [salesSaving, setSalesSaving] = useState(false)
+  const [tjTargetValues, setTjTargetValues] = useState<Record<string, number>>({})
+  const [tjActuals, setTjActuals] = useState<Record<string, number>>({})
+  const [tjSaving, setTjSaving] = useState(false)
   const [clients, setClients] = useState<any[]>([])
 
   const period = targetType === 'weekly' ? selectedWeekStart : selectedMonth
@@ -351,6 +366,139 @@ export function SettingsTargetsPage() {
     }
   }
 
+  const loadTjTargets = async (weekStart: string) => {
+    const { data } = await supabase
+      .from('targets')
+      .select('metric_id, target_value')
+      .is('client_id', null)
+      .eq('target_type', 'weekly')
+      .eq('period', weekStart)
+      .in('metric_id', TJ_TARGET_METRIC_IDS)
+
+    const map: Record<string, number> = {}
+    data?.forEach(target => {
+      if (target.target_value !== null) map[target.metric_id] = target.target_value
+    })
+    setTjTargetValues(map)
+  }
+
+  const loadTjActuals = async (weekStart: string) => {
+    const { data } = await supabase
+      .from('tj_weekly_data')
+      .select('instagram, youtube, linkedin_newsletter, email_newsletter, podcast')
+      .eq('week_start', weekStart)
+      .maybeSingle()
+
+    if (!data) {
+      setTjActuals({})
+      return
+    }
+
+    const sources = [
+      data.instagram,
+      data.youtube,
+      data.linkedin_newsletter,
+      data.email_newsletter,
+      data.podcast,
+    ] as Array<Record<string, any> | null>
+    const actuals: Record<string, number> = {}
+
+    TJ_TARGET_METRIC_IDS.forEach(metricId => {
+      const entry = sources
+        .map(source => source?.[metricId])
+        .find(value => value !== null && value !== undefined)
+      const rawValue = typeof entry === 'object' && entry !== null ? entry.value : entry
+      if (rawValue !== null && rawValue !== undefined && !isNaN(Number(rawValue))) {
+        actuals[metricId] = Number(rawValue)
+      }
+    })
+    setTjActuals(actuals)
+  }
+
+  useEffect(() => {
+    if (activeSection !== 'tj') return
+    loadTjTargets(selectedWeekStart)
+    loadTjActuals(selectedWeekStart)
+  }, [activeSection, selectedWeekStart])
+
+  const saveTjTargets = async () => {
+    setTjSaving(true)
+    try {
+      const { error: deleteError } = await supabase
+        .from('targets')
+        .delete()
+        .is('client_id', null)
+        .eq('target_type', 'weekly')
+        .eq('period', selectedWeekStart)
+        .in('metric_id', TJ_TARGET_METRIC_IDS)
+      if (deleteError) throw deleteError
+
+      const rows = Object.entries(tjTargetValues)
+        .filter(([metricId]) => TJ_TARGET_METRIC_IDS.includes(metricId))
+        .filter(([, value]) => value !== null && value !== undefined)
+        .map(([metricId, targetValue]) => ({
+          client_id: null as string | null,
+          metric_id: metricId,
+          target_type: 'weekly',
+          period: selectedWeekStart,
+          target_value: Number(targetValue),
+        }))
+
+      if (rows.length > 0) {
+        const { error } = await supabase.from('targets').insert(rows)
+        if (error) throw error
+      }
+      toast.success('TJ personal channel targets saved.')
+    } catch (error: any) {
+      toast.error('Save failed: ' + error.message)
+    } finally {
+      setTjSaving(false)
+    }
+  }
+
+  const renderInternalTargetRow = (
+    metric: Pick<CompanyMetric, 'id' | 'name' | 'unit'>,
+    values: Record<string, number>,
+    actuals: Record<string, number>,
+    setValues: React.Dispatch<React.SetStateAction<Record<string, number>>>,
+  ) => {
+    const target = values[metric.id]
+    const actual = actuals[metric.id]
+    const achievement = target && actual !== undefined ? Math.round((actual / target) * 100) : null
+    const achievementColor = achievement === null ? '#999'
+      : achievement >= 100 ? '#3B82F6'
+      : achievement >= 70 ? '#22C55E'
+      : achievement >= 40 ? '#EAB308'
+      : '#EF4444'
+
+    return (
+      <tr key={metric.id} style={{ borderBottom: '1px solid #F5F5F5' }}>
+        <td style={{ padding: '10px 8px', fontSize: '14px' }}>
+          {metric.name}
+          <span style={{ marginLeft: '6px', fontSize: '11px', color: '#bbb' }}>{metric.id}</span>
+        </td>
+        <td style={{ padding: '10px 8px', textAlign: 'right' }}>
+          <input
+            type="number"
+            value={target ?? ''}
+            placeholder="-"
+            onChange={event => setValues(previous => ({ ...previous, [metric.id]: Number(event.target.value) }))}
+            style={{ width: '90px', padding: '6px 10px', border: '1px solid #E5E5E5', borderRadius: '6px', fontSize: '14px', fontWeight: '600', textAlign: 'right', outline: 'none' }}
+            onFocus={event => event.target.style.borderColor = '#FFC947'}
+            onBlur={event => event.target.style.borderColor = '#E5E5E5'}
+          />
+          {metric.unit === '%' && <span style={{ marginLeft: '4px', color: '#999' }}>%</span>}
+        </td>
+        <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: '600', fontSize: '14px' }}>
+          {actual !== undefined ? actual.toLocaleString() : '-'}
+        </td>
+        <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: '700', fontSize: '13px', color: achievementColor }}>
+          {achievement !== null ? `${achievement}%` : '-'}
+        </td>
+      </tr>
+    )
+  }
+
   const targetableMetrics = ALL_METRICS.filter(m => m.hasTarget)
   const targetableContent = targetableMetrics.filter(m => m.category === 'content')
   const targetableLeadGen = targetableMetrics.filter(m => m.category === 'leadgen')
@@ -398,8 +546,71 @@ export function SettingsTargetsPage() {
             onClick={() => setActiveSection('sales')}
             className={`px-4 py-1.5 rounded text-xs font-black uppercase tracking-wider transition-all ${activeSection === 'sales' ? 'bg-gold text-black shadow' : 'text-muted-foreground hover:text-foreground'}`}
           >Sales & Outreach</button>
+          <button
+            onClick={() => setActiveSection('tj')}
+            className={`px-4 py-1.5 rounded text-xs font-black uppercase tracking-wider transition-all ${activeSection === 'tj' ? 'bg-gold text-black shadow' : 'text-muted-foreground hover:text-foreground'}`}
+          >TJ Personal Channels</button>
         </div>
       </div>
+
+      {activeSection === 'tj' && (
+        <div className="space-y-6">
+          <Card className="p-6 bg-muted/20 border-none shadow-none">
+            <div className="flex flex-col md:flex-row gap-4 items-end">
+              <div className="space-y-2 min-w-[260px]">
+                <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Week</Label>
+                <Select value={selectedWeekStart} onValueChange={setSelectedWeekStart}>
+                  <SelectTrigger className="bg-background font-bold h-11"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {weekOptions.map(week => <SelectItem key={week.weekStart} value={week.weekStart}>{week.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs text-muted-foreground pb-2">
+                Weekly targets and actuals for TJ's Instagram, YouTube, newsletters, and podcast channels.
+              </p>
+            </div>
+          </Card>
+
+          <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#FFC947' }}>
+                  <th style={{ padding: '12px 10px', textAlign: 'left', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>Metric</th>
+                  <th style={{ padding: '12px 10px', textAlign: 'right', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>This Week Target</th>
+                  <th style={{ padding: '12px 10px', textAlign: 'right', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>This Week Actual</th>
+                  <th style={{ padding: '12px 10px', textAlign: 'right', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>Ach%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {TJ_TARGET_GROUPS.map(group => (
+                  <React.Fragment key={group.title}>
+                    <tr>
+                      <th colSpan={4} style={{ background: '#F9F9F9', padding: '10px 8px', fontSize: '12px', fontWeight: '700', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #E5E5E5' }}>
+                        {group.title}
+                      </th>
+                    </tr>
+                    {group.metrics.map(metric => renderInternalTargetRow(metric, tjTargetValues, tjActuals, setTjTargetValues))}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+
+            <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid #E5E5E5', padding: '16px 24px', display: 'flex', justifyContent: 'flex-end', gap: '12px', zIndex: 10 }}>
+              <span style={{ color: '#999', fontSize: '13px', alignSelf: 'center', fontWeight: '500' }}>
+                {Object.keys(tjTargetValues).length} targets configured
+              </span>
+              <button
+                onClick={saveTjTargets}
+                disabled={tjSaving}
+                style={{ background: tjSaving ? '#E5E5E5' : '#FFC947', color: '#000', border: 'none', borderRadius: '8px', padding: '10px 28px', fontWeight: '800', fontSize: '15px', cursor: tjSaving ? 'not-allowed' : 'pointer', boxShadow: '0 4px 14px 0 rgba(255, 201, 71, 0.39)', transition: 'all 0.2s ease' }}
+              >
+                {tjSaving ? 'Saving...' : 'Save TJ Targets'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Sales & Outreach internal targets ─── */}
       {activeSection === 'sales' && (

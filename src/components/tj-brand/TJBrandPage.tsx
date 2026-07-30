@@ -127,7 +127,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
     }
   }
 
-  const updateMetric = (section: string, id: string, field: 'value' | 'target', value: any) => {
+  const updateMetric = (section: string, id: string, value: any) => {
     if (!selectedWeek) {
       toast.error('Please select a week first.')
       return
@@ -135,7 +135,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
     setFormData((prev: any) => {
       const updatedSection = {
         ...prev[section],
-        [id]: { ...(prev[section][id] || {}), [field]: value }
+        [id]: { ...(prev[section][id] || {}), value }
       }
       const updated = { ...prev, [section]: updatedSection }
 
@@ -158,7 +158,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
   }
 
   const renderMetricCard = (section: string, metric: CompanyMetric) => {
-    const data = formData[section][metric.id] || { value: '', target: '' }
+    const data = formData[section][metric.id] || { value: '' }
     const lifetimeHigh = lifetimeHighs[metric.id]
 
     // Auto-calc for Total Posts
@@ -171,17 +171,6 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
                 <CardContent className="p-4 space-y-3">
                     <Label className="text-[10px] font-black uppercase text-muted-foreground">{metric.name}</Label>
                     <div className="text-3xl font-black text-gold">{total}</div>
-                    <div className="flex gap-2">
-                        <div className="flex-1 space-y-1">
-                            <Label className="text-[9px] uppercase font-bold opacity-50">Target</Label>
-                            <Input 
-                                type="number" 
-                                value={data.target} 
-                                onChange={e => updateMetric(section, metric.id, 'target', e.target.value)}
-                                className="h-8 text-xs font-bold"
-                            />
-                        </div>
-                    </div>
                 </CardContent>
             </Card>
         )
@@ -195,24 +184,11 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
             <Input 
               type="number" 
               value={data.value} 
-              onChange={e => updateMetric(section, metric.id, 'value', e.target.value)}
+              onChange={e => updateMetric(section, metric.id, e.target.value)}
               className="h-12 text-2xl font-black pr-8"
             />
             {(metric.unit || metric.type === 'percentage') && <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">{metric.unit || '%'}</span>}
           </div>
-          {metric.hasTarget && (
-            <div className="flex gap-2 pt-2 border-t border-border/30">
-              <div className="flex-1 space-y-1">
-                <Label className="text-[9px] uppercase font-bold opacity-50">Target</Label>
-                <Input
-                  type="number"
-                  value={data.target}
-                  onChange={e => updateMetric(section, metric.id, 'target', e.target.value)}
-                  className="h-8 text-xs font-bold"
-                />
-              </div>
-            </div>
-          )}
           {lifetimeHigh && (
             <div className="flex items-center gap-1 text-[11px] text-gold font-bold pt-1 border-t border-border/30">
               <Trophy className="w-3 h-3" />

@@ -4,6 +4,7 @@ import { ExportPage } from './ExportPage'
 import { SettingsTargetsPage } from './SettingsTargetsPage'
 import { TJChannelAssignmentsTab } from './TJChannelAssignmentsTab'
 import { MetricFieldsTab } from './MetricFieldsTab'
+import { ClientSettingsPage } from './ClientSettingsPage'
 import { Button } from "@/components/ui/button"
 import { BackButton } from "@/components/ui/BackButton"
 
@@ -55,10 +56,7 @@ export function SettingsPage() {
                 {activeTab === 'targets' && <SettingsTargetsPage />}
                 {activeTab === 'tj_channels' && <TJChannelAssignmentsTab />}
                 {activeTab === 'clients' && (
-                  <div className="p-12 text-center border rounded-lg bg-muted/20">
-                    <p className="text-muted-foreground font-bold mb-4">Client Management System</p>
-                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-black">Coming Soon</p>
-                  </div>
+                  <ClientSettingsPage />
                 )}
                 {activeTab === 'metrics' && <MetricFieldsTab />}
               </div>
