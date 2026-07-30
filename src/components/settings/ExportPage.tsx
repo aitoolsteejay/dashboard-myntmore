@@ -207,7 +207,7 @@ export function ExportPage() {
                   {[
                     ['📋 Client Weekly Data', 'All 55 metrics per client per week'],
                     ['❤️ Health Scores', 'Score history + deltas'],
-                    ['👤 TJ Brand', 'IG, YT, Podcast, Video (all clients)'],
+                    ['👤 TJ Brand', 'IG, YT, Newsletter, Video'],
                     ['🏢 MM Content', 'LinkedIn, IG, Web, Quora, Reddit'],
                     ['💼 Sales & Outreach', 'Pipeline + meeting tracker'],
                     ['🎯 Targets', 'All weekly + monthly targets set'],

@@ -26,7 +26,6 @@ const CHANNELS = [
   { key: 'youtube',             label: 'YouTube',              icon: '▶️' },
   { key: 'linkedin_newsletter', label: 'LinkedIn Newsletter',  icon: '📧' },
   { key: 'email_newsletter',    label: 'Email Newsletter',     icon: '✉️' },
-  { key: 'podcast',             label: 'Podcast',              icon: '🎙️' },
   { key: 'video_pipeline',      label: 'Video Pipeline',       icon: '🎬' },
 ]
 

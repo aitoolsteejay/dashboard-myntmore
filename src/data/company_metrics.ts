@@ -40,15 +40,12 @@ export const TJ_PODCAST_METRICS: CompanyMetric[] = [
   { id: 'TJP05', name: 'LinkedIn Newsletter Impressions', type: 'number' },
   { id: 'TJP06', name: 'LinkedIn Newsletter Members Reached', type: 'number' },
   { id: 'TJP07', name: 'LinkedIn Newsletter Views', type: 'number' },
-  { id: 'TJP02', name: 'Email Newsletter Subs', type: 'number', hasTarget: true },
   { id: 'TJP08', name: 'Emails Sent', type: 'number' },
   { id: 'TJP09', name: 'Delivery Rate', type: 'percentage' },
   { id: 'TJP10', name: 'Open Rate', type: 'percentage' },
   { id: 'TJP11', name: 'Click Rate', type: 'percentage' },
   { id: 'TJP12', name: 'CTOR (Click-to-Open Rate)', type: 'percentage' },
   { id: 'TJP13', name: 'Unsubscribe Rate', type: 'percentage' },
-  { id: 'TJP03', name: 'Podcast Listens', type: 'number', hasTarget: true },
-  { id: 'TJP04', name: 'Podcast Downloads', type: 'number' },
 ]
 
 export const MM_ADS_METRICS: CompanyMetric[] = [

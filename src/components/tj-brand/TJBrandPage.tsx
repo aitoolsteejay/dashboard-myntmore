@@ -147,8 +147,8 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
         instagram: updated.instagram,
         youtube: updated.youtube,
         linkedin_newsletter: { TJP01: updated.newsletter_podcast?.TJP01, TJP05: updated.newsletter_podcast?.TJP05, TJP06: updated.newsletter_podcast?.TJP06, TJP07: updated.newsletter_podcast?.TJP07 },
-        email_newsletter: { TJP02: updated.newsletter_podcast?.TJP02, TJP08: updated.newsletter_podcast?.TJP08, TJP09: updated.newsletter_podcast?.TJP09, TJP10: updated.newsletter_podcast?.TJP10, TJP11: updated.newsletter_podcast?.TJP11, TJP12: updated.newsletter_podcast?.TJP12, TJP13: updated.newsletter_podcast?.TJP13 },
-        podcast: { TJP03: updated.newsletter_podcast?.TJP03, TJP04: updated.newsletter_podcast?.TJP04 },
+        email_newsletter: { TJP08: updated.newsletter_podcast?.TJP08, TJP09: updated.newsletter_podcast?.TJP09, TJP10: updated.newsletter_podcast?.TJP10, TJP11: updated.newsletter_podcast?.TJP11, TJP12: updated.newsletter_podcast?.TJP12, TJP13: updated.newsletter_podcast?.TJP13 },
+        podcast: {},
         video_pipeline: updated.video_pipeline,
         submitted_by: user?.id
       })
@@ -239,7 +239,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
             <Youtube className="w-4 h-4" /> YouTube
           </TabsTrigger>
           <TabsTrigger value="podcast" className="py-2.5 font-bold data-[state=active]:bg-gold data-[state=active]:text-black gap-2">
-            <Mic className="w-4 h-4" /> Newsletter & Pod
+            <Mic className="w-4 h-4" /> Newsletter
           </TabsTrigger>
           <TabsTrigger value="pipeline" className="py-2.5 font-bold data-[state=active]:bg-gold data-[state=active]:text-black gap-2">
             <Video className="w-4 h-4" /> Video Pipeline
@@ -304,13 +304,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 border-b pb-1">Email Newsletter</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {TJ_PODCAST_METRICS.filter(m => ['TJP02','TJP08','TJP09','TJP10','TJP11','TJP12','TJP13'].includes(m.id)).map(m => renderMetricCard('newsletter_podcast', m))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 border-b pb-1">Podcast</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {TJ_PODCAST_METRICS.filter(m => ['TJP03','TJP04'].includes(m.id)).map(m => renderMetricCard('newsletter_podcast', m))}
+                    {TJ_PODCAST_METRICS.filter(m => ['TJP08','TJP09','TJP10','TJP11','TJP12','TJP13'].includes(m.id)).map(m => renderMetricCard('newsletter_podcast', m))}
                   </div>
                 </div>
             </TabsContent>

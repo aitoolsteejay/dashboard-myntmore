@@ -715,7 +715,10 @@ export function DashboardPage() {
   const monthTjAgg = {
     instagram: aggregateChannelRows(monthTjRows, 'instagram'),
     youtube: aggregateChannelRows(monthTjRows, 'youtube'),
-    podcast: aggregateChannelRows(monthTjRows, 'podcast'),
+    newsletter: {
+      ...aggregateChannelRows(monthTjRows, 'linkedin_newsletter'),
+      ...aggregateChannelRows(monthTjRows, 'email_newsletter'),
+    },
     video_pipeline: aggregateChannelRows(monthTjRows, 'video_pipeline'),
   }
 
@@ -1614,16 +1617,28 @@ export function DashboardPage() {
                           prevData={isMonthlyView ? null : tjPrev?.youtube}
                         />
                         <TJChannelCard
-                          title="Newsletter & Podcast"
+                          title="Newsletter"
                           icon={Mail}
                           metrics={[
-                            { id: 'TJP01', name: 'LinkedIn Subs' },
-                            { id: 'TJP02', name: 'Email Subs' },
-                            { id: 'TJP03', name: 'Podcast Listens' },
-                            { id: 'TJP04', name: 'Downloads' },
+                            { id: 'TJP01', name: 'LinkedIn Subscribers' },
+                            { id: 'TJP05', name: 'LinkedIn Impressions' },
+                            { id: 'TJP06', name: 'LinkedIn Members Reached' },
+                            { id: 'TJP07', name: 'LinkedIn Views' },
+                            { id: 'TJP08', name: 'Emails Sent' },
+                            { id: 'TJP09', name: 'Delivery Rate', unit: '%' },
+                            { id: 'TJP10', name: 'Open Rate', unit: '%' },
+                            { id: 'TJP11', name: 'Click Rate', unit: '%' },
+                            { id: 'TJP12', name: 'Click-to-Open Rate', unit: '%' },
+                            { id: 'TJP13', name: 'Unsubscribe Rate', unit: '%' },
                           ]}
-                          currentData={isMonthlyView ? monthTjAgg.podcast : tjData?.podcast}
-                          prevData={isMonthlyView ? null : tjPrev?.podcast}
+                          currentData={isMonthlyView ? monthTjAgg.newsletter : {
+                            ...((tjData?.linkedin_newsletter as Record<string, any> | null) || {}),
+                            ...((tjData?.email_newsletter as Record<string, any> | null) || {}),
+                          }}
+                          prevData={isMonthlyView ? null : {
+                            ...((tjPrev?.linkedin_newsletter as Record<string, any> | null) || {}),
+                            ...((tjPrev?.email_newsletter as Record<string, any> | null) || {}),
+                          }}
                         />
                         <TJChannelCard
                           title="Video Pipeline"

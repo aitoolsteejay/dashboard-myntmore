@@ -486,7 +486,7 @@ export async function generateWeeklySummary(weekStart: string) {
     text += `\nTJ PERSONAL BRAND\n────────────────────────────\n`
     text += `IG: ${tj.instagram?.TJI11?.value || '-'} followers (+${tj.instagram?.TJI10?.value || '0'})\n`
     text += `YT: ${tj.youtube?.TJY07?.value || '-'} subs (+${tj.youtube?.TJY06?.value || '0'})\n`
-    text += `News: ${tj.linkedin_newsletter?.TJP01?.value || tj.email_newsletter?.TJP02?.value || '-'} subs | Pod: ${tj.podcast?.TJP03?.value || '-'} listens\n`
+    text += `News: ${tj.linkedin_newsletter?.TJP01?.value || '-'} LinkedIn subs\n`
   }
 
   if (salesData) {
