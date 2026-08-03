@@ -267,9 +267,9 @@ export function ActionablesPage() {
       </header>
 
       <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/20 p-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex rounded-lg bg-background p-1 shadow-sm">
-          <Button variant={scope === "mine" ? "secondary" : "ghost"} onClick={() => changeScope("mine")} className="flex-1 font-bold sm:min-w-36"><UserRound className="mr-2 h-4 w-4" />My Tasks</Button>
-          <Button variant={scope === "team" ? "secondary" : "ghost"} onClick={() => changeScope("team")} className="flex-1 font-bold sm:min-w-36"><UsersRound className="mr-2 h-4 w-4" />Team Tasks</Button>
+        <div className="flex gap-1 rounded-xl border bg-background p-1.5 shadow-sm">
+          <Button variant="ghost" aria-pressed={scope === "mine"} onClick={() => changeScope("mine")} className={cn("flex-1 border border-transparent font-bold transition-all sm:min-w-44", scope === "mine" ? "border-gold bg-gold text-black shadow-md hover:bg-gold/90 hover:text-black" : "text-muted-foreground hover:bg-muted hover:text-foreground")}><UserRound className="mr-2 h-4 w-4" />My Tasks{scope === "mine" && <CheckCircle2 className="ml-2 h-4 w-4" />}</Button>
+          <Button variant="ghost" aria-pressed={scope === "team"} onClick={() => changeScope("team")} className={cn("flex-1 border border-transparent font-bold transition-all sm:min-w-44", scope === "team" ? "border-gold bg-gold text-black shadow-md hover:bg-gold/90 hover:text-black" : "text-muted-foreground hover:bg-muted hover:text-foreground")}><UsersRound className="mr-2 h-4 w-4" />Team Tasks{scope === "team" && <CheckCircle2 className="ml-2 h-4 w-4" />}</Button>
         </div>
         <p className="px-2 text-xs font-medium text-muted-foreground">{scope === "mine" ? "Your personal queue — tasks assigned to you." : "The complete execution board across all team members."}</p>
       </div>
