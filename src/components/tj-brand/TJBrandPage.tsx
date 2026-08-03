@@ -50,7 +50,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
     fetchTJLifetimeHighs().then(setLifetimeHighs)
   }, [])
 
-  const { triggerSave, saveStatus, lastSaved } = useAutoSave({
+  const { triggerSave, retrySave, saveStatus, lastSaved } = useAutoSave({
     table: 'tj_weekly_data',
     matchColumns: { week_start: selectedWeek },
     debounceMs: 1500,
@@ -310,7 +310,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
 
 <div className="flex justify-end gap-3 py-6 border-t">
               <div className="flex items-center">
-                <SaveIndicator status={saveStatus} lastSaved={lastSaved} />
+                <SaveIndicator status={saveStatus} lastSaved={lastSaved} onRetry={retrySave} />
               </div>
             </div>
           </div>

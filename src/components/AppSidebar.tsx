@@ -17,6 +17,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -26,14 +27,28 @@ import {
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 
-const items = [
-  { to: "/dashboard", label: "Dashboard", icon: Home, adminOnly: false },
-  { to: "/clients", label: "Clients", icon: Users, adminOnly: false },
-  { to: "/data-entry", label: "Data Entry", icon: PenSquare, adminOnly: false },
-  { to: "/actionables", label: "Actionables", icon: CheckSquare, adminOnly: false },
-  { to: "/monthly-targets", label: "Monthly Targets", icon: CalendarCheck, adminOnly: false },
-  { to: "/reports", label: "Reports", icon: BarChart2, adminOnly: false },
-  { to: "/settings", label: "Settings", icon: Settings, adminOnly: true },
+const groups = [
+  {
+    label: "Overview",
+    items: [{ to: "/dashboard", label: "Dashboard", icon: Home, adminOnly: false }],
+  },
+  {
+    label: "Client work",
+    items: [
+      { to: "/clients", label: "Clients", icon: Users, adminOnly: false },
+      { to: "/data-entry", label: "Data Entry", icon: PenSquare, adminOnly: false },
+      { to: "/actionables", label: "Actionables", icon: CheckSquare, adminOnly: false },
+      { to: "/monthly-targets", label: "Monthly Targets", icon: CalendarCheck, adminOnly: false },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [{ to: "/reports", label: "Reports", icon: BarChart2, adminOnly: false }],
+  },
+  {
+    label: "Administration",
+    items: [{ to: "/settings", label: "Settings", icon: Settings, adminOnly: true }],
+  },
 ];
 
 export function AppSidebar() {
@@ -41,8 +56,6 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const path = useRouterState({ select: (s) => s.location.pathname });
   const { profile, isAdmin, clientRecord, signOut } = useAuth();
-
-  const visible = items.filter((i) => !i.adminOnly || isAdmin);
 
   return (
     <Sidebar collapsible="icon">
@@ -61,20 +74,26 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {visible.map((item) => {
+        {groups.map(group => {
+          const visibleItems = group.items.filter(item => !item.adminOnly || isAdmin);
+          if (visibleItems.length === 0) return null;
+          return (
+          <SidebarGroup key={group.label} className="py-2">
+            {!collapsed && <SidebarGroupLabel className="px-2 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground/70">{group.label}</SidebarGroupLabel>}
+            <SidebarGroupContent>
+              <SidebarMenu>
+              {visibleItems.map((item) => {
                 const active = path === item.to || path.startsWith(item.to + "/");
                 return (
                   <SidebarMenuItem key={item.to}>
-                    <SidebarMenuButton asChild isActive={active}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
                       <Link
                         to={item.to}
-                        className={`flex items-center gap-2 ${
+                        aria-current={active ? "page" : undefined}
+                        className={`flex items-center gap-2 rounded-lg transition-colors ${
                           active
-                            ? "border-l-2 border-gold bg-gold-soft font-semibold"
-                            : ""
+                            ? "border border-gold bg-gold text-black shadow-sm hover:bg-gold/90 hover:text-black"
+                            : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
                         <item.icon className="h-4 w-4" />
@@ -84,9 +103,11 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          );
+        })}
       </SidebarContent>
 
       <SidebarFooter className="border-t">

@@ -1210,6 +1210,7 @@ export function DataEntryPage() {
   const {
     triggerSave: triggerContentSave,
     saveNow: saveContentNow,
+    retrySave: retryContentSave,
     saveStatus: contentSaveStatus,
     lastSaved: contentLastSaved,
     cancelPendingAutoSave: cancelContentAutoSave
@@ -1756,7 +1757,7 @@ export function DataEntryPage() {
 
       {/* AutoSave Bar Sticky Below Header */}
       <div className="sticky top-0 z-10 bg-background border-b px-4 py-2 flex justify-between items-center">
-        <SaveIndicator status={contentSaveStatus} lastSaved={contentLastSaved} />
+        <SaveIndicator status={contentSaveStatus} lastSaved={contentLastSaved} onRetry={retryContentSave} />
         <div className="flex gap-2">
           <Button
             onClick={() => handleSave(false, false)}

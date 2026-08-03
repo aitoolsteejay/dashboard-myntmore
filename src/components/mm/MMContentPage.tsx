@@ -40,7 +40,7 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
   
   const weekOptions = useMemo(() => getWeekOptions(12), [])
   const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart())
-  const { triggerSave, saveStatus, lastSaved } = useAutoSave({
+  const { triggerSave, retrySave, saveStatus, lastSaved } = useAutoSave({
     table: 'mm_weekly_data',
     matchColumns: { week_start: selectedWeek },
     debounceMs: 1500,
@@ -254,7 +254,7 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
 
             <div className="flex justify-end gap-3 py-6 border-t">
               <div className="flex items-center">
-                <SaveIndicator status={saveStatus} lastSaved={lastSaved} />
+                <SaveIndicator status={saveStatus} lastSaved={lastSaved} onRetry={retrySave} />
               </div>
             </div>
           </div>

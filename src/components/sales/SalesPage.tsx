@@ -51,7 +51,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
   const weekOptions = useMemo(() => getWeekOptions(12), [])
   const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart())
 
-  const { triggerSave, saveStatus, lastSaved } = useAutoSave({
+  const { triggerSave, retrySave, saveStatus, lastSaved } = useAutoSave({
     table: 'sales_weekly_data',
     matchColumns: { week_start: selectedWeek },
     debounceMs: 1500
@@ -655,7 +655,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
               </Accordion>
 
               <div className="flex justify-end pt-4 mb-10">
-                <SaveIndicator status={saveStatus} lastSaved={lastSaved} />
+                <SaveIndicator status={saveStatus} lastSaved={lastSaved} onRetry={retrySave} />
               </div>
             </>
           )}

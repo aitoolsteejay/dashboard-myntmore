@@ -10,7 +10,7 @@ import { useEffect } from "react";
 
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/sonner";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { hasSupabaseConfig } from "@/integrations/supabase/client";
 
@@ -116,11 +116,29 @@ function AppLayout() {
     return <Outlet />;
   }
 
+  const pageLabel = path.startsWith('/clients') ? 'Client workspace'
+    : path.startsWith('/data-entry') ? 'Data entry'
+      : path.startsWith('/actionables') ? 'Actionables'
+        : path.startsWith('/monthly-targets') ? 'Monthly targets'
+          : path.startsWith('/reports') ? 'Reports'
+            : path.startsWith('/settings') ? 'Settings'
+              : path.startsWith('/processes') ? 'Processes'
+                : path.startsWith('/sales') ? 'Sales & outreach'
+                  : path.startsWith('/mm-content') ? 'Myntmore content'
+                    : path.startsWith('/tj-personal-brand') ? 'TJ personal brand'
+                      : 'Dashboard';
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
-        <main className="flex-1 overflow-auto">
+        <main className="min-w-0 flex-1 overflow-auto">
+          {path !== '/dashboard' && (
+            <div className="sticky top-0 z-30 flex h-12 items-center gap-3 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+              <SidebarTrigger aria-label="Toggle navigation" />
+              <span className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">{pageLabel}</span>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

@@ -19,7 +19,7 @@ interface AutoSaveOptions {
   saveFn?: (payload: Record<string, any>) => Promise<void> // Custom save logic (e.g. RPC)
 }
 
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
 
 export function useAutoSave(options: AutoSaveOptions) {
   const {
@@ -36,6 +36,7 @@ export function useAutoSave(options: AutoSaveOptions) {
   const [pendingData, setPendingData] = useState<Record<string, any> | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isSavingRef = useRef(false)
+  const failedSaveRef = useRef<{ data: Record<string, any>; cols: Record<string, any> } | null>(null)
   // Carries the match columns (client_id/week_start) alongside the queued data so a
   // save that was in flight for one client can never flush another client's edits
   // into its own row once it completes. See save()'s finally block below.
@@ -87,10 +88,12 @@ export function useAutoSave(options: AutoSaveOptions) {
       setSaveStatus('saved')
       setLastSaved(new Date())
       setPendingData(null)
+      failedSaveRef.current = null
       onSaveSuccess?.(cols)
 
     } catch (err: any) {
       setSaveStatus('error')
+      failedSaveRef.current = { data, cols }
       onSaveError?.(err.message)
       console.error('Auto-save failed:', err)
     } finally {
@@ -109,7 +112,7 @@ export function useAutoSave(options: AutoSaveOptions) {
   // Debounced trigger - call this whenever form data changes
   const triggerSave = useCallback((data: Record<string, any>) => {
     setPendingData(data)
-    setSaveStatus('saving') // show saving indicator immediately
+    setSaveStatus('pending')
 
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
@@ -121,6 +124,13 @@ export function useAutoSave(options: AutoSaveOptions) {
   const saveNow = useCallback((data: Record<string, any>) => {
     if (timerRef.current) clearTimeout(timerRef.current)
     save(data)
+  }, [save])
+
+  const retrySave = useCallback(() => {
+    const failedSave = failedSaveRef.current
+    if (!failedSave) return
+    if (timerRef.current) clearTimeout(timerRef.current)
+    save(failedSave.data, failedSave.cols)
   }, [save])
 
   // Cancel any pending auto-save timer
@@ -165,5 +175,5 @@ export function useAutoSave(options: AutoSaveOptions) {
     }
   }, [])
 
-  return { triggerSave, saveNow, saveStatus, lastSaved, cancelPendingAutoSave }
+  return { triggerSave, saveNow, retrySave, saveStatus, lastSaved, cancelPendingAutoSave }
 }
