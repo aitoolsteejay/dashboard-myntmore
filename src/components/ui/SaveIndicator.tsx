@@ -43,7 +43,7 @@ export function SaveIndicator({ status, lastSaved }: SaveIndicatorProps) {
             width: '8px', height: '8px', borderRadius: '50%',
             background: '#EF4444'
           }} />
-          <span>Save failed - retrying...</span>
+          <span>Save failed — make another edit to retry</span>
         </>
       )}
       {status === 'idle' && (

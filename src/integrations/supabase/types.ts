@@ -884,6 +884,7 @@ export type Database = {
       }
       mm_weekly_data: {
         Row: {
+          ads: Json
           created_at: string | null
           id: string
           instagram: Json | null
@@ -897,6 +898,7 @@ export type Database = {
           week_start: string
         }
         Insert: {
+          ads?: Json
           created_at?: string | null
           id?: string
           instagram?: Json | null
@@ -910,6 +912,7 @@ export type Database = {
           week_start: string
         }
         Update: {
+          ads?: Json
           created_at?: string | null
           id?: string
           instagram?: Json | null

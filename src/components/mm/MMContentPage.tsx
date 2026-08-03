@@ -43,7 +43,8 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
   const { triggerSave, saveStatus, lastSaved } = useAutoSave({
     table: 'mm_weekly_data',
     matchColumns: { week_start: selectedWeek },
-    debounceMs: 1500
+    debounceMs: 1500,
+    onSaveError: message => toast.error(`MM Content save failed: ${message}`),
   })
 
   const [formData, setFormData] = useState<any>({
