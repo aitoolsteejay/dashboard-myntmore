@@ -1,444 +1,274 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import { supabase } from "@/integrations/supabase/client"
-import { sortAlphabetically } from "@/utils/sort"
-import { useAuth } from "@/lib/auth"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { toast } from "sonner"
-import { LayoutGrid, List, Plus, Search, Edit2, Trash2, Calendar, User, Clock } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { BackButton } from "@/components/ui/BackButton"
-import { getCurrentWeekStart } from "@/utils/weekUtils"
-import type { Actionable, Client, Profile } from '@/types'
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  CircleDot,
+  Clock3,
+  Edit2,
+  GripVertical,
+  LayoutGrid,
+  List,
+  Loader2,
+  Plus,
+  Search,
+  Trash2,
+  UserRound,
+} from "lucide-react";
+import { DndContext, DragEndEvent, KeyboardSensor, PointerSensor, closestCorners, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { supabase } from "@/integrations/supabase/client";
+import { sortAlphabetically } from "@/utils/sort";
+import { useAuth } from "@/lib/auth";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { BackButton } from "@/components/ui/BackButton";
+import { getCurrentWeekStart } from "@/utils/weekUtils";
+import type { Actionable, Client, Profile } from "@/types";
 
 type ActionableRow = Actionable & {
-  is_carried_forward: boolean
-  clients?: { name: string; company: string | null } | null
-  assignee?: { full_name: string | null } | null
-}
-type ClientSummary = Pick<Client, 'id' | 'name'>
-type ProfileSummary = Pick<Profile, 'id' | 'full_name'>
+  is_carried_forward: boolean;
+  clients?: { name: string; company: string | null } | null;
+  assignee?: { full_name: string | null } | null;
+};
+type ClientSummary = Pick<Client, "id" | "name">;
+type ProfileSummary = Pick<Profile, "id" | "full_name">;
+type FormState = { title: string; client_id: string; assignee_id: string; due_date: string; description: string; status: string };
 
-
-// Note: @dnd-kit/core is required for the Kanban functionality as per the prompt.
-// If it's not installed, you can install it using: npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
-import { DndContext, closestCorners, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+const EMPTY_FORM: FormState = { title: "", client_id: "", assignee_id: "", due_date: "", description: "", status: "open" };
 
 const COLUMNS = [
-  { id: 'open', title: 'Open', color: 'bg-blue-500' },
-  { id: 'in_progress', title: 'In Progress', color: 'bg-gold' },
-  { id: 'done', title: 'Done', color: 'bg-status-on' },
-  { id: 'carried_forward', title: 'Carried Forward', color: 'bg-orange-500' }
-]
+  { id: "open", title: "Open", description: "Ready to be picked up", color: "bg-blue-500", soft: "bg-blue-50 text-blue-700", icon: CircleDot },
+  { id: "in_progress", title: "In Progress", description: "Actively being worked on", color: "bg-amber-400", soft: "bg-amber-50 text-amber-700", icon: Clock3 },
+  { id: "done", title: "Done", description: "Completed work", color: "bg-emerald-500", soft: "bg-emerald-50 text-emerald-700", icon: CheckCircle2 },
+  { id: "carried_forward", title: "Carried Forward", description: "Moved from an earlier week", color: "bg-orange-500", soft: "bg-orange-50 text-orange-700", icon: AlertTriangle },
+] as const;
 
-function SortableActionableCard({ actionable, onEdit, onDelete }: { actionable: ActionableRow, onEdit: (a: ActionableRow) => void, onDelete: (id: string) => void }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id: actionable.id })
+function formatDate(value: string | null) {
+  if (!value) return "No due date";
+  return new Date(`${value}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1
-  }
+function isOverdue(actionable: ActionableRow) {
+  return Boolean(actionable.due_date && actionable.status !== "done" && actionable.due_date < new Date().toISOString().slice(0, 10));
+}
 
+function statusForColumn(actionable: ActionableRow) {
+  return actionable.is_carried_forward ? "carried_forward" : actionable.status || "open";
+}
+
+function SummaryCard({ label, value, icon: Icon, className }: { label: string; value: number; icon: typeof CircleDot; className: string }) {
   return (
-    <Card 
-      ref={setNodeRef} 
-      style={style} 
-      {...attributes} 
-      {...listeners}
-      className={cn(
-        "group relative hover:shadow-md transition-all cursor-grab active:cursor-grabbing",
-        actionable.is_carried_forward && "border-l-4 border-l-orange-500"
-      )}
-    >
-      <CardContent className="p-4 space-y-3">
-        <div className="flex justify-between items-start gap-2">
-          <h4 className="font-bold text-sm leading-tight">{actionable.title}</h4>
-          <Badge variant="outline" className="text-[9px] uppercase font-bold px-1 h-4 shrink-0">
-            {actionable.clients?.name || 'Internal'}
-          </Badge>
-        </div>
-        
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
-            <User className="w-3 h-3" />
-            <span>{actionable.assignee?.full_name || 'Unassigned'}</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
-            <Calendar className="w-3 h-3" />
-            <span>Due: {actionable.due_date || 'No date'}</span>
-          </div>
-        </div>
-
-        <div className="flex justify-between items-center pt-2 border-t border-border/30">
-          <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground uppercase">
-             <Clock className="w-3 h-3" />
-             <span>{actionable.week_start}</span>
-          </div>
-          {actionable.is_carried_forward && (
-            <Badge className="bg-orange-500 text-[9px] h-4 font-black">CARRY FORWARD</Badge>
-          )}
-        </div>
+    <Card className="border-border/60 shadow-sm">
+      <CardContent className="flex items-center gap-3 p-4">
+        <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", className)}><Icon className="h-5 w-5" /></div>
+        <div><div className="text-2xl font-black leading-none">{value}</div><div className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{label}</div></div>
       </CardContent>
     </Card>
-  )
+  );
+}
+
+function SortableActionableCard({ actionable, expanded, onToggle, onEdit, onDelete }: {
+  actionable: ActionableRow;
+  expanded: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: actionable.id });
+  const overdue = isOverdue(actionable);
+  return (
+    <Card ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.55 : 1 }} className={cn("group border-border/70 bg-background shadow-sm transition-shadow hover:shadow-md", actionable.is_carried_forward && "border-l-4 border-l-orange-500")}>
+      <CardContent className="p-0">
+        <div className="flex items-start gap-2 p-3.5">
+          <button type="button" {...attributes} {...listeners} aria-label={`Drag ${actionable.title}`} className="mt-0.5 cursor-grab rounded p-1 text-muted-foreground/50 hover:bg-muted hover:text-muted-foreground active:cursor-grabbing"><GripVertical className="h-4 w-4" /></button>
+          <button type="button" onClick={onToggle} aria-expanded={expanded} className="min-w-0 flex-1 text-left">
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="text-sm font-black leading-snug">{actionable.title}</h4>
+              <ChevronDown className={cn("mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")} />
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Badge variant="outline" className="max-w-full truncate text-[9px] font-bold">{actionable.clients?.name || "Internal"}</Badge>
+              {overdue && <Badge className="border-red-200 bg-red-50 text-[9px] font-black text-red-700">Overdue</Badge>}
+              {actionable.is_carried_forward && <Badge className="border-orange-200 bg-orange-50 text-[9px] font-black text-orange-700">Carried</Badge>}
+            </div>
+            <div className="mt-3 grid gap-1.5 text-[11px] font-medium text-muted-foreground">
+              <span className="flex items-center gap-1.5"><UserRound className="h-3.5 w-3.5" />{actionable.assignee?.full_name || "Unassigned"}</span>
+              <span className={cn("flex items-center gap-1.5", overdue && "font-bold text-red-600")}><CalendarDays className="h-3.5 w-3.5" />{formatDate(actionable.due_date)}</span>
+            </div>
+          </button>
+        </div>
+        {expanded && (
+          <div className="space-y-3 border-t bg-muted/20 p-3.5">
+            <div><div className="mb-1 text-[9px] font-black uppercase tracking-widest text-muted-foreground">Notes</div><p className="whitespace-pre-wrap text-xs leading-relaxed">{actionable.description || "No additional notes."}</p></div>
+            <div className="flex items-center justify-between gap-2 border-t pt-2">
+              <span className="text-[10px] font-medium text-muted-foreground">Week {actionable.week_start ? formatDate(actionable.week_start) : "not set"}</span>
+              <div className="flex gap-1"><Button variant="ghost" size="sm" onClick={onEdit} className="h-7 px-2 text-xs"><Edit2 className="mr-1 h-3 w-3" />Edit</Button><Button variant="ghost" size="icon" onClick={onDelete} aria-label={`Delete ${actionable.title}`} className="h-7 w-7 text-red-500 hover:bg-red-50 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" /></Button></div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function BoardColumn({ column, items, expandedIds, onToggle, onEdit, onDelete }: {
+  column: typeof COLUMNS[number];
+  items: ActionableRow[];
+  expandedIds: Set<string>;
+  onToggle: (id: string) => void;
+  onEdit: (actionable: ActionableRow) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const Icon = column.icon;
+  return (
+    <div ref={setNodeRef} className={cn("flex min-h-[380px] flex-col rounded-xl border bg-muted/20 transition-colors", isOver && "border-gold bg-gold/5 ring-1 ring-gold")}>
+      <div className="rounded-t-xl border-b bg-background/80 p-4">
+        <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><div className={cn("flex h-7 w-7 items-center justify-center rounded-lg", column.soft)}><Icon className="h-4 w-4" /></div><h3 className="text-xs font-black uppercase tracking-widest">{column.title}</h3></div><Badge variant="secondary" className="font-black">{items.length}</Badge></div>
+        <p className="mt-1 pl-9 text-[10px] text-muted-foreground">{column.description}</p>
+      </div>
+      <SortableContext items={items.map(item => item.id)} strategy={verticalListSortingStrategy}>
+        <div className="flex-1 space-y-3 p-3">
+          {items.map(item => <SortableActionableCard key={item.id} actionable={item} expanded={expandedIds.has(item.id)} onToggle={() => onToggle(item.id)} onEdit={() => onEdit(item)} onDelete={() => onDelete(item.id)} />)}
+          {items.length === 0 && <div className="flex min-h-[150px] flex-col items-center justify-center rounded-lg border border-dashed bg-background/40 px-4 text-center"><Icon className="mb-2 h-6 w-6 text-muted-foreground/30" /><p className="text-xs font-bold text-muted-foreground">No tasks here</p><p className="mt-1 text-[10px] text-muted-foreground/70">Drag a task into this column</p></div>}
+        </div>
+      </SortableContext>
+    </div>
+  );
 }
 
 export function ActionablesPage() {
-  const { user, isAdmin } = useAuth()
-  const [view, setView] = useState<'board' | 'list'>('board')
-  const [actionables, setActionables] = useState<ActionableRow[]>([])
-  const [clients, setClients] = useState<ClientSummary[]>([])
-  const [profiles, setProfiles] = useState<ProfileSummary[]>([])
-  const [loading, setLoading] = useState(true)
-  
-  // Filters
-  const [search, setSearch] = useState('')
-  const [filterClient, setFilterClient] = useState('all')
-  const [filterAssignee, setFilterAssignee] = useState('all')
-  const [filterStatus, setFilterStatus] = useState('all')
-
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingActionable, setEditingActionable] = useState<ActionableRow | null>(null)
-  const [form, setForm] = useState({
-    title: '',
-    client_id: '',
-    assignee_id: '',
-    due_date: '',
-    description: '',
-    status: 'open'
-  })
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
-
-  const currentWeekStart = useMemo(() => getCurrentWeekStart(), [])
+  const { user } = useAuth();
+  const [view, setView] = useState<"board" | "list">("board");
+  const [actionables, setActionables] = useState<ActionableRow[]>([]);
+  const [clients, setClients] = useState<ClientSummary[]>([]);
+  const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filterClient, setFilterClient] = useState("all");
+  const [filterAssignee, setFilterAssignee] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingActionable, setEditingActionable] = useState<ActionableRow | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const currentWeekStart = useMemo(() => getCurrentWeekStart(), []);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
   const fetchData = async () => {
-    setLoading(true)
+    setLoading(true);
     try {
-      const [
-        { data: actionsData },
-        { data: clientsData },
-        { data: profilesData }
-      ] = await Promise.all([
-        supabase.from('actionables').select(`
-          *,
-          clients(name, company),
-          assignee:profiles!assignee_id(full_name),
-          assigner:profiles!assigner_id(full_name)
-        `),
-        supabase.from('clients').select('id, name').eq('status', 'active'),
-        supabase.from('profiles').select('id, full_name')
-      ])
-
-      const processed = (actionsData || []).map(a => ({
-        ...a,
-        is_carried_forward: a.status === 'open' && !!a.week_start && a.week_start < currentWeekStart
-      }))
-
-      setActionables(processed)
-      setClients(sortAlphabetically(clientsData || [], client => client.name))
-      setProfiles(sortAlphabetically(profilesData || [], profile => profile.full_name))
+      const [{ data: actionsData, error: actionsError }, { data: clientsData, error: clientsError }, { data: profilesData, error: profilesError }] = await Promise.all([
+        supabase.from("actionables").select("*, clients(name, company), assignee:profiles!assignee_id(full_name), assigner:profiles!assigner_id(full_name)").order("created_at", { ascending: false }),
+        supabase.from("clients").select("id, name").eq("status", "active"),
+        supabase.from("profiles").select("id, full_name, department"),
+      ]);
+      if (actionsError) throw actionsError;
+      if (clientsError) throw clientsError;
+      if (profilesError) throw profilesError;
+      setActionables((actionsData || []).map(actionable => ({ ...actionable, is_carried_forward: actionable.status === "carried_forward" || (actionable.status === "open" && Boolean(actionable.week_start) && actionable.week_start! < currentWeekStart) })) as ActionableRow[]);
+      setClients(sortAlphabetically(clientsData || [], client => client.name));
+      setProfiles(sortAlphabetically((profilesData || []).filter(profile => profile.department !== "client"), profile => profile.full_name));
     } catch (error: any) {
-      toast.error(error.message)
+      toast.error("Could not load actionables: " + error.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  useEffect(() => {
-    fetchData()
-  }, [currentWeekStart])
+  useEffect(() => { fetchData(); }, [currentWeekStart]);
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over) return
+  const filteredActionables = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    return actionables.filter(actionable => {
+      const matchesSearch = !query || `${actionable.title} ${actionable.description || ""} ${actionable.clients?.name || "Internal"} ${actionable.assignee?.full_name || ""}`.toLocaleLowerCase().includes(query);
+      return matchesSearch && (filterClient === "all" || actionable.client_id === filterClient) && (filterAssignee === "all" || actionable.assignee_id === filterAssignee) && (filterStatus === "all" || statusForColumn(actionable) === filterStatus);
+    });
+  }, [actionables, filterAssignee, filterClient, filterStatus, search]);
 
-    const activeId = active.id as string
-    const overId = over.id as string
+  const itemsByColumn = useMemo(() => Object.fromEntries(COLUMNS.map(column => [column.id, filteredActionables.filter(actionable => statusForColumn(actionable) === column.id)])) as Record<string, ActionableRow[]>, [filteredActionables]);
+  const openCount = actionables.filter(actionable => statusForColumn(actionable) === "open").length;
+  const progressCount = actionables.filter(actionable => statusForColumn(actionable) === "in_progress").length;
+  const overdueCount = actionables.filter(isOverdue).length;
+  const doneCount = actionables.filter(actionable => statusForColumn(actionable) === "done").length;
 
-    // If over a column or an item in a column
-    let newStatus = overId
-    if (!COLUMNS.some(c => c.id === overId)) {
-        const overItem = actionables.find(a => a.id === overId)
-        if (overItem) newStatus = overItem.status ?? 'open'
-    }
+  const openCreate = () => { setEditingActionable(null); setForm(EMPTY_FORM); setIsModalOpen(true); };
+  const openEdit = (actionable: ActionableRow) => { setEditingActionable(actionable); setForm({ title: actionable.title, client_id: actionable.client_id || "", assignee_id: actionable.assignee_id || "", due_date: actionable.due_date || "", description: actionable.description || "", status: statusForColumn(actionable) }); setIsModalOpen(true); };
+  const toggleExpanded = (id: string) => setExpandedIds(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
-    const activeItem = actionables.find(a => a.id === activeId)
-    if (activeItem && activeItem.status !== newStatus) {
-      try {
-        const { error } = await supabase.from('actionables').update({ status: newStatus }).eq('id', activeId)
-        if (error) throw error
-        
-        setActionables(prev => prev.map(a => a.id === activeId ? { ...a, status: newStatus } : a))
-        toast.success(`Moved to ${newStatus}`)
-      } catch (error: any) {
-        toast.error(error.message)
-      }
-    }
-  }
+  const handleDragEnd = async ({ active, over }: DragEndEvent) => {
+    if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    const overItem = actionables.find(item => item.id === overId);
+    const targetStatus = COLUMNS.some(column => column.id === overId)
+      ? overId
+      : overItem
+        ? statusForColumn(overItem)
+        : null;
+    const activeItem = actionables.find(item => item.id === activeId);
+    if (!activeItem || !targetStatus || statusForColumn(activeItem) === targetStatus) return;
+    const update = { status: targetStatus, ...(targetStatus === "open" ? { week_start: currentWeekStart } : {}) };
+    const previous = actionables;
+    setActionables(current => current.map(item => item.id === activeId ? { ...item, ...update, is_carried_forward: targetStatus === "carried_forward" } : item));
+    const { error } = await supabase.from("actionables").update(update).eq("id", activeId);
+    if (error) { setActionables(previous); toast.error("Could not move task: " + error.message); return; }
+    toast.success(`Moved to ${COLUMNS.find(column => column.id === targetStatus)?.title}`);
+  };
 
   const handleSave = async () => {
-    if (!form.title || !form.assignee_id) {
-      toast.error("Title and Assignee are required")
-      return
-    }
-
-    try {
-      const payload = {
-        ...form,
-        assigner_id: editingActionable ? editingActionable.assigner_id : user?.id,
-        week_start: editingActionable ? editingActionable.week_start : currentWeekStart
-      }
-
-      if (editingActionable) {
-        const { error } = await supabase.from('actionables').update(payload).eq('id', editingActionable.id)
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from('actionables').insert(payload)
-        if (error) throw error
-      }
-
-      toast.success(editingActionable ? "Actionable updated" : "Actionable created")
-      setIsModalOpen(false)
-      fetchData()
-    } catch (error: any) {
-      toast.error(error.message)
-    }
-  }
+    if (!form.title.trim() || !form.assignee_id) { toast.error("Title and assignee are required."); return; }
+    setSaving(true);
+    const payload = { ...form, title: form.title.trim(), client_id: form.client_id || null, due_date: form.due_date || null, description: form.description.trim() || null, assigner_id: editingActionable?.assigner_id || user?.id, week_start: editingActionable?.week_start || currentWeekStart };
+    const { error } = editingActionable ? await supabase.from("actionables").update(payload).eq("id", editingActionable.id) : await supabase.from("actionables").insert(payload);
+    setSaving(false);
+    if (error) { toast.error("Could not save actionable: " + error.message); return; }
+    toast.success(editingActionable ? "Actionable updated" : "Actionable created");
+    setIsModalOpen(false);
+    await fetchData();
+  };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure?")) return
-    try {
-      const { error } = await supabase.from('actionables').delete().eq('id', id)
-      if (error) throw error
-      setActionables(prev => prev.filter(a => a.id !== id))
-      toast.success("Actionable deleted")
-    } catch (error: any) {
-      toast.error(error.message)
-    }
-  }
-
-  const filteredActionables = actionables.filter(a => {
-    const matchesSearch = a.title.toLowerCase().includes(search.toLowerCase()) || 
-                          (a.clients?.name || '').toLowerCase().includes(search.toLowerCase())
-    const matchesClient = filterClient === 'all' || a.client_id === filterClient
-    const matchesAssignee = filterAssignee === 'all' || a.assignee_id === filterAssignee
-    const matchesStatus = filterStatus === 'all' || a.status === filterStatus
-    return matchesSearch && matchesClient && matchesAssignee && matchesStatus
-  })
+    const actionable = actionables.find(item => item.id === id);
+    if (!window.confirm(`Delete “${actionable?.title || "this actionable"}”?`)) return;
+    const { error } = await supabase.from("actionables").delete().eq("id", id);
+    if (error) { toast.error("Could not delete actionable: " + error.message); return; }
+    setActionables(current => current.filter(item => item.id !== id));
+    toast.success("Actionable deleted");
+  };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="mx-auto max-w-[1700px] space-y-6 p-6 lg:p-8">
       <BackButton to="/dashboard" label="Back to Dashboard" />
-      <div className="flex justify-between items-end">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div><div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-gold"><CheckCircle2 className="h-4 w-4" />Execution workspace</div><h1 className="text-3xl font-black tracking-tight">Actionables</h1><p className="mt-1 text-sm text-muted-foreground">Plan, assign and move client work forward from one place.</p></div>
+        <div className="flex flex-wrap gap-2"><div className="flex rounded-lg bg-muted p-1"><Button variant={view === "board" ? "secondary" : "ghost"} size="sm" onClick={() => setView("board")} className="h-8"><LayoutGrid className="mr-2 h-4 w-4" />Board</Button><Button variant={view === "list" ? "secondary" : "ghost"} size="sm" onClick={() => setView("list")} className="h-8"><List className="mr-2 h-4 w-4" />List</Button></div><Button onClick={openCreate} className="bg-gold font-black text-black hover:bg-gold/90"><Plus className="mr-2 h-4 w-4" />Add Actionable</Button></div>
+      </header>
 
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Actionables</h1>
-          <p className="text-muted-foreground">Track tasks and strategic initiatives across clients.</p>
-        </div>
-        <div className="flex gap-2">
-            <div className="bg-muted p-1 rounded-lg flex">
-                <Button 
-                    variant={view === 'board' ? 'secondary' : 'ghost'} 
-                    size="sm" 
-                    className="h-8"
-                    onClick={() => setView('board')}
-                >
-                    <LayoutGrid className="w-4 h-4 mr-2" /> Board
-                </Button>
-                <Button 
-                    variant={view === 'list' ? 'secondary' : 'ghost'} 
-                    size="sm" 
-                    className="h-8"
-                    onClick={() => setView('list')}
-                >
-                    <List className="w-4 h-4 mr-2" /> List
-                </Button>
-            </div>
-            <Button onClick={() => { setEditingActionable(null); setForm({title:'', client_id:'', assignee_id:'', due_date:'', description:'', status:'open'}); setIsModalOpen(true); }} className="bg-gold text-black hover:bg-gold/90 font-bold">
-                <Plus className="w-4 h-4 mr-2" /> Add Actionable
-            </Button>
-        </div>
-      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4"><SummaryCard label="Open" value={openCount} icon={CircleDot} className="bg-blue-50 text-blue-600" /><SummaryCard label="In progress" value={progressCount} icon={Clock3} className="bg-amber-50 text-amber-600" /><SummaryCard label="Overdue" value={overdueCount} icon={AlertTriangle} className="bg-red-50 text-red-600" /><SummaryCard label="Completed" value={doneCount} icon={CheckCircle2} className="bg-emerald-50 text-emerald-600" /></div>
 
-      <div className="flex flex-wrap gap-4 items-center bg-card p-4 rounded-xl border shadow-sm">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Search tasks..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <Select value={filterClient} onValueChange={setFilterClient}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="All Clients" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Clients</SelectItem>
-            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="All Assignees" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Assignees</SelectItem>
-            {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        {view === 'list' && (
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="All Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              {COLUMNS.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
+      <Card className="border-border/60 shadow-sm"><CardContent className="grid gap-3 p-4 lg:grid-cols-[minmax(280px,1fr)_220px_220px_190px]"><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search title, notes, client or assignee…" className="pl-9" value={search} onChange={event => setSearch(event.target.value)} /></div><Select value={filterClient} onValueChange={setFilterClient}><SelectTrigger><SelectValue placeholder="All Clients" /></SelectTrigger><SelectContent><SelectItem value="all">All clients</SelectItem>{clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent></Select><Select value={filterAssignee} onValueChange={setFilterAssignee}><SelectTrigger><SelectValue placeholder="All Assignees" /></SelectTrigger><SelectContent><SelectItem value="all">All assignees</SelectItem>{profiles.map(profile => <SelectItem key={profile.id} value={profile.id}>{profile.full_name || "Unnamed member"}</SelectItem>)}</SelectContent></Select><Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger><SelectValue placeholder="All Statuses" /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{COLUMNS.map(column => <SelectItem key={column.id} value={column.id}>{column.title}</SelectItem>)}</SelectContent></Select></CardContent></Card>
 
-      {view === 'board' ? (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-[calc(100vh-320px)] min-h-[500px]">
-            {COLUMNS.map(column => (
-              <div key={column.id} className="flex flex-col bg-muted/30 rounded-xl border border-dashed border-border/60">
-                <div className="p-4 flex items-center justify-between border-b bg-background/50 rounded-t-xl">
-                  <div className="flex items-center gap-2">
-                    <div className={cn("w-2 h-2 rounded-full", column.color)} />
-                    <h3 className="font-black text-sm uppercase tracking-widest">{column.title}</h3>
-                  </div>
-                  <Badge variant="secondary" className="text-[10px]">{filteredActionables.filter(a => a.status === column.id || (column.id === 'carried_forward' && a.is_carried_forward)).length}</Badge>
-                </div>
-                <ScrollArea className="flex-1 p-3">
-                  <SortableContext items={filteredActionables.filter(a => a.status === column.id || (column.id === 'carried_forward' && a.is_carried_forward)).map(a => a.id)} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-3">
-                      {filteredActionables.filter(a => a.status === column.id || (column.id === 'carried_forward' && a.is_carried_forward)).map(a => (
-                        <SortableActionableCard key={a.id} actionable={a} onEdit={(a) => { setEditingActionable(a); setForm({ title: a.title, client_id: a.client_id ?? '', assignee_id: a.assignee_id ?? '', due_date: a.due_date ?? '', description: a.description ?? '', status: a.status ?? 'open' }); setIsModalOpen(true); }} onDelete={handleDelete} />
-                      ))}
-                    </div>
-                  </SortableContext>
-                </ScrollArea>
-              </div>
-            ))}
-          </div>
-        </DndContext>
+      {loading ? <div className="flex items-center justify-center gap-3 py-24 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin text-gold" />Loading actionables…</div> : view === "board" ? (
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}><div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">{COLUMNS.map(column => <BoardColumn key={column.id} column={column} items={itemsByColumn[column.id] || []} expandedIds={expandedIds} onToggle={toggleExpanded} onEdit={openEdit} onDelete={handleDelete} />)}</div></DndContext>
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Assignee</TableHead>
-                  <TableHead>Week</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredActionables.map(a => (
-                  <TableRow key={a.id}>
-                    <TableCell className="font-bold">{a.title}</TableCell>
-                    <TableCell>{a.clients?.name || 'Internal'}</TableCell>
-                    <TableCell>{a.assignee?.full_name}</TableCell>
-                    <TableCell className="text-[11px] font-mono">{a.week_start}</TableCell>
-                    <TableCell>{a.due_date}</TableCell>
-                    <TableCell>
-                      <Badge variant={a.status === 'done' ? 'default' : 'secondary'} className={cn(
-                        a.status === 'done' ? "bg-status-on" : "",
-                        a.is_carried_forward && "border-orange-500 text-orange-600"
-                      )}>
-                        {(a.status ?? 'open').replace('_', ' ')}
-                        {a.is_carried_forward && " (Carried Forward)"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => { setEditingActionable(a); setForm({ title: a.title, client_id: a.client_id ?? '', assignee_id: a.assignee_id ?? '', due_date: a.due_date ?? '', description: a.description ?? '', status: a.status ?? 'open' }); setIsModalOpen(true); }}><Edit2 className="w-3 h-3" /></Button>
-                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(a.id)}><Trash2 className="w-3 h-3" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <Card className="overflow-hidden"><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Actionable</TableHead><TableHead>Client</TableHead><TableHead>Assignee</TableHead><TableHead>Due date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredActionables.map(actionable => { const status = statusForColumn(actionable); const column = COLUMNS.find(item => item.id === status); return <TableRow key={actionable.id}><TableCell><div className="font-bold">{actionable.title}</div>{actionable.description && <div className="mt-1 max-w-md truncate text-xs text-muted-foreground">{actionable.description}</div>}</TableCell><TableCell>{actionable.clients?.name || "Internal"}</TableCell><TableCell>{actionable.assignee?.full_name || "Unassigned"}</TableCell><TableCell className={cn(isOverdue(actionable) && "font-bold text-red-600")}>{formatDate(actionable.due_date)}</TableCell><TableCell><Badge className={cn("border-0", column?.soft)}>{column?.title || status}</Badge></TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => openEdit(actionable)} aria-label={`Edit ${actionable.title}`}><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDelete(actionable.id)} aria-label={`Delete ${actionable.title}`} className="text-red-500"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>; })}{filteredActionables.length === 0 && <TableRow><TableCell colSpan={6} className="py-16 text-center text-muted-foreground">No actionables match these filters.</TableCell></TableRow>}</TableBody></Table></CardContent></Card>
       )}
 
-      {/* Modal */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{editingActionable ? 'Edit Actionable' : 'Add Actionable'}</DialogTitle></DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Title*</Label>
-              <Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                    <Label>Client</Label>
-                    <Select value={form.client_id || "none"} onValueChange={v => setForm({...form, client_id: v === "none" ? "" : v})}>
-                        <SelectTrigger><SelectValue placeholder="Internal" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="none">Internal</SelectItem>
-                            {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="grid gap-2">
-                    <Label>Assignee*</Label>
-                    <Select value={form.assignee_id} onValueChange={v => setForm({...form, assignee_id: v})}>
-                        <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
-                        <SelectContent>
-                            {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                    <Label>Due Date</Label>
-                    <Input type="date" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} />
-                </div>
-                <div className="grid gap-2">
-                    <Label>Status</Label>
-                    <Select value={form.status} onValueChange={v => setForm({...form, status: v})}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            {COLUMNS.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-            <div className="grid gap-2">
-                <Label>Notes</Label>
-                <Textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={handleSave} className="bg-gold text-black font-bold w-full">Save Actionable</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}><DialogContent className="sm:max-w-[560px]"><DialogHeader><DialogTitle className="text-xl font-black">{editingActionable ? "Edit Actionable" : "Create an Actionable"}</DialogTitle></DialogHeader><div className="grid gap-4 py-2"><div className="grid gap-1.5"><Label htmlFor="actionable-title">Title *</Label><Input id="actionable-title" value={form.title} onChange={event => setForm(current => ({ ...current, title: event.target.value }))} placeholder="What needs to get done?" autoFocus /></div><div className="grid gap-1.5"><Label htmlFor="actionable-notes">Context and expected outcome</Label><Textarea id="actionable-notes" value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} placeholder="Add the context, deliverable or next step." className="min-h-[100px]" /></div><div className="grid gap-4 sm:grid-cols-2"><div className="grid gap-1.5"><Label>Client</Label><Select value={form.client_id || "none"} onValueChange={value => setForm(current => ({ ...current, client_id: value === "none" ? "" : value }))}><SelectTrigger><SelectValue placeholder="Internal" /></SelectTrigger><SelectContent><SelectItem value="none">Internal</SelectItem>{clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent></Select></div><div className="grid gap-1.5"><Label>Assignee *</Label><Select value={form.assignee_id} onValueChange={assignee_id => setForm(current => ({ ...current, assignee_id }))}><SelectTrigger><SelectValue placeholder="Select a member" /></SelectTrigger><SelectContent>{profiles.map(profile => <SelectItem key={profile.id} value={profile.id}>{profile.full_name || "Unnamed member"}</SelectItem>)}</SelectContent></Select></div></div><div className="grid gap-4 sm:grid-cols-2"><div className="grid gap-1.5"><Label htmlFor="actionable-due">Due date</Label><Input id="actionable-due" type="date" value={form.due_date} onChange={event => setForm(current => ({ ...current, due_date: event.target.value }))} /></div><div className="grid gap-1.5"><Label>Status</Label><Select value={form.status} onValueChange={status => setForm(current => ({ ...current, status }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{COLUMNS.map(column => <SelectItem key={column.id} value={column.id}>{column.title}</SelectItem>)}</SelectContent></Select></div></div></div><DialogFooter><Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button><Button onClick={handleSave} disabled={saving} className="bg-gold font-black text-black hover:bg-gold/90">{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{editingActionable ? "Save Changes" : "Create Actionable"}</Button></DialogFooter></DialogContent></Dialog>
     </div>
-  )
+  );
 }
