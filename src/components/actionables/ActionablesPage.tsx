@@ -15,6 +15,7 @@ import {
   Search,
   Trash2,
   UserRound,
+  UsersRound,
 } from "lucide-react";
 import { DndContext, DragEndEvent, KeyboardSensor, PointerSensor, closestCorners, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -151,6 +152,7 @@ function BoardColumn({ column, items, expandedIds, onToggle, onEdit, onDelete }:
 
 export function ActionablesPage() {
   const { user } = useAuth();
+  const [scope, setScope] = useState<"mine" | "team">("mine");
   const [view, setView] = useState<"board" | "list">("board");
   const [actionables, setActionables] = useState<ActionableRow[]>([]);
   const [clients, setClients] = useState<ClientSummary[]>([]);
@@ -191,21 +193,27 @@ export function ActionablesPage() {
 
   useEffect(() => { fetchData(); }, [currentWeekStart]);
 
+  const scopedActionables = useMemo(
+    () => scope === "mine" ? actionables.filter(actionable => actionable.assignee_id === user?.id) : actionables,
+    [actionables, scope, user?.id],
+  );
+
   const filteredActionables = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
-    return actionables.filter(actionable => {
+    return scopedActionables.filter(actionable => {
       const matchesSearch = !query || `${actionable.title} ${actionable.description || ""} ${actionable.clients?.name || "Internal"} ${actionable.assignee?.full_name || ""}`.toLocaleLowerCase().includes(query);
       return matchesSearch && (filterClient === "all" || actionable.client_id === filterClient) && (filterAssignee === "all" || actionable.assignee_id === filterAssignee) && (filterStatus === "all" || statusForColumn(actionable) === filterStatus);
     });
-  }, [actionables, filterAssignee, filterClient, filterStatus, search]);
+  }, [filterAssignee, filterClient, filterStatus, scopedActionables, search]);
 
   const itemsByColumn = useMemo(() => Object.fromEntries(COLUMNS.map(column => [column.id, filteredActionables.filter(actionable => statusForColumn(actionable) === column.id)])) as Record<string, ActionableRow[]>, [filteredActionables]);
-  const openCount = actionables.filter(actionable => statusForColumn(actionable) === "open").length;
-  const progressCount = actionables.filter(actionable => statusForColumn(actionable) === "in_progress").length;
-  const overdueCount = actionables.filter(isOverdue).length;
-  const doneCount = actionables.filter(actionable => statusForColumn(actionable) === "done").length;
+  const openCount = scopedActionables.filter(actionable => statusForColumn(actionable) === "open").length;
+  const progressCount = scopedActionables.filter(actionable => statusForColumn(actionable) === "in_progress").length;
+  const overdueCount = scopedActionables.filter(isOverdue).length;
+  const doneCount = scopedActionables.filter(actionable => statusForColumn(actionable) === "done").length;
 
-  const openCreate = () => { setEditingActionable(null); setForm(EMPTY_FORM); setIsModalOpen(true); };
+  const openCreate = () => { setEditingActionable(null); setForm({ ...EMPTY_FORM, assignee_id: scope === "mine" ? user?.id || "" : "" }); setIsModalOpen(true); };
+  const changeScope = (nextScope: "mine" | "team") => { setScope(nextScope); setFilterAssignee("all"); };
   const openEdit = (actionable: ActionableRow) => { setEditingActionable(actionable); setForm({ title: actionable.title, client_id: actionable.client_id || "", assignee_id: actionable.assignee_id || "", due_date: actionable.due_date || "", description: actionable.description || "", status: statusForColumn(actionable) }); setIsModalOpen(true); };
   const toggleExpanded = (id: string) => setExpandedIds(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
@@ -258,9 +266,17 @@ export function ActionablesPage() {
         <div className="flex flex-wrap gap-2"><div className="flex rounded-lg bg-muted p-1"><Button variant={view === "board" ? "secondary" : "ghost"} size="sm" onClick={() => setView("board")} className="h-8"><LayoutGrid className="mr-2 h-4 w-4" />Board</Button><Button variant={view === "list" ? "secondary" : "ghost"} size="sm" onClick={() => setView("list")} className="h-8"><List className="mr-2 h-4 w-4" />List</Button></div><Button onClick={openCreate} className="bg-gold font-black text-black hover:bg-gold/90"><Plus className="mr-2 h-4 w-4" />Add Actionable</Button></div>
       </header>
 
+      <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/20 p-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex rounded-lg bg-background p-1 shadow-sm">
+          <Button variant={scope === "mine" ? "secondary" : "ghost"} onClick={() => changeScope("mine")} className="flex-1 font-bold sm:min-w-36"><UserRound className="mr-2 h-4 w-4" />My Tasks</Button>
+          <Button variant={scope === "team" ? "secondary" : "ghost"} onClick={() => changeScope("team")} className="flex-1 font-bold sm:min-w-36"><UsersRound className="mr-2 h-4 w-4" />Team Tasks</Button>
+        </div>
+        <p className="px-2 text-xs font-medium text-muted-foreground">{scope === "mine" ? "Your personal queue — tasks assigned to you." : "The complete execution board across all team members."}</p>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4"><SummaryCard label="Open" value={openCount} icon={CircleDot} className="bg-blue-50 text-blue-600" /><SummaryCard label="In progress" value={progressCount} icon={Clock3} className="bg-amber-50 text-amber-600" /><SummaryCard label="Overdue" value={overdueCount} icon={AlertTriangle} className="bg-red-50 text-red-600" /><SummaryCard label="Completed" value={doneCount} icon={CheckCircle2} className="bg-emerald-50 text-emerald-600" /></div>
 
-      <Card className="border-border/60 shadow-sm"><CardContent className="grid gap-3 p-4 lg:grid-cols-[minmax(280px,1fr)_220px_220px_190px]"><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search title, notes, client or assignee…" className="pl-9" value={search} onChange={event => setSearch(event.target.value)} /></div><Select value={filterClient} onValueChange={setFilterClient}><SelectTrigger><SelectValue placeholder="All Clients" /></SelectTrigger><SelectContent><SelectItem value="all">All clients</SelectItem>{clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent></Select><Select value={filterAssignee} onValueChange={setFilterAssignee}><SelectTrigger><SelectValue placeholder="All Assignees" /></SelectTrigger><SelectContent><SelectItem value="all">All assignees</SelectItem>{profiles.map(profile => <SelectItem key={profile.id} value={profile.id}>{profile.full_name || "Unnamed member"}</SelectItem>)}</SelectContent></Select><Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger><SelectValue placeholder="All Statuses" /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{COLUMNS.map(column => <SelectItem key={column.id} value={column.id}>{column.title}</SelectItem>)}</SelectContent></Select></CardContent></Card>
+      <Card className="border-border/60 shadow-sm"><CardContent className={cn("grid gap-3 p-4", scope === "team" ? "lg:grid-cols-[minmax(280px,1fr)_220px_220px_190px]" : "lg:grid-cols-[minmax(280px,1fr)_220px_190px]")}><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search title, notes, client or assignee…" className="pl-9" value={search} onChange={event => setSearch(event.target.value)} /></div><Select value={filterClient} onValueChange={setFilterClient}><SelectTrigger><SelectValue placeholder="All Clients" /></SelectTrigger><SelectContent><SelectItem value="all">All clients</SelectItem>{clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent></Select>{scope === "team" && <Select value={filterAssignee} onValueChange={setFilterAssignee}><SelectTrigger><SelectValue placeholder="All Assignees" /></SelectTrigger><SelectContent><SelectItem value="all">All assignees</SelectItem>{profiles.map(profile => <SelectItem key={profile.id} value={profile.id}>{profile.full_name || "Unnamed member"}</SelectItem>)}</SelectContent></Select>}<Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger><SelectValue placeholder="All Statuses" /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{COLUMNS.map(column => <SelectItem key={column.id} value={column.id}>{column.title}</SelectItem>)}</SelectContent></Select></CardContent></Card>
 
       {loading ? <div className="flex items-center justify-center gap-3 py-24 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin text-gold" />Loading actionables…</div> : view === "board" ? (
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}><div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">{COLUMNS.map(column => <BoardColumn key={column.id} column={column} items={itemsByColumn[column.id] || []} expandedIds={expandedIds} onToggle={toggleExpanded} onEdit={openEdit} onDelete={handleDelete} />)}</div></DndContext>
