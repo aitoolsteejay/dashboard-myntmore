@@ -150,6 +150,7 @@ export function DashboardPage() {
   const [actionables, setActionables] = useState<Actionable[]>([])
   const [processesData, setProcessesData] = useState<MyntmoreProcess[]>([])
   const [processesUpdates, setProcessesUpdates] = useState<ProcessUpdate[]>([])
+  const [expandedProcesses, setExpandedProcesses] = useState<Set<string>>(new Set())
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
   const [loadingClients, setLoadingClients] = useState<Set<string>>(new Set())
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['alerts']))
@@ -1841,27 +1842,78 @@ export function DashboardPage() {
               <div className="space-y-4">
                 <SectionHeader title="Myntmore Processes" id="processes" icon={LayoutDashboard} />
                 {!collapsedSections.has('processes') && (
-                  <Card className="border shadow-sm p-4 space-y-4">
+                  <Card className="overflow-hidden border shadow-sm">
                     {processesData.length === 0 ? (
-                      <p className="text-sm italic text-muted-foreground">No active processes found.</p>
+                      <p className="p-6 text-sm italic text-muted-foreground">No active processes found.</p>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {processesData.map(p => {
+                      <div className="divide-y">
+                        {processesData
+                          .slice()
+                          .sort((a, b) => ({ high: 0, medium: 1, low: 2 }[a.priority || 'medium'] ?? 1) - ({ high: 0, medium: 1, low: 2 }[b.priority || 'medium'] ?? 1) || a.title.localeCompare(b.title))
+                          .map(p => {
                           const update = processesUpdates.find(u => u.process_id === p.id)
+                          const expanded = expandedProcesses.has(p.id)
+                          const owner = profiles.find(person => person.id === p.owner_id)?.full_name || 'Unassigned'
+                          const priorityClass = p.priority === 'high'
+                            ? 'border-red-200 bg-red-50 text-red-700'
+                            : p.priority === 'low'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : 'border-amber-200 bg-amber-50 text-amber-700'
                           return (
-                            <div key={p.id} className="p-3 border rounded-lg bg-muted/20">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className={`text-xs ${p.priority === 'high' ? 'text-red-500' : p.priority === 'medium' ? 'text-yellow-500' : 'text-green-500'}`}>
-                                  {p.priority === 'high' ? '🔴' : p.priority === 'medium' ? '🟡' : '🟢'}
-                                </span>
-                                <span className="font-bold text-sm truncate">{p.title}</span>
-                              </div>
-                              <p className="text-xs text-muted-foreground italic line-clamp-2">
-                                {update ? `"${update.update_text}"` : "No update this week."}
-                              </p>
+                            <div key={p.id} className="transition-colors hover:bg-muted/10">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedProcesses(current => {
+                                  const next = new Set(current)
+                                  if (next.has(p.id)) next.delete(p.id)
+                                  else next.add(p.id)
+                                  return next
+                                })}
+                                aria-expanded={expanded}
+                                className="flex w-full items-center justify-between gap-4 p-4 text-left"
+                              >
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${update ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="truncate text-sm font-black">{p.title}</span>
+                                      <Badge variant="outline" className={`text-[9px] font-black uppercase ${priorityClass}`}>{p.priority || 'medium'}</Badge>
+                                      {p.category && <Badge variant="secondary" className="text-[9px] font-bold">{p.category}</Badge>}
+                                    </div>
+                                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-medium text-muted-foreground">
+                                      <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {owner}</span>
+                                      <span className={update ? 'text-emerald-600' : 'text-amber-600'}>{update ? 'Updated for selected week' : 'Awaiting weekly update'}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                              </button>
+
+                              {expanded && (
+                                <div className="grid gap-4 border-t bg-muted/20 px-4 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+                                  <div>
+                                    <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Process definition</div>
+                                    <p className="text-sm leading-relaxed text-foreground">{p.description || 'No process description has been added yet.'}</p>
+                                  </div>
+                                  <div className="rounded-lg border bg-background p-3">
+                                    <div className="mb-1 flex items-center justify-between gap-3">
+                                      <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Weekly progress</span>
+                                      <span className="text-[10px] text-muted-foreground">{getWeekLabel(displayWeek)}</span>
+                                    </div>
+                                    <p className={`whitespace-pre-wrap text-sm leading-relaxed ${update ? 'text-foreground' : 'italic text-muted-foreground'}`}>
+                                      {update?.update_text || 'No update has been entered for this week.'}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )
                         })}
+                        <div className="flex justify-end bg-muted/10 p-3">
+                          <Button asChild variant="outline" size="sm" className="h-8 text-xs font-bold">
+                            <Link to="/processes">Open Processes Workspace <ArrowRight className="ml-1.5 h-3.5 w-3.5" /></Link>
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </Card>
