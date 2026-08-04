@@ -1,8 +1,11 @@
 import { supabase } from "@/integrations/supabase/client"
-import { getWeeksInSameMonth, getWeekOptions } from "@/utils/weekUtils"
+import { getWeekOptions } from "@/utils/weekUtils"
 
-// Prevents concurrent syncs for the same client+week from clobbering each other
-const _syncInFlight = new Set<string>()
+// Serialize rollups for the same client+week. A previous implementation simply
+// dropped a sync request while another was running. When two campaign autosaves
+// landed together, the first rollup could read before the second upsert completed
+// and the second rollup would never run, leaving the aggregate totals stale.
+const syncQueues = new Map<string, Promise<void>>()
 
 // markSubmitted must only be true when this call is a direct consequence of a real
 // user save (submitting a campaign week, or the Save Draft/Submit Week buttons).
@@ -13,23 +16,27 @@ const _syncInFlight = new Set<string>()
 // had actually touched, the instant anyone merely looked at it.
 export const syncAllCampaignTotals = async (clientId: string, weekStart: string, markSubmitted = false) => {
   const key = `${clientId}:${weekStart}`
-  if (_syncInFlight.has(key)) return
-  _syncInFlight.add(key)
+  const previous = syncQueues.get(key) ?? Promise.resolve()
+  const current = previous
+    .catch(() => undefined)
+    .then(() => _syncAllCampaignTotalsInner(clientId, weekStart, markSubmitted))
+  syncQueues.set(key, current)
   try {
-    await _syncAllCampaignTotalsInner(clientId, weekStart, markSubmitted)
+    await current
   } finally {
-    _syncInFlight.delete(key)
+    if (syncQueues.get(key) === current) syncQueues.delete(key)
   }
 }
 
 const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string, markSubmitted: boolean) => {
   // Fetch all campaign data for this client + week
-  const { data: campaignRows } = await supabase
+  const { data: campaignRows, error: campaignRowsError } = await supabase
     .from('campaign_weekly_data')
     .select('*')
     .eq('client_id', clientId)
     .eq('week_start', weekStart)
 
+  if (campaignRowsError) throw campaignRowsError
   if (!campaignRows || campaignRows.length === 0) return
 
   // Sum across all campaigns
@@ -37,16 +44,21 @@ const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string, 
   let positive = 0, negative = 0, hotLeads = 0
   let meetings = 0, existSent = 0, existRply = 0
 
+  const numberOrZero = (value: unknown) => {
+    const number = Number(value)
+    return Number.isFinite(number) ? number : 0
+  }
+
   campaignRows.forEach((row: any) => {
-    connReq   += row.conn_requests_sent    ?? 0
-    accepted  += row.accepted              ?? 0
-    answered  += row.answered              ?? 0
-    positive  += row.positive_replies      ?? 0
-    negative  += row.negative_replies      ?? 0
-    hotLeads  += row.hot_leads             ?? 0
-    meetings  += row.meetings_booked       ?? 0
-    existSent += row.existing_conn_sent    ?? 0
-    existRply += row.existing_conn_replied ?? 0
+    connReq   += numberOrZero(row.conn_requests_sent)
+    accepted  += numberOrZero(row.accepted)
+    answered  += numberOrZero(row.answered)
+    positive  += numberOrZero(row.positive_replies)
+    negative  += numberOrZero(row.negative_replies)
+    hotLeads  += numberOrZero(row.hot_leads)
+    meetings  += numberOrZero(row.meetings_booked)
+    existSent += numberOrZero(row.existing_conn_sent)
+    existRply += numberOrZero(row.existing_conn_replied)
   })
 
   // Get existing weekly_data to preserve qualitative fields

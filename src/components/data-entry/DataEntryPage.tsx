@@ -478,7 +478,16 @@ function LeadGenCampaignEntry({
 
     const totals = useMemo(() => {
         const t = { L10: 0, L11: 0, L13: 0, L15: 0, L16: 0, L24: 0 }
-        Object.values(localCampaignData).forEach((d: any) => {
+        campaigns.forEach(campaign => {
+            // Browsing an inactive campaign's history replaces its local form with
+            // that historical week. Weekly totals must remain tied to the globally
+            // selected week instead of silently mixing values from different weeks.
+            const campaignViewWeek = inactiveCampaignWeekMap[campaign.id] || selectedWeek
+            const selectedWeekRow = campaignWeeklyData.find(row => row.campaign_id === campaign.id)
+            const d: any = campaignViewWeek === selectedWeek
+              ? localCampaignData[campaign.id]
+              : selectedWeekRow
+            if (!d) return
             t.L10 += Number(d.conn_requests_sent || 0)
             t.L11 += Number(d.accepted || 0)
             t.L13 += Number(d.answered || 0)
@@ -487,7 +496,7 @@ function LeadGenCampaignEntry({
             t.L24 += Number(d.meetings_booked || 0)
         })
         return t
-    }, [localCampaignData])
+    }, [campaignWeeklyData, campaigns, inactiveCampaignWeekMap, localCampaignData, selectedWeek])
 
     const LegacyCard = () => {
       const legacyMetrics = [
