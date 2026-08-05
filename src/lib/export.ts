@@ -97,6 +97,8 @@ function buildClientSheet(
       const L21 = built.L21
       const L26 = built.L26
       const C09  = built.C09 ?? (readNum(cm, 'C06') ?? 0) + (readNum(cm, 'C07') ?? 0) + (readNum(cm, 'C08') ?? 0)
+      const C10  = built.C10
+      const C26  = built.C26
 
       const health = healthScores.find(
         h => h.client_id === row.client_id && h.week_start === row.week_start,
@@ -118,6 +120,8 @@ function buildClientSheet(
         base[label] = readField(cm, m.id)
       }
       base['[C] Total Posts (calc)'] = n(C09)
+      base['[C] Total Impressions (calc)'] = n(C10)
+      base['[C] Avg Impressions Per Post (calc)'] = n(C26)
 
       // Leadgen metrics
       for (const m of LEADGEN_METRICS) {
@@ -182,6 +186,13 @@ function buildMmSheet(rows: any[]) {
         'Week Label': row.week_label ?? '',
       }
       for (const m of MM_LINKEDIN_METRICS)   base[`[LI] ${m.name}`]  = readField(li, m.id)
+      const mmInNetwork = Number(readField(li, 'MML10'))
+      const mmOutOfNetwork = Number(readField(li, 'MML11'))
+      const hasMmSplit = readField(li, 'MML10') !== '' || readField(li, 'MML11') !== ''
+      const mmTotal = hasMmSplit ? (mmInNetwork || 0) + (mmOutOfNetwork || 0) : Number(readField(li, 'MML02')) || 0
+      const mmPosts = Number(readField(li, 'MML01')) || 0
+      base['[LI] Total Impressions'] = mmTotal
+      base['[LI] Avg Impressions Per Post'] = mmPosts > 0 ? Math.round((mmTotal / mmPosts) * 100) / 100 : ''
       for (const m of MM_INSTAGRAM_METRICS)  base[`[IG] ${m.name}`]  = readField(ig, m.id)
       for (const m of MM_WEBSITE_METRICS)    base[`[Web] ${m.name}`] = readField(web, m.id)
       for (const m of MM_OTHER_METRICS) {

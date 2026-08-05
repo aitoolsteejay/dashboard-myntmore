@@ -57,7 +57,14 @@ export const CONTENT_METRICS: Metric[] = [
   auto("C09", "Total Posts Posted", "Post Output", "C06 + C07 + C08", (v) =>
     (v.C06 || 0) + (v.C07 || 0) + (v.C08 || 0),
   ),
-  num("C10", "Impressions", "Performance"),
+  num("C36", "In-Network Impressions", "Performance"),
+  num("C37", "Out-of-Network Impressions", "Performance"),
+  auto("C10", "Total Impressions", "Performance", "C36 + C37", (v) =>
+    (v.C36 || 0) + (v.C37 || 0) || (v.C10 || 0),
+  ),
+  auto("C26", "Avg Impressions Per Post", "Performance", "C10 / C09", (v) =>
+    v.C09 ? ((v.C10 || 0) / v.C09) : 0,
+  ),
   num("C11", "Likes", "Performance"),
   num("C12", "Comments", "Performance"),
   auto("C13", "Engagement Total", "Performance", "C11 + C12", (v) =>

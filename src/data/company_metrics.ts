@@ -65,7 +65,10 @@ export const TJ_VIDEO_METRICS: CompanyMetric[] = [
 
 export const MM_LINKEDIN_METRICS: CompanyMetric[] = [
   { id: 'MML01', name: 'Posts Published', type: 'number', hasTarget: true },
-  { id: 'MML02', name: 'Impressions', type: 'number', hasTarget: true },
+  { id: 'MML10', name: 'In-Network Impressions', type: 'number' },
+  { id: 'MML11', name: 'Out-of-Network Impressions', type: 'number' },
+  { id: 'MML02', name: 'Total Impressions', type: 'auto', hasTarget: true },
+  { id: 'MML12', name: 'Avg Impressions Per Post', type: 'auto' },
   { id: 'MML03', name: 'Reactions', type: 'number' },
   { id: 'MML04', name: 'Comments', type: 'number' },
   { id: 'MML05', name: 'New Followers', type: 'number', hasTarget: true },

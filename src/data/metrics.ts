@@ -27,7 +27,9 @@ export const CONTENT_METRICS: Metric[] = [
   { id: 'C27', name: 'Video Views', type: 'number', category: 'content', group: 'Post Output', hasTarget: false, hasNote: false },
   { id: 'C28', name: 'Newsletters Drafted', type: 'number', category: 'content', group: 'Post Output', hasTarget: true, hasNote: false },
   // Performance
-  { id: 'C10', name: 'Impressions', type: 'number', category: 'content', group: 'Performance', hasTarget: true, hasNote: false },
+  { id: 'C36', name: 'In-Network Impressions', type: 'number', category: 'content', group: 'Performance', hasTarget: false, hasNote: false },
+  { id: 'C37', name: 'Out-of-Network Impressions', type: 'number', category: 'content', group: 'Performance', hasTarget: false, hasNote: false },
+  { id: 'C10', name: 'Total Impressions', type: 'auto', category: 'content', group: 'Performance', autoFormula: 'C36+C37', dependsOn: ['C36','C37'], hasTarget: true, hasNote: false },
   { id: 'C26', name: 'Avg Impressions Per Post', type: 'auto', category: 'content', group: 'Performance', autoFormula: 'C10/C09', dependsOn: ['C10','C09'], hasTarget: false, hasNote: false },
   { id: 'C11', name: 'Likes', type: 'number', category: 'content', group: 'Performance', hasTarget: false, hasNote: false },
   { id: 'C12', name: 'Comments', type: 'number', category: 'content', group: 'Performance', hasTarget: false, hasNote: false },
@@ -94,6 +96,15 @@ export const LEADGEN_METRICS: Metric[] = [
 export const ALL_METRICS = [...CONTENT_METRICS, ...LEADGEN_METRICS]
 
 export function resolveAutoCalc(metricId: string, values: Record<string, number>): number {
+  if (metricId === 'C10') {
+    const splitTotal = Number(values.C36 || 0) + Number(values.C37 || 0)
+    return splitTotal || Number(values.C10 || 0)
+  }
+  if (metricId === 'C26') {
+    const impressions = Number(values.C10 || 0) || Number(values.C36 || 0) + Number(values.C37 || 0)
+    const posts = Number(values.C09 || 0) || Number(values.C06 || 0) + Number(values.C07 || 0) + Number(values.C08 || 0)
+    return posts > 0 ? Math.round((impressions / posts) * 100) / 100 : 0
+  }
   const metric = ALL_METRICS.find(m => m.id === metricId)
   if (!metric?.autoFormula) return 0
   try {

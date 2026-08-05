@@ -27,6 +27,13 @@ export function readNum(
   return null
 }
 
+export function readLinkedInImpressions(metrics: Record<string, any> | null | undefined): number | null {
+  const inNetwork = readNum(metrics, 'C36')
+  const outOfNetwork = readNum(metrics, 'C37')
+  if (inNetwork !== null || outOfNetwork !== null) return (inNetwork ?? 0) + (outOfNetwork ?? 0)
+  return readNum(metrics, 'C10')
+}
+
 export function readText(
   metrics: Record<string, any> | null | undefined,
   metricId: string

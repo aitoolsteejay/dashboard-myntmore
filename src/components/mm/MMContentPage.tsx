@@ -106,6 +106,11 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
         ...prev[section],
         [id]: { ...(prev[section][id] || {}), [field]: value }
       }
+      if (section === 'linkedin' && field === 'value' && (id === 'MML10' || id === 'MML11')) {
+        const inNetwork = Number(updatedSection.MML10?.value || 0)
+        const outOfNetwork = Number(updatedSection.MML11?.value || 0)
+        updatedSection.MML02 = { ...(updatedSection.MML02 || {}), value: inNetwork + outOfNetwork }
+      }
       const updated = { ...prev, [section]: updatedSection }
 
       const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
@@ -128,18 +133,32 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
 
   const renderMetricCard = (section: string, metric: CompanyMetric) => {
     const data = formData[section][metric.id] || { value: '', target: '' }
+    const isLinkedInAuto = section === 'linkedin' && (metric.id === 'MML02' || metric.id === 'MML12')
+    const inNetwork = Number(formData.linkedin.MML10?.value || 0)
+    const outOfNetwork = Number(formData.linkedin.MML11?.value || 0)
+    const splitTotal = inNetwork + outOfNetwork
+    const storedTotal = Number(formData.linkedin.MML02?.value || 0)
+    const totalImpressions = splitTotal || storedTotal
+    const posts = Number(formData.linkedin.MML01?.value || 0)
+    const autoValue = metric.id === 'MML02'
+      ? totalImpressions
+      : posts > 0 ? Math.round((totalImpressions / posts) * 100) / 100 : 0
     
     return (
       <Card key={metric.id} className="border-2 border-border/50">
         <CardContent className="p-4 space-y-3">
           <Label className="text-[10px] font-black uppercase text-muted-foreground">{metric.name}</Label>
           <div className="relative">
+            {isLinkedInAuto ? (
+              <div className="flex h-12 items-center justify-end rounded-md border border-gold/20 bg-gold-soft px-3 text-2xl font-black">{autoValue.toLocaleString('en-IN')}</div>
+            ) : (
             <Input 
               type="number" 
               value={data.value} 
               onChange={e => updateMetric(section, metric.id, 'value', e.target.value)}
               className="h-12 text-2xl font-black pr-8"
             />
+            )}
             {(metric.unit || metric.type === 'percentage') && <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">{metric.unit || '%'}</span>}
           </div>
           {metric.hasTarget && (

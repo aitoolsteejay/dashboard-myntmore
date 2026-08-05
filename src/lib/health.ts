@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client"
+import { readLinkedInImpressions } from "@/utils/readMetric"
 
 export function calculateHealthScore(
   contentMetrics: Record<string, any>,
@@ -35,7 +36,7 @@ export function calculateHealthScore(
   const meetingsTarget = target('L24')
   const posts = get(contentMetrics, 'C09')
   const postsTarget = target('C09')
-  const impressions = get(contentMetrics, 'C10')
+  const impressions = readLinkedInImpressions(contentMetrics) ?? 0
   const impressionsTarget = target('C10')
   const happiness = get(leadgenMetrics, 'L30')
 

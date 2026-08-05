@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client'
 import { calcAcceptanceRate, calcResponseRate, calcPositiveRate } from './metricCalculations'
-import { readNum } from './readMetric'
+import { readNum, readLinkedInImpressions } from './readMetric'
 
 /**
  * Scans ALL historical weekly_data rows for a client and upserts true all-time highs.
@@ -39,7 +39,7 @@ export async function backfillHighScores(clientId: string): Promise<void> {
     const C09stored = readNum(cm, 'C09')
     const C09computed = (C06 ?? 0) + (C07 ?? 0) + (C08 ?? 0)
     const C09 = C09stored ?? (C09computed > 0 ? C09computed : null)
-    const C10 = readNum(cm, 'C10')
+    const C10 = readLinkedInImpressions(cm)
     const C26 = C09 && C09 > 0 && C10 ? Math.round((C10 / C09) * 100) / 100 : null
 
     TRACKED_METRICS.forEach(({ id, name, category }) => {
@@ -47,6 +47,7 @@ export async function backfillHighScores(clientId: string): Promise<void> {
       // Use computed values for auto metrics
       let val: number | null = null
       if (id === 'C09') val = C09
+      else if (id === 'C10') val = C10
       else if (id === 'C26') val = C26
       else val = readNum(col, id)
       if (val !== null && val > 0) {
@@ -121,7 +122,9 @@ const TRACKED_METRICS = [
   { id: 'C07', name: 'Carousels Posted', category: 'content' },
   { id: 'C08', name: 'Videos Posted', category: 'content' },
   { id: 'C09', name: 'Total Posts Posted', category: 'content' },
-  { id: 'C10', name: 'Impressions', category: 'content' },
+  { id: 'C36', name: 'In-Network Impressions', category: 'content' },
+  { id: 'C37', name: 'Out-of-Network Impressions', category: 'content' },
+  { id: 'C10', name: 'Total Impressions', category: 'content' },
   { id: 'C11', name: 'Likes', category: 'content' },
   { id: 'C12', name: 'Comments', category: 'content' },
   { id: 'C13', name: 'Engagement Total', category: 'content' },
@@ -155,13 +158,14 @@ export async function detectAndUpdateHighScores(
   const _C09stored = readNum(contentMetrics, 'C09')
   const _C09computed = (_C06 ?? 0) + (_C07 ?? 0) + (_C08 ?? 0)
   const _C09 = _C09stored ?? (_C09computed > 0 ? _C09computed : null)
-  const _C10 = readNum(contentMetrics, 'C10')
+  const _C10 = readLinkedInImpressions(contentMetrics)
   const _C26 = _C09 && _C09 > 0 && _C10 ? Math.round((_C10 / _C09) * 100) / 100 : null
 
   TRACKED_METRICS.forEach(({ id, name, category }) => {
     const col = category === 'content' ? contentMetrics : leadgenMetrics
     let val: number | null = null
     if (id === 'C09') val = _C09
+    else if (id === 'C10') val = _C10
     else if (id === 'C26') val = _C26
     else val = readNum(col, id)
     if (val !== null && val > 0) {

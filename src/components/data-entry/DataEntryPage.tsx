@@ -1253,7 +1253,7 @@ export function DataEntryPage() {
   const buildMetricsPayload = (metrics: Metric[], source: Record<string, any>) => {
     const payload: Record<string, any> = {}
     metrics.forEach((metric) => {
-      if (metric.type !== 'auto') payload[metric.id] = source[metric.id] || {}
+      if (metric.type !== 'auto' || metric.id === 'C10') payload[metric.id] = source[metric.id] || {}
     })
     return payload
   }
@@ -1369,10 +1369,20 @@ export function DataEntryPage() {
       ALL_METRICS.forEach(m => {
         const metrics = (m.category === 'content' ? currentData?.content_metrics : currentData?.leadgen_metrics) as Record<string, any> | null | undefined
         const val = metrics?.[m.id]
+        const emptyValue = m.id === 'C36' || m.id === 'C37'
+          ? ''
+          : m.type === 'number' || m.type === 'slider'
+            ? 0
+            : m.type === 'boolean'
+              ? false
+              : ''
+        const storedValue = val && typeof val === 'object' && 'value' in val ? val.value : val
+        const storedTarget = val && typeof val === 'object' && 'target' in val ? val.target : undefined
+        const storedNote = val && typeof val === 'object' && 'note' in val ? val.note : undefined
         initialForm[m.id] = {
-          value: val?.value ?? (m.type === 'number' || m.type === 'slider' ? 0 : m.type === 'boolean' ? false : ''),
-          target: val?.target ?? (settings?.custom_targets as Record<string, any> | null)?.[m.id] ?? 0,
-          note: val?.note ?? ''
+          value: storedValue ?? emptyValue,
+          target: storedTarget ?? (settings?.custom_targets as Record<string, any> | null)?.[m.id] ?? 0,
+          note: storedNote ?? ''
         }
       })
       formDataRef.current = initialForm
@@ -1447,11 +1457,19 @@ export function DataEntryPage() {
   }
 
   const handleMetricChange = (metricId: string, field: 'value' | 'target' | 'note', value: any) => {
-    const updatedFormData = {
+    let updatedFormData = {
       ...formDataRef.current,
       [metricId]: {
         ...formDataRef.current[metricId],
         [field]: value
+      }
+    }
+    if (field === 'value' && (metricId === 'C36' || metricId === 'C37')) {
+      const inNetwork = Number(updatedFormData.C36?.value || 0)
+      const outOfNetwork = Number(updatedFormData.C37?.value || 0)
+      updatedFormData = {
+        ...updatedFormData,
+        C10: { ...updatedFormData.C10, value: inNetwork + outOfNetwork },
       }
     }
     formDataRef.current = updatedFormData
@@ -1476,17 +1494,9 @@ export function DataEntryPage() {
     try {
       const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
       
-      const contentMetrics: Record<string, any> = {}
-      const leadGenMetrics: Record<string, any> = {}
-
       const currentFormData = formDataRef.current
-
-      CONTENT_METRICS.forEach(m => {
-        contentMetrics[m.id] = currentFormData[m.id]
-      })
-      LEADGEN_METRICS.forEach(m => {
-        leadGenMetrics[m.id] = currentFormData[m.id]
-      })
+      const contentMetrics = buildMetricsPayload(CONTENT_METRICS, currentFormData)
+      const leadGenMetrics = buildMetricsPayload(LEADGEN_METRICS, currentFormData)
 
       const payload: any = {
         client_id: selectedClientId,
@@ -1570,7 +1580,9 @@ export function DataEntryPage() {
       : clientSettings.active_leadgen_metrics
     // null means not yet configured — show all metrics
     if (activeIds === null || activeIds === undefined) return metrics
-    return metrics.filter(m => activeIds.includes(m.id))
+    const contentImpressionIds = new Set(['C10', 'C26', 'C36', 'C37'])
+    const impressionsEnabled = activeTab === 'content' && activeIds.includes('C10')
+    return metrics.filter(m => activeIds.includes(m.id) || (impressionsEnabled && contentImpressionIds.has(m.id)))
   }
 
   const contentEnabled = clientSettings?.content_enabled ?? true

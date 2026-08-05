@@ -1,6 +1,6 @@
 import { ALL_METRICS } from '../data/metrics'
 
-import { readNum, readBool, readText, calcRateCapped, calcRateUncapped } from './readMetric'
+import { readNum, readBool, readText, readLinkedInImpressions, calcRateCapped, calcRateUncapped } from './readMetric'
 
 import { fmt, fmtPct } from './format'
 
@@ -141,7 +141,7 @@ export function buildWeekMetrics(weekRow: any) {
   })
 
   const C09 = result.C09
-  const C10 = result.C10
+  const C10 = readLinkedInImpressions(cm)
   const L02 = result.L02
   const L03 = result.L03
   const L10 = result.L10
@@ -154,7 +154,9 @@ export function buildWeekMetrics(weekRow: any) {
   const L25 = result.L25
 
   // 2. Overwrite with live calculations
-  result.impressionsPerPost = C09 && C09 > 0 && C10 ? Math.round(C10 / C09) : null
+  result.C10 = C10
+  result.C26 = C09 && C09 > 0 && C10 !== null ? Math.round((C10 / C09) * 100) / 100 : null
+  result.impressionsPerPost = result.C26
   
   result.L05 = L02 !== null && L03 !== null ? calcRateCapped(L03, L02) : null
   result.L12 = calcAcceptanceRate(L11, L10)

@@ -111,7 +111,10 @@ const GOLD = '#FFC947'
 // Metrics to highlight in the overview cards
 const OVERVIEW_METRICS = [
   { id: 'C09', label: 'Total Posts', icon: FileText },
-  { id: 'C10', label: 'Impressions', icon: BarChart2 },
+  { id: 'C36', label: 'In-Network Impressions', icon: Users },
+  { id: 'C37', label: 'Out-of-Network Impressions', icon: ArrowLeftRight },
+  { id: 'C10', label: 'Total Impressions', icon: BarChart2 },
+  { id: 'C26', label: 'Avg Impressions / Post', icon: BarChart2 },
   { id: 'L10', label: 'Connection Requests', icon: Users },
   { id: 'L24', label: 'Meetings Booked', icon: TrendingUp },
 ]
@@ -382,6 +385,7 @@ export function ClientPortalPage() {
       }
     }
   }
+  mtdTotals.C26 = mtdTotals.C09 > 0 ? mtdTotals.C10 / mtdTotals.C09 : 0
 
   // Key metrics to show in the goal progress section
   const GOAL_METRICS = [

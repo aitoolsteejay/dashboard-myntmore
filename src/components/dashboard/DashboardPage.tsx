@@ -181,7 +181,9 @@ export function DashboardPage() {
       ? clientSettings[clientId]?.active_content_metrics
       : clientSettings[clientId]?.active_leadgen_metrics
     if (ids === null || ids === undefined) return metrics
-    return metrics.filter(metric => ids.includes(metric.id))
+    const impressionIds = new Set(['C10', 'C26', 'C36', 'C37'])
+    const impressionsEnabled = category === 'content' && ids.includes('C10')
+    return metrics.filter(metric => ids.includes(metric.id) || (impressionsEnabled && impressionIds.has(metric.id)))
   }
 
   const handleDismissNotification = (id: string) => {
@@ -512,6 +514,7 @@ export function DashboardPage() {
     // Recalculate rates for monthly totals
     monthlyTotals['L12'] = calcRateCapped(monthlyTotals['L11'], monthlyTotals['L10']) || 0
     monthlyTotals['L14'] = calcRateCapped(monthlyTotals['L13'], monthlyTotals['L11']) || 0
+    monthlyTotals['C26'] = monthlyTotals['C09'] > 0 ? monthlyTotals['C10'] / monthlyTotals['C09'] : 0
 
     return (
       <div className="mt-6 border-t border-border overflow-x-auto w-full">
@@ -610,6 +613,7 @@ export function DashboardPage() {
           t['L12'] = calcRateCapped(t['L11'], t['L10']) || 0
           t['L14'] = calcRateCapped(t['L13'], t['L11']) || 0
           t['L17'] = calcRateCapped(t['L15'], t['L13']) || 0
+          t['C26'] = t['C09'] > 0 ? t['C10'] / t['C09'] : 0
         })
 
         setPrevMonthTotals(totals)
@@ -633,6 +637,7 @@ export function DashboardPage() {
           })
           cTotals['L12'] = calcRateCapped(cTotals['L11'], cTotals['L10']) || 0
           cTotals['L14'] = calcRateCapped(cTotals['L13'], cTotals['L11']) || 0
+          cTotals['C26'] = cTotals['C09'] > 0 ? cTotals['C10'] / cTotals['C09'] : 0
 
           const pTotals = prevMonthTotals[client.id] || {}
 
@@ -735,6 +740,17 @@ export function DashboardPage() {
     quora: aggregateChannelRows(monthMmRows, 'quora'),
     reddit: aggregateChannelRows(monthMmRows, 'reddit'),
     ads: aggregateChannelRows(monthMmRows, 'ads'),
+  }
+
+  const withLinkedInImpressionTotals = (data: any) => {
+    if (!data) return data
+    const inNetwork = tjVal(data, 'MML10')
+    const outOfNetwork = tjVal(data, 'MML11')
+    const hasSplit = inNetwork !== null || outOfNetwork !== null
+    const total = hasSplit ? (inNetwork ?? 0) + (outOfNetwork ?? 0) : tjVal(data, 'MML02')
+    const posts = tjVal(data, 'MML01')
+    const average = posts && posts > 0 && total !== null ? Math.round((total / posts) * 100) / 100 : null
+    return { ...data, MML02: total, MML12: average }
   }
 
   const TJChannelCard = ({ title, icon: Icon, metrics, currentData, prevData }: { title: string, icon: any, metrics: any[], currentData: any, prevData: any }) => {
@@ -1378,6 +1394,10 @@ export function DashboardPage() {
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Impr.</p>
                                         <p className="text-sm font-black">{formatDashboardValue(built?.C10, 'C10')}</p>
                                       </div>}
+                                      {isServiceEnabled(client.id, 'content') && <div className="text-center w-14 shrink-0">
+                                        <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Avg/Post</p>
+                                        <p className="text-sm font-black">{formatDashboardValue(built?.C26, 'C26')}</p>
+                                      </div>}
                                       {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Conn Req</p>
                                         <p className="text-sm font-black">{formatDashboardValue(built?.L10, 'L10')}</p>
@@ -1534,6 +1554,8 @@ export function DashboardPage() {
                                   {(() => {
                                     const weekBuilt = buildWeekMetrics(currentData) as Record<string, any> | null
                                     const totalPosts = weekBuilt?.C09 ?? null
+                                    const totalImpressions = weekBuilt?.C10 ?? null
+                                    const averageImpressions = weekBuilt?.C26 ?? null
                                     const totalConnReq = weekBuilt?.L10 ?? null
                                     const onTrack = score === '-' ? null : Number(score) >= 75 ? 'on' : Number(score) >= 50 ? 'risk' : 'off'
                                     return (
@@ -1542,6 +1564,14 @@ export function DashboardPage() {
                                           {isServiceEnabled(client.id, 'content') && <div>
                                             <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Total Posts This Week</p>
                                             <p className="text-lg font-black">{formatDashboardValue(totalPosts, 'C09')}</p>
+                                          </div>}
+                                          {isServiceEnabled(client.id, 'content') && <div>
+                                            <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Total Impressions</p>
+                                            <p className="text-lg font-black">{formatDashboardValue(totalImpressions, 'C10')}</p>
+                                          </div>}
+                                          {isServiceEnabled(client.id, 'content') && <div>
+                                            <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Average Per Post</p>
+                                            <p className="text-lg font-black">{formatDashboardValue(averageImpressions, 'C26')}</p>
                                           </div>}
                                           {isServiceEnabled(client.id, 'leadgen') && <div>
                                             <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Total Connection Requests Sent This Week</p>
@@ -1780,7 +1810,10 @@ export function DashboardPage() {
                       <>
                         <MMContentRow title="LinkedIn Presence" icon={Linkedin} metrics={[
                             { id: 'MML01', name: 'Posts' },
-                            { id: 'MML02', name: 'Impressions' },
+                            { id: 'MML10', name: 'In-Network Impressions' },
+                            { id: 'MML11', name: 'Out-of-Network Impressions' },
+                            { id: 'MML02', name: 'Total Impressions' },
+                            { id: 'MML12', name: 'Avg Impressions / Post' },
                             { id: 'MML03', name: 'Reactions' },
                             { id: 'MML04', name: 'Comments' },
                             { id: 'MML05', name: 'New Followers' },
@@ -1788,7 +1821,7 @@ export function DashboardPage() {
                             { id: 'MML07', name: 'Page Views' },
                             { id: 'MML08', name: 'Articles Published' },
                             { id: 'MML09', name: 'Article Impressions' },
-                          ]} currentData={isMonthlyView ? monthMmAgg.linkedin : mmData?.linkedin} prevData={isMonthlyView ? null : prevMmData?.linkedin}
+                          ]} currentData={withLinkedInImpressionTotals(isMonthlyView ? monthMmAgg.linkedin : mmData?.linkedin)} prevData={isMonthlyView ? null : withLinkedInImpressionTotals(prevMmData?.linkedin)}
                         />
                         <MMContentRow title="Instagram Presence" icon={Instagram} metrics={[
                             { id: 'MMI01', name: 'Posts' },

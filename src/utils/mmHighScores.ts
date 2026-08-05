@@ -27,6 +27,28 @@ export async function fetchMMLifetimeHighs(): Promise<MMLifetimeHighs> {
         }
       }
     }
+
+    const linkedin = row.linkedin as Record<string, { value?: unknown }> | null
+    if (linkedin) {
+      const read = (id: string) => {
+        const value = linkedin[id]?.value
+        if (value === null || value === undefined || value === '') return null
+        const number = Number(value)
+        return Number.isFinite(number) ? number : null
+      }
+      const inNetwork = read('MML10')
+      const outOfNetwork = read('MML11')
+      const total = inNetwork !== null || outOfNetwork !== null
+        ? (inNetwork ?? 0) + (outOfNetwork ?? 0)
+        : read('MML02')
+      const posts = read('MML01')
+      const average = posts && posts > 0 && total !== null ? Math.round((total / posts) * 100) / 100 : null
+      for (const [metricId, value] of [['MML02', total], ['MML12', average]] as const) {
+        if (value !== null && (!highs[metricId] || value > highs[metricId].value)) {
+          highs[metricId] = { value, week: row.week_start }
+        }
+      }
+    }
   }
   return highs
 }
