@@ -28,7 +28,8 @@ import {
   CompanyMetric
 } from "@/data/company_metrics"
 import { BackButton } from "@/components/ui/BackButton"
-import { getPreviousWeekStart, getWeekOptions } from "@/utils/weekUtils"
+import { getWeekOptions } from "@/utils/weekUtils"
+import { useWorkspace } from "@/lib/workspace"
 import { useAutoSave } from "@/hooks/useAutoSave"
 import { SaveIndicator } from "@/components/ui/SaveIndicator"
 
@@ -39,7 +40,7 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
   const [saving, setSaving] = useState(false)
   
   const weekOptions = useMemo(() => getWeekOptions(12), [])
-  const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart())
+  const { selectedWeek, setSelectedWeek } = useWorkspace()
   const { triggerSave, retrySave, saveStatus, lastSaved } = useAutoSave({
     table: 'mm_weekly_data',
     matchColumns: { week_start: selectedWeek },

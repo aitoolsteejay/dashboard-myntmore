@@ -109,7 +109,7 @@ export function formatMetricValue(val: any, metricId: string): string {
   
   // Percentage metrics
   const pctMetrics = ['L12','L14','L17','L18','L21','L26','L30','L34','L05', 'C05'] // Added C05 just in case, but user specified some L codes. Wait, let's stick to user's list.
-  const userPctMetrics = ['L12','L14','L17','L18','L21','L26','L30','L34','L05']
+  const userPctMetrics = ['L12','L14','L17','L18','L21','L26','L30','L34','L05','C36','C37']
   if (userPctMetrics.includes(metricId)) {
     return Number(val).toFixed(1) + '%'
   }

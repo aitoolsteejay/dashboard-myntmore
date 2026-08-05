@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -152,8 +153,8 @@ function BoardColumn({ column, items, expandedIds, onToggle, onEdit, onDelete }:
 
 export function ActionablesPage() {
   const { user } = useAuth();
-  const [scope, setScope] = useState<"mine" | "team">("mine");
-  const [view, setView] = useState<"board" | "list">("board");
+  const [scope, setScope] = useState<"mine" | "team">(() => localStorage.getItem("actionables.scope") === "team" ? "team" : "mine");
+  const [view, setView] = useState<"board" | "list">(() => localStorage.getItem("actionables.view") === "list" ? "list" : "board");
   const [actionables, setActionables] = useState<ActionableRow[]>([]);
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
@@ -167,6 +168,7 @@ export function ActionablesPage() {
   const [editingActionable, setEditingActionable] = useState<ActionableRow | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [pendingDelete, setPendingDelete] = useState<ActionableRow | null>(null);
   const currentWeekStart = useMemo(() => getCurrentWeekStart(), []);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
@@ -192,6 +194,8 @@ export function ActionablesPage() {
   };
 
   useEffect(() => { fetchData(); }, [currentWeekStart]);
+  useEffect(() => { localStorage.setItem("actionables.scope", scope); }, [scope]);
+  useEffect(() => { localStorage.setItem("actionables.view", view); }, [view]);
 
   const scopedActionables = useMemo(
     () => scope === "mine" ? actionables.filter(actionable => actionable.assignee_id === user?.id) : actionables,
@@ -251,10 +255,17 @@ export function ActionablesPage() {
 
   const handleDelete = async (id: string) => {
     const actionable = actionables.find(item => item.id === id);
-    if (!window.confirm(`Delete “${actionable?.title || "this actionable"}”?`)) return;
+    if (!actionable) return;
+    setPendingDelete(actionable);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const id = pendingDelete.id;
     const { error } = await supabase.from("actionables").delete().eq("id", id);
     if (error) { toast.error("Could not delete actionable: " + error.message); return; }
     setActionables(current => current.filter(item => item.id !== id));
+    setPendingDelete(null);
     toast.success("Actionable deleted");
   };
 
@@ -276,7 +287,7 @@ export function ActionablesPage() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4"><SummaryCard label="Open" value={openCount} icon={CircleDot} className="bg-blue-50 text-blue-600" /><SummaryCard label="In progress" value={progressCount} icon={Clock3} className="bg-amber-50 text-amber-600" /><SummaryCard label="Overdue" value={overdueCount} icon={AlertTriangle} className="bg-red-50 text-red-600" /><SummaryCard label="Completed" value={doneCount} icon={CheckCircle2} className="bg-emerald-50 text-emerald-600" /></div>
 
-      <Card className="border-border/60 shadow-sm"><CardContent className={cn("grid gap-3 p-4", scope === "team" ? "lg:grid-cols-[minmax(280px,1fr)_220px_220px_190px]" : "lg:grid-cols-[minmax(280px,1fr)_220px_190px]")}><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search title, notes, client or assignee…" className="pl-9" value={search} onChange={event => setSearch(event.target.value)} /></div><Select value={filterClient} onValueChange={setFilterClient}><SelectTrigger><SelectValue placeholder="All Clients" /></SelectTrigger><SelectContent><SelectItem value="all">All clients</SelectItem>{clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent></Select>{scope === "team" && <Select value={filterAssignee} onValueChange={setFilterAssignee}><SelectTrigger><SelectValue placeholder="All Assignees" /></SelectTrigger><SelectContent><SelectItem value="all">All assignees</SelectItem>{profiles.map(profile => <SelectItem key={profile.id} value={profile.id}>{profile.full_name || "Unnamed member"}</SelectItem>)}</SelectContent></Select>}<Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger><SelectValue placeholder="All Statuses" /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{COLUMNS.map(column => <SelectItem key={column.id} value={column.id}>{column.title}</SelectItem>)}</SelectContent></Select></CardContent></Card>
+      <Card className="border-border/60 shadow-sm"><CardContent className="space-y-3 p-4"><div className={cn("grid gap-3", scope === "team" ? "lg:grid-cols-[minmax(280px,1fr)_220px_220px_190px]" : "lg:grid-cols-[minmax(280px,1fr)_220px_190px]")}><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search title, notes, client or assignee…" className="pl-9" value={search} onChange={event => setSearch(event.target.value)} /></div><Select value={filterClient} onValueChange={setFilterClient}><SelectTrigger><SelectValue placeholder="All Clients" /></SelectTrigger><SelectContent><SelectItem value="all">All clients</SelectItem>{clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent></Select>{scope === "team" && <Select value={filterAssignee} onValueChange={setFilterAssignee}><SelectTrigger><SelectValue placeholder="All Assignees" /></SelectTrigger><SelectContent><SelectItem value="all">All assignees</SelectItem>{profiles.map(profile => <SelectItem key={profile.id} value={profile.id}>{profile.full_name || "Unnamed member"}</SelectItem>)}</SelectContent></Select>}<Select value={filterStatus} onValueChange={setFilterStatus}><SelectTrigger><SelectValue placeholder="All Statuses" /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{COLUMNS.map(column => <SelectItem key={column.id} value={column.id}>{column.title}</SelectItem>)}</SelectContent></Select></div><div className="flex items-center justify-between text-xs text-muted-foreground"><span>{filteredActionables.length} of {scopedActionables.length} tasks shown</span>{(search || filterClient !== "all" || filterAssignee !== "all" || filterStatus !== "all") && <Button variant="ghost" size="sm" className="h-7" onClick={() => { setSearch(""); setFilterClient("all"); setFilterAssignee("all"); setFilterStatus("all"); }}>Clear filters</Button>}</div></CardContent></Card>
 
       {loading ? <div className="flex items-center justify-center gap-3 py-24 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin text-gold" />Loading actionables…</div> : view === "board" ? (
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}><div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">{COLUMNS.map(column => <BoardColumn key={column.id} column={column} items={itemsByColumn[column.id] || []} expandedIds={expandedIds} onToggle={toggleExpanded} onEdit={openEdit} onDelete={handleDelete} />)}</div></DndContext>
@@ -285,6 +296,7 @@ export function ActionablesPage() {
       )}
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}><DialogContent className="sm:max-w-[560px]"><DialogHeader><DialogTitle className="text-xl font-black">{editingActionable ? "Edit Actionable" : "Create an Actionable"}</DialogTitle></DialogHeader><div className="grid gap-4 py-2"><div className="grid gap-1.5"><Label htmlFor="actionable-title">Title *</Label><Input id="actionable-title" value={form.title} onChange={event => setForm(current => ({ ...current, title: event.target.value }))} placeholder="What needs to get done?" autoFocus /></div><div className="grid gap-1.5"><Label htmlFor="actionable-notes">Context and expected outcome</Label><Textarea id="actionable-notes" value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} placeholder="Add the context, deliverable or next step." className="min-h-[100px]" /></div><div className="grid gap-4 sm:grid-cols-2"><div className="grid gap-1.5"><Label>Client</Label><Select value={form.client_id || "none"} onValueChange={value => setForm(current => ({ ...current, client_id: value === "none" ? "" : value }))}><SelectTrigger><SelectValue placeholder="Internal" /></SelectTrigger><SelectContent><SelectItem value="none">Internal</SelectItem>{clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent></Select></div><div className="grid gap-1.5"><Label>Assignee *</Label><Select value={form.assignee_id} onValueChange={assignee_id => setForm(current => ({ ...current, assignee_id }))}><SelectTrigger><SelectValue placeholder="Select a member" /></SelectTrigger><SelectContent>{profiles.map(profile => <SelectItem key={profile.id} value={profile.id}>{profile.full_name || "Unnamed member"}</SelectItem>)}</SelectContent></Select></div></div><div className="grid gap-4 sm:grid-cols-2"><div className="grid gap-1.5"><Label htmlFor="actionable-due">Due date</Label><Input id="actionable-due" type="date" value={form.due_date} onChange={event => setForm(current => ({ ...current, due_date: event.target.value }))} /></div><div className="grid gap-1.5"><Label>Status</Label><Select value={form.status} onValueChange={status => setForm(current => ({ ...current, status }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{COLUMNS.map(column => <SelectItem key={column.id} value={column.id}>{column.title}</SelectItem>)}</SelectContent></Select></div></div></div><DialogFooter><Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button><Button onClick={handleSave} disabled={saving} className="bg-gold font-black text-black hover:bg-gold/90">{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{editingActionable ? "Save Changes" : "Create Actionable"}</Button></DialogFooter></DialogContent></Dialog>
+      <AlertDialog open={!!pendingDelete} onOpenChange={open => !open && setPendingDelete(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this actionable?</AlertDialogTitle><AlertDialogDescription>“{pendingDelete?.title}” will be permanently removed. This cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep actionable</AlertDialogCancel><AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
 }

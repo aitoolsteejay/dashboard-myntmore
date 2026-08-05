@@ -70,6 +70,8 @@ export function formatMetricDisplay(
   if (isNaN(Number(val))) return '-'
   const n = Number(val)
   if (n === 0) return '0'
+  const metric = ALL_METRICS.find(item => item.id === metricId)
+  if (metric?.type === 'percentage' || metric?.unit === '%') return fmt(n, { unit: '%' })
   return fmt(n)
 }
 
@@ -155,6 +157,11 @@ export function buildWeekMetrics(weekRow: any) {
 
   // 2. Overwrite with live calculations
   result.C10 = C10
+  // Interpret legacy count-based splits as shares without rewriting stored data.
+  if (C10 && ((result.C36 ?? 0) > 100 || (result.C37 ?? 0) > 100)) {
+    result.C36 = Math.round(((result.C36 ?? 0) / C10) * 10000) / 100
+    result.C37 = Math.round(((result.C37 ?? 0) / C10) * 10000) / 100
+  }
   result.C26 = C09 && C09 > 0 && C10 !== null ? Math.round((C10 / C09) * 100) / 100 : null
   result.impressionsPerPost = result.C26
   

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link } from "@tanstack/react-router"
 import { useAuth } from "@/lib/auth"
-import { SidebarTrigger } from "@/components/ui/sidebar"
 import { supabase } from "@/integrations/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -12,7 +11,7 @@ import { AlertCircle, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Use
 import { Gift, Cake, Calendar, Bell, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { getCurrentWeekStart, getPreviousWeekStart, getWeekLabel, getWeekOptions, getWeeksInSameMonth, isLastWeekOfMonth } from "@/utils/weekUtils"
+import { getPreviousWeekStart, getWeekLabel, getWeeksInSameMonth, isLastWeekOfMonth } from "@/utils/weekUtils"
 import { CampaignMonthTable } from "../monday/CampaignMonthTable"
 import { EditCampaignModal } from "../monday/EditCampaignModal"
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS } from "@/data/metrics"
@@ -28,6 +27,7 @@ import { fetchTJLifetimeHighs, TJLifetimeHighs } from "@/utils/tjHighScores"
 import { fetchMMLifetimeHighs, MMLifetimeHighs } from "@/utils/mmHighScores"
 import { formatWeekDate } from "@/utils/dateUtils"
 import { sortAlphabetically } from "@/utils/sort"
+import { useWorkspace } from "@/lib/workspace"
 import type {
   WeeklyData, WeeklyDataSummary, Profile, MetricTarget, HealthScore, Actionable,
   Campaign, MyntmoreProcess, ProcessUpdate, TjWeeklyData, SalesWeeklyData,
@@ -877,7 +877,7 @@ export function DashboardPage() {
     )
   }
 
-  const [displayWeek, setDisplayWeek] = useState<string>('')
+  const { selectedWeek: displayWeek } = useWorkspace()
   
   const loadAllDashboardData = async (weekStart: string) => {
     setLoading(true)
@@ -923,7 +923,7 @@ export function DashboardPage() {
         supabase.from('mm_weekly_data').select('*').eq('week_start', weekStart).maybeSingle(),
         supabase.from('mm_weekly_data').select('*').eq('week_start', prevWeekStart).maybeSingle(),
         supabase.from('profiles').select('*'),
-        supabase.from('actionables').select('*').eq('status', 'todo'),
+        supabase.from('actionables').select('*').in('status', ['todo', 'open', 'in_progress', 'carried_forward']),
         supabase.from('targets').select('*').eq('period', weekStart).eq('target_type', 'weekly'),
         supabase.from('targets').select('*').eq('period', weekStart.slice(0, 7)).eq('target_type', 'monthly'),
         supabase.from('high_scores').select('*'),
@@ -985,16 +985,6 @@ export function DashboardPage() {
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    const initWeek = async () => {
-      // The dashboard always reviews the week that just ended, not the in-progress week.
-      setDisplayWeek(getPreviousWeekStart())
-    }
-    if (session) {
-      initWeek()
-    }
-  }, [session])
 
   useEffect(() => {
     if (session) fetchTJLifetimeHighs().then(setTjLifetimeHighs)
@@ -1138,13 +1128,17 @@ export function DashboardPage() {
     }
   }).filter(c => c.count > 0)
 
+  const submittedClientCount = clients.filter(client => {
+    const row = weeklyData.find(week => week.client_id === client.id)
+    const contentReady = !isServiceEnabled(client.id, 'content') || !!row?.content_submitted_at
+    const leadgenReady = !isServiceEnabled(client.id, 'leadgen') || !!row?.leadgen_submitted_at
+    return contentReady && leadgenReady
+  }).length
+  const completionPct = clients.length ? Math.round((submittedClientCount / clients.length) * 100) : 0
+  const overdueActionables = actionables.filter(item => item.due_date && item.due_date < new Date().toISOString().slice(0, 10)).length
+
   return (
     <div className="flex flex-1 flex-col">
-          <header className="flex h-12 items-center gap-2 border-b bg-background px-3">
-            <SidebarTrigger />
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-bold">Command Center Dashboard</span>
-          </header>
-          
           <main className="flex-1 overflow-y-auto">
             <div className="mx-auto max-w-[1200px] w-full box-border p-6 space-y-8 pb-20">
               
@@ -1154,30 +1148,7 @@ export function DashboardPage() {
                   <h1 className="text-4xl font-black tracking-tight">MYNTMORE COMMAND CENTER</h1>
                   <p className="text-muted-foreground font-medium uppercase tracking-widest text-xs mt-1">Operational Performance Dashboard - {getWeekLabel(displayWeek)}</p>
                 </div>
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold uppercase text-muted-foreground">Period:</span>
-                    <select
-                      value={displayWeek}
-                      onChange={(e) => setDisplayWeek(e.target.value)}
-                      className="border rounded-md px-3 py-1.5 text-sm font-bold bg-background cursor-pointer hover:border-gold transition-colors"
-                    >
-                      {getWeekOptions(12).map(w => (
-                        <option key={w.weekStart} value={w.weekStart}>
-                          {w.label}
-                          {w.weekStart === getPreviousWeekStart() ? ' ← Last Week' : ''}
-                          {w.weekStart === getCurrentWeekStart() ? ' ← This Week' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {process.env.NODE_ENV === 'development' && (
-                    <div style={{ fontSize: '11px', color: '#999', padding: '4px 0' }}>
-                      Debug: displayWeek={displayWeek} | rows={weeklyData.length} | 
-                      Aditya row={weeklyData.find(r => r.client_id === 'a396561e-c0e2-4c33-a798-3ce49ee2c8b3') ? 'FOUND' : 'NOT FOUND'}
-                    </div>
-                  )}
-                  
+                <div className="flex items-center gap-3">
                   {notifications.length > 0 && (
                     <Sheet>
                       <SheetTrigger asChild>
@@ -1251,6 +1222,30 @@ export function DashboardPage() {
                   </div>
                 </div>
               </div>
+
+              <section aria-labelledby="week-overview-title" className="space-y-3">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gold">At a glance</p>
+                    <h2 id="week-overview-title" className="text-xl font-black">This week needs your attention</h2>
+                  </div>
+                  <Button asChild variant="outline" size="sm"><Link to="/data-entry">Complete missing data <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <Card className="border-l-4 border-l-emerald-500">
+                    <CardContent className="p-4"><p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Submissions complete</p><div className="mt-2 flex items-end justify-between"><p className="text-3xl font-black">{submittedClientCount}<span className="text-sm text-muted-foreground">/{clients.length}</span></p><Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">{completionPct}%</Badge></div></CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-amber-400">
+                    <CardContent className="p-4"><p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Below target / missing</p><p className="mt-2 text-3xl font-black">{deliverableAlerts.length}</p><p className="text-xs text-muted-foreground">client workspaces need review</p></CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-red-500">
+                    <CardContent className="p-4"><p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Overdue actionables</p><p className="mt-2 text-3xl font-black">{overdueActionables}</p><Link to="/actionables" className="text-xs font-semibold text-red-600 hover:underline">Review tasks →</Link></CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-blue-500">
+                    <CardContent className="p-4"><p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Open actionables</p><p className="mt-2 text-3xl font-black">{actionables.length}</p><p className="text-xs text-muted-foreground">across {actionablesByClient.length} clients</p></CardContent>
+                  </Card>
+                </div>
+              </section>
 
               {/* Section 2 - Active Alerts Panel */}
               {alerts.length > 0 && (
@@ -1556,11 +1551,13 @@ export function DashboardPage() {
                                     const totalPosts = weekBuilt?.C09 ?? null
                                     const totalImpressions = weekBuilt?.C10 ?? null
                                     const averageImpressions = weekBuilt?.C26 ?? null
+                                    const inNetworkShare = weekBuilt?.C36 ?? null
+                                    const outNetworkShare = weekBuilt?.C37 ?? null
                                     const totalConnReq = weekBuilt?.L10 ?? null
                                     const onTrack = score === '-' ? null : Number(score) >= 75 ? 'on' : Number(score) >= 50 ? 'risk' : 'off'
                                     return (
                                       <div className="mt-8 flex items-center justify-between gap-4 rounded-lg border bg-muted/20 px-5 py-3">
-                                        <div className="flex items-center gap-8">
+                                        <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
                                           {isServiceEnabled(client.id, 'content') && <div>
                                             <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Total Posts This Week</p>
                                             <p className="text-lg font-black">{formatDashboardValue(totalPosts, 'C09')}</p>
@@ -1572,6 +1569,14 @@ export function DashboardPage() {
                                           {isServiceEnabled(client.id, 'content') && <div>
                                             <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Average Per Post</p>
                                             <p className="text-lg font-black">{formatDashboardValue(averageImpressions, 'C26')}</p>
+                                          </div>}
+                                          {isServiceEnabled(client.id, 'content') && inNetworkShare !== null && <div>
+                                            <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">In-Network</p>
+                                            <p className="text-lg font-black">{formatPct(inNetworkShare)} <span className="text-xs font-semibold text-muted-foreground">({totalImpressions !== null ? Math.round(totalImpressions * inNetworkShare / 100).toLocaleString('en-IN') : '-'} impressions)</span></p>
+                                          </div>}
+                                          {isServiceEnabled(client.id, 'content') && outNetworkShare !== null && <div>
+                                            <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Out-of-Network</p>
+                                            <p className="text-lg font-black">{formatPct(outNetworkShare)} <span className="text-xs font-semibold text-muted-foreground">({totalImpressions !== null ? Math.round(totalImpressions * outNetworkShare / 100).toLocaleString('en-IN') : '-'} impressions)</span></p>
                                           </div>}
                                           {isServiceEnabled(client.id, 'leadgen') && <div>
                                             <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Total Connection Requests Sent This Week</p>

@@ -26,7 +26,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
-import { getPreviousWeekStart, getWeekLabel, getWeekOptions } from "@/utils/weekUtils";
+import { getWeekLabel, getWeekOptions } from "@/utils/weekUtils";
+import { useWorkspace } from "@/lib/workspace";
 import { sortAlphabetically } from "@/utils/sort";
 
 type Process = {
@@ -89,7 +90,7 @@ export function ProcessesPage({ embedded }: { embedded?: boolean } = {}) {
   const { user, isAdmin } = useAuth();
   const weekOptions = useMemo(() => getWeekOptions(12), []);
   const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
-  const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart());
+  const { selectedWeek, setSelectedWeek } = useWorkspace();
   const [processes, setProcesses] = useState<Process[]>([]);
   const [updates, setUpdates] = useState<ProcessUpdate[]>([]);
   const [profiles, setProfiles] = useState<ProfileOption[]>([]);

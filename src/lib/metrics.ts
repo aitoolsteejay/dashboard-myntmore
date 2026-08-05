@@ -2,6 +2,7 @@
 
 export type MetricType =
   | "number"
+  | "percentage"
   | "textarea"
   | "boolean"
   | "auto"
@@ -22,6 +23,7 @@ const num = (id: string, name: string, section: string): Metric => ({
   type: "number",
   section,
 });
+const percentage = (id: string, name: string, section: string): Metric => ({ id, name, type: "percentage", section });
 const text = (id: string, name: string, section: string): Metric => ({
   id,
   name,
@@ -57,11 +59,9 @@ export const CONTENT_METRICS: Metric[] = [
   auto("C09", "Total Posts Posted", "Post Output", "C06 + C07 + C08", (v) =>
     (v.C06 || 0) + (v.C07 || 0) + (v.C08 || 0),
   ),
-  num("C36", "In-Network Impressions", "Performance"),
-  num("C37", "Out-of-Network Impressions", "Performance"),
-  auto("C10", "Total Impressions", "Performance", "C36 + C37", (v) =>
-    (v.C36 || 0) + (v.C37 || 0) || (v.C10 || 0),
-  ),
+  num("C10", "Total Impressions", "Performance"),
+  percentage("C36", "In-Network Share", "Performance"),
+  percentage("C37", "Out-of-Network Share", "Performance"),
   auto("C26", "Avg Impressions Per Post", "Performance", "C10 / C09", (v) =>
     v.C09 ? ((v.C10 || 0) / v.C09) : 0,
   ),

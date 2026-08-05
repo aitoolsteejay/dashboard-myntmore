@@ -27,7 +27,8 @@ import {
   CompanyMetric
 } from "@/data/company_metrics"
 import { BackButton } from "@/components/ui/BackButton"
-import { getPreviousWeekStart, getWeekOptions } from "@/utils/weekUtils"
+import { getWeekOptions } from "@/utils/weekUtils"
+import { useWorkspace } from "@/lib/workspace"
 import { formatWeekDate } from "@/utils/dateUtils"
 import { useAutoSave } from "@/hooks/useAutoSave"
 import { SaveIndicator } from "@/components/ui/SaveIndicator"
@@ -40,7 +41,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
   const [saving, setSaving] = useState(false)
 
   const weekOptions = useMemo(() => getWeekOptions(12), [])
-  const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart())
+  const { selectedWeek, setSelectedWeek } = useWorkspace()
 
   // Lifetime high (all-time best week) per metric — see fetchTJLifetimeHighs for why
   // this is computed on the fly rather than read from a stored table.

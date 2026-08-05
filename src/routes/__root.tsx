@@ -10,8 +10,10 @@ import { useEffect } from "react";
 
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/sonner";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { AppTopbar } from "@/components/AppTopbar";
+import { WorkspaceProvider } from "@/lib/workspace";
 import { hasSupabaseConfig } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
@@ -73,7 +75,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <AppLayout />
+        <WorkspaceProvider><AppLayout /></WorkspaceProvider>
         <Toaster richColors position="top-right" />
       </AuthProvider>
     </QueryClientProvider>
@@ -133,12 +135,7 @@ function AppLayout() {
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <main className="min-w-0 flex-1 overflow-auto">
-          {path !== '/dashboard' && (
-            <div className="sticky top-0 z-30 flex h-12 items-center gap-3 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-              <SidebarTrigger aria-label="Toggle navigation" />
-              <span className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">{pageLabel}</span>
-            </div>
-          )}
+          <AppTopbar pageLabel={pageLabel} />
           <Outlet />
         </main>
       </div>

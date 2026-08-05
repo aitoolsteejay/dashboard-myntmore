@@ -111,8 +111,8 @@ const GOLD = '#FFC947'
 // Metrics to highlight in the overview cards
 const OVERVIEW_METRICS = [
   { id: 'C09', label: 'Total Posts', icon: FileText },
-  { id: 'C36', label: 'In-Network Impressions', icon: Users },
-  { id: 'C37', label: 'Out-of-Network Impressions', icon: ArrowLeftRight },
+  { id: 'C36', label: 'In-Network Share', icon: Users, percentage: true },
+  { id: 'C37', label: 'Out-of-Network Share', icon: ArrowLeftRight, percentage: true },
   { id: 'C10', label: 'Total Impressions', icon: BarChart2 },
   { id: 'C26', label: 'Avg Impressions / Post', icon: BarChart2 },
   { id: 'L10', label: 'Connection Requests', icon: Users },
@@ -516,7 +516,7 @@ export function ClientPortalPage() {
                             <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{m.label}</p>
                             <Icon className="w-4 h-4 text-gold" />
                           </div>
-                          <p className="text-3xl font-black text-foreground">{formatVal(curr)}</p>
+                          <p className="text-3xl font-black text-foreground">{formatVal(curr)}{m.percentage && curr !== null ? '%' : ''}</p>
                           <div className="mt-1.5 text-xs">
                             <Delta curr={curr} prev={prev} />
                           </div>

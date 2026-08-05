@@ -71,8 +71,14 @@ export function MetricCard({
           <div className="relative">
             <Input
               type="number"
+              min={metric.type === 'percentage' ? 0 : undefined}
+              max={metric.type === 'percentage' ? 100 : undefined}
+              step={metric.type === 'percentage' ? 0.1 : undefined}
               value={value as number}
-              onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+              onChange={(e) => {
+                const parsed = parseFloat(e.target.value) || 0
+                onChange(metric.type === 'percentage' ? Math.min(100, Math.max(0, parsed)) : parsed)
+              }}
               disabled={readOnly}
               className="text-right text-2xl font-bold h-12 pr-8"
             />

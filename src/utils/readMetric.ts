@@ -28,10 +28,13 @@ export function readNum(
 }
 
 export function readLinkedInImpressions(metrics: Record<string, any> | null | undefined): number | null {
+  const total = readNum(metrics, 'C10')
+  if (total !== null) return total
+  // Backward compatibility for weeks saved while the network fields were counts.
   const inNetwork = readNum(metrics, 'C36')
   const outOfNetwork = readNum(metrics, 'C37')
-  if (inNetwork !== null || outOfNetwork !== null) return (inNetwork ?? 0) + (outOfNetwork ?? 0)
-  return readNum(metrics, 'C10')
+  if ((inNetwork ?? 0) > 100 || (outOfNetwork ?? 0) > 100) return (inNetwork ?? 0) + (outOfNetwork ?? 0)
+  return null
 }
 
 export function readText(

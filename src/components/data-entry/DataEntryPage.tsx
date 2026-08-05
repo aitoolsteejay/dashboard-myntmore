@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { BackButton } from "@/components/ui/BackButton"
-import { getPreviousWeekStart, getWeekEnd, getWeekLabel, getWeekOptions, isLastWeekOfMonth } from "@/utils/weekUtils"
+import { getWeekEnd, getWeekLabel, getWeekOptions, isLastWeekOfMonth } from "@/utils/weekUtils"
 import { readMetric, formatMetricValue } from "@/utils/dataUtils"
 import { detectAndUpdateHighScores } from '@/utils/highScores'
 import { formatWeekDate } from '@/utils/dateUtils'
@@ -32,6 +32,7 @@ import { useAutoSave, SaveStatus } from '../../hooks/useAutoSave'
 import { EditCampaignModal } from '../monday/EditCampaignModal'
 import type { WeeklyData, HighScore, MetricTarget, Campaign, CampaignWeeklyData, ContextNoteWithAuthor, ClientSettings } from '@/types'
 import { sortAlphabetically } from '@/utils/sort'
+import { useWorkspace } from '@/lib/workspace'
 
 type ClientSummary = { id: string; name: string; company: string | null }
 
@@ -1179,7 +1180,7 @@ export function DataEntryPage() {
   const navigate = useNavigate()
   const weekOptions = useMemo(() => getWeekOptions(12), [])
   
-  const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart())
+  const { selectedWeek, setSelectedWeek } = useWorkspace()
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'content' | 'leadgen'>('content')
   
@@ -1385,6 +1386,14 @@ export function DataEntryPage() {
           note: storedNote ?? ''
         }
       })
+      // Preserve legacy count-based splits by presenting them as percentage shares.
+      const legacyIn = Number(initialForm.C36?.value || 0)
+      const legacyOut = Number(initialForm.C37?.value || 0)
+      const storedTotal = Number(initialForm.C10?.value || 0) || legacyIn + legacyOut
+      if (storedTotal > 0 && (legacyIn > 100 || legacyOut > 100)) {
+        initialForm.C36.value = Math.round((legacyIn / storedTotal) * 10000) / 100
+        initialForm.C37.value = Math.round((legacyOut / storedTotal) * 10000) / 100
+      }
       formDataRef.current = initialForm
       setFormData(initialForm)
     } catch (error: any) {
@@ -1462,14 +1471,6 @@ export function DataEntryPage() {
       [metricId]: {
         ...formDataRef.current[metricId],
         [field]: value
-      }
-    }
-    if (field === 'value' && (metricId === 'C36' || metricId === 'C37')) {
-      const inNetwork = Number(updatedFormData.C36?.value || 0)
-      const outOfNetwork = Number(updatedFormData.C37?.value || 0)
-      updatedFormData = {
-        ...updatedFormData,
-        C10: { ...updatedFormData.C10, value: inNetwork + outOfNetwork },
       }
     }
     formDataRef.current = updatedFormData
@@ -1700,10 +1701,16 @@ export function DataEntryPage() {
     const groups = groupedMetrics(filteredMetrics(metrics))
     return (
       <Accordion type="multiple" defaultValue={Object.keys(groups)} className="space-y-4">
-        {Object.entries(groups).map(([group, groupMetrics]) => (
+        {Object.entries(groups).map(([group, groupMetrics]) => {
+          const editable = groupMetrics.filter(metric => metric.type !== 'auto')
+          const completed = editable.filter(metric => {
+            const value = formData[metric.id]?.value
+            return value !== '' && value !== null && value !== undefined
+          }).length
+          return (
           <AccordionItem key={group} value={group} className="border rounded-lg bg-card overflow-hidden">
             <AccordionTrigger className="px-4 py-3 hover:bg-muted/30 hover:no-underline">
-              <span className="font-bold text-lg">{group}</span>
+              <span className="flex items-center gap-3 font-bold text-lg">{group}<Badge variant="outline" className={completed === editable.length ? "border-emerald-300 bg-emerald-50 text-emerald-700" : ""}>{completed}/{editable.length}</Badge></span>
             </AccordionTrigger>
             <AccordionContent className="p-4 pt-0">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
@@ -1718,8 +1725,8 @@ export function DataEntryPage() {
                   const weekPeriod = formatWeekPeriod(selectedWeek)
                   
                   return (
+                    <div key={m.id} id={`metric-${m.id}`} className="scroll-mt-44">
                     <MetricCard
-                      key={m.id}
                       metric={m}
                       value={val}
                       target={data.target}
@@ -1732,22 +1739,36 @@ export function DataEntryPage() {
                       onNoteChange={(n) => handleMetricChange(m.id, 'note', n)}
                       note={data.note}
                       allValues={Object.entries(formData).reduce((acc, [k, v]: [string, any]) => ({ ...acc, [k]: v.value }), {})}
-                    />
+                    /></div>
                   )
                 })}
               </div>
             </AccordionContent>
           </AccordionItem>
-        ))}
+        )})}
       </Accordion>
     )
   }
 
   const selectedClient = clients.find(c => c.id === selectedClientId)
   const selectedWeekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
+  const activeMetrics = filteredMetrics(activeTab === 'content' ? CONTENT_METRICS : LEADGEN_METRICS)
+    .filter(metric => metric.type !== 'auto' && metric.group !== 'Qualitative')
+  const completedMetrics = activeMetrics.filter(metric => {
+    const value = formData[metric.id]?.value
+    return value !== '' && value !== null && value !== undefined
+  })
+  const missingMetrics = activeMetrics.filter(metric => !completedMetrics.includes(metric))
+  const completeness = activeMetrics.length ? Math.round((completedMetrics.length / activeMetrics.length) * 100) : 0
+  const jumpToNextMissing = () => {
+    const next = missingMetrics[0]
+    if (!next) return
+    document.getElementById(`metric-${next.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    window.setTimeout(() => document.querySelector<HTMLElement>(`#metric-${next.id} input, #metric-${next.id} textarea`)?.focus(), 450)
+  }
 
   return (
-    <div className="flex flex-col flex-1 h-screen overflow-hidden bg-muted/10">
+    <div className="flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-muted/10">
       {/* Page Header */}
       <div className="p-6 md:py-4 md:px-8 border-b bg-background">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -1872,6 +1893,22 @@ export function DataEntryPage() {
             Lead Gen
           </TabsTrigger>
         </TabsList>
+
+        {selectedClientId && !loading && (
+          <div className="sticky top-12 z-10 mx-auto flex max-w-7xl flex-col gap-3 rounded-xl border bg-background/95 p-4 shadow-sm backdrop-blur md:flex-row md:items-center">
+            <div className="min-w-0 flex-1">
+              <div className="mb-2 flex items-center justify-between gap-3 text-xs">
+                <span className="font-black uppercase tracking-wider">{activeTab === 'content' ? 'Content' : 'Lead gen'} completeness</span>
+                <span className={cn("font-bold", completeness === 100 ? "text-emerald-600" : "text-amber-700")}>{completedMetrics.length}/{activeMetrics.length} fields · {completeness}%</span>
+              </div>
+              <Progress value={completeness} className="h-2" />
+            </div>
+            <Button type="button" variant="outline" disabled={!missingMetrics.length} onClick={jumpToNextMissing} className="shrink-0">
+              {missingMetrics.length ? `Next missing: ${missingMetrics[0].name}` : 'All fields complete'}
+              {missingMetrics.length ? <ChevronRight className="ml-2 h-4 w-4" /> : <Check className="ml-2 h-4 w-4 text-emerald-600" />}
+            </Button>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
