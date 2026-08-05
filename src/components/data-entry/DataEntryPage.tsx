@@ -33,8 +33,59 @@ import { EditCampaignModal } from '../monday/EditCampaignModal'
 import type { WeeklyData, HighScore, MetricTarget, Campaign, CampaignWeeklyData, ContextNoteWithAuthor, ClientSettings } from '@/types'
 import { sortAlphabetically } from '@/utils/sort'
 import { useWorkspace } from '@/lib/workspace'
+import { parseWaalaxyExport, type WaalaxyImportSummary } from '@/utils/waalaxyImport'
 
 type ClientSummary = { id: string; name: string; company: string | null }
+
+function CampaignWaalaxyImport({
+  campaignId,
+  weekStart,
+  onImported,
+}: {
+  campaignId: string
+  weekStart: string
+  onImported: (summary: WaalaxyImportSummary) => void
+}) {
+  const [summary, setSummary] = useState<WaalaxyImportSummary | null>(null)
+  const weekEnd = getWeekEnd(weekStart)
+  const inputId = `waalaxy-import-${campaignId}-${weekStart}`
+
+  const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      const imported = parseWaalaxyExport(await file.text(), weekStart, weekEnd)
+      onImported(imported)
+      setSummary(imported)
+      toast.success(`Waalaxy CSV imported for ${weekStart} to ${weekEnd}. All values remain editable.`)
+    } catch (error) {
+      setSummary(null)
+      toast.error(error instanceof Error ? error.message : 'Could not import the Waalaxy CSV.')
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-gold/35 bg-gold/5 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <Label htmlFor={inputId} className="text-xs font-black uppercase tracking-wider">Import from Waalaxy CSV</Label>
+          <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground">
+            Prefills Requests Sent, Accepted and Answered. You can edit those values and manually review all remaining results before saving.
+          </p>
+        </div>
+        <Input id={inputId} type="file" accept=".csv,text/csv" onChange={handleFile} className="h-9 max-w-xs bg-background text-xs file:mr-3 file:border-0 file:bg-transparent file:font-bold" />
+      </div>
+      {summary && (
+        <div role="status" className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-medium text-emerald-800">
+          Imported {weekStart}–{weekEnd}: <strong>{summary.conn_requests_sent}</strong> sent, <strong>{summary.accepted}</strong> accepted and <strong>{summary.answered}</strong> answered from {summary.totalRows} prospects
+          {summary.skippedRows ? ` · ${summary.skippedRows} blank rows skipped` : ''}. Review or edit below.
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface LeadGenCampaignEntryProps {
   selectedClientId: string | null
@@ -298,6 +349,26 @@ function LeadGenCampaignEntry({
         autosaveTimers.current[campaignId] = setTimeout(() => {
           saveCampaignData(campaignId, true)
         }, 2000)
+    }
+
+    const applyCampaignImport = (campaignId: string, summary: WaalaxyImportSummary) => {
+        const updatedCampaignData = {
+            ...localCampaignDataRef.current,
+            [campaignId]: {
+                ...localCampaignDataRef.current[campaignId],
+                conn_requests_sent: String(summary.conn_requests_sent),
+                accepted: String(summary.accepted),
+                answered: String(summary.answered),
+            },
+        }
+        localCampaignDataRef.current = updatedCampaignData
+        setLocalCampaignData(updatedCampaignData)
+        if (autosaveTimers.current[campaignId]) clearTimeout(autosaveTimers.current[campaignId])
+        setSaveStatus(previous => {
+            const next = { ...previous }
+            delete next[campaignId]
+            return next
+        })
     }
 
     const saveCampaignData = async (campaignId: string, silent = false) => {
@@ -824,6 +895,12 @@ function LeadGenCampaignEntry({
                                 </AccordionTrigger>
                                 <AccordionContent className="p-4 pt-0 border-t bg-muted/5">
                                     <div className="space-y-6 mt-4">
+                                        <CampaignWaalaxyImport
+                                          key={`${campaign.id}-${selectedWeek}`}
+                                          campaignId={campaign.id}
+                                          weekStart={selectedWeek}
+                                          onImported={summary => applyCampaignImport(campaign.id, summary)}
+                                        />
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                             <div className="space-y-2">
                                                 <Label className="text-[10px] font-bold uppercase text-muted-foreground">Outreach</Label>
@@ -1010,6 +1087,12 @@ function LeadGenCampaignEntry({
                                                 </div>
                                               )}
                                             </div>
+                                            <CampaignWaalaxyImport
+                                              key={`${campaign.id}-${selectedInactiveWeek || selectedWeek}`}
+                                              campaignId={campaign.id}
+                                              weekStart={selectedInactiveWeek || selectedWeek}
+                                              onImported={summary => applyCampaignImport(campaign.id, summary)}
+                                            />
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                                 <div className="space-y-2">
                                                     <Label className="text-[10px] font-bold uppercase text-muted-foreground">Outreach</Label>

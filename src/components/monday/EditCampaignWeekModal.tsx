@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { supabase } from "@/integrations/supabase/client"
 import { toast } from "sonner"
 import { syncAllCampaignTotals } from "@/utils/campaignSync"
+import { parseWaalaxyExport, type WaalaxyImportSummary } from "@/utils/waalaxyImport"
 
 const FIELDS = [
   { key: 'conn_requests_sent',  label: 'Connection Requests Sent' },
@@ -29,6 +30,35 @@ export function EditCampaignWeekModal({ campaign, weekData, weekStart, weekLabel
 
   const [form, setForm] = useState(init)
   const [saving, setSaving] = useState(false)
+  const [importSummary, setImportSummary] = useState<WaalaxyImportSummary | null>(null)
+
+  const weekEnd = weekData?.week_end ?? (() => {
+    const d = new Date(`${weekStart}T00:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + 6)
+    return d.toISOString().split('T')[0]
+  })()
+
+  const handleWaalaxyImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const summary = parseWaalaxyExport(await file.text(), weekStart, weekEnd)
+      setForm(current => ({
+        ...current,
+        conn_requests_sent: String(summary.conn_requests_sent),
+        accepted: String(summary.accepted),
+        answered: String(summary.answered),
+      }))
+      setImportSummary(summary)
+      toast.success(`Waalaxy CSV imported for ${weekStart} to ${weekEnd}. Review the remaining fields, then click Save.`)
+    } catch (error) {
+      setImportSummary(null)
+      toast.error(error instanceof Error ? error.message : 'Could not import the Waalaxy CSV.')
+    } finally {
+      event.target.value = ''
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -37,11 +67,7 @@ export function EditCampaignWeekModal({ campaign, weekData, weekStart, weekLabel
         campaign_id: campaign.id,
         client_id: campaign.client_id,
         week_start: weekStart,
-        week_end: weekData?.week_end ?? (() => {
-          const d = new Date(weekStart)
-          d.setDate(d.getDate() + 6)
-          return d.toISOString().split('T')[0]
-        })(),
+        week_end: weekEnd,
         week_label: weekLabel,
         notes: form.notes || null,
       }
@@ -84,6 +110,45 @@ export function EditCampaignWeekModal({ campaign, weekData, weekStart, weekLabel
         </div>
         <div style={{ fontSize: '12px', color: '#888', fontWeight: '600', marginBottom: '20px' }}>
           {campaign.name} · {weekLabel}
+        </div>
+
+        <div style={{
+          marginBottom: '20px', padding: '14px', border: '1px solid #F2D27C',
+          borderRadius: '9px', background: '#FFF9E9',
+        }}>
+          <label htmlFor="waalaxy-csv-import" style={{
+            display: 'block', marginBottom: '5px', fontSize: '12px',
+            fontWeight: '800', color: '#3F351C',
+          }}>
+            Import from Waalaxy CSV
+          </label>
+          <p style={{ margin: '0 0 10px', color: '#716442', fontSize: '11px', lineHeight: '1.45' }}>
+            Fills Requests Sent, Accepted and Answered for this week. Positive/negative replies,
+            hot leads and meetings booked still need manual review.
+          </p>
+          <input
+            id="waalaxy-csv-import"
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleWaalaxyImport}
+            style={{
+              display: 'block', width: '100%', fontSize: '12px', color: '#555',
+              background: 'white', border: '1px solid #E5D7AF', borderRadius: '7px',
+              padding: '7px', boxSizing: 'border-box',
+            }}
+          />
+          {importSummary && (
+            <div role="status" style={{
+              marginTop: '10px', padding: '9px 10px', borderRadius: '7px',
+              background: '#ECFDF3', border: '1px solid #B7E4C7',
+              color: '#17653A', fontSize: '11px', lineHeight: '1.5',
+            }}>
+              <strong>Imported {weekStart} to {weekEnd}:</strong>{' '}
+              {importSummary.conn_requests_sent} requests sent, {importSummary.accepted} accepted,
+              {' '}{importSummary.answered} answered from {importSummary.totalRows} prospects
+              {importSummary.skippedRows > 0 ? ` (${importSummary.skippedRows} blank rows skipped)` : ''}.
+            </div>
+          )}
         </div>
 
         {FIELDS.map(f => (
