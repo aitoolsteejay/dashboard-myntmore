@@ -2139,6 +2139,7 @@ function DashboardCampaignsSection({ clientId, displayWeek, onEditCampaign }: { 
     const { data: cdata } = await supabase
       .from('campaign_weekly_data')
       .select('*')
+      .eq('client_id', clientId)
       .in('campaign_id', data.map(c => c.id))
       .in('week_start', weekStarts)
     return data.map(c => {

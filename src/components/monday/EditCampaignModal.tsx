@@ -28,6 +28,7 @@ export function EditCampaignModal({ campaign, onSave, onClose }: {
         status: form.status as any,
       })
       .eq('id', campaign.id)
+      .eq('client_id', campaign.client_id)
 
     setSaving(false)
     if (error) { toast.error('Save failed: ' + error.message); return }

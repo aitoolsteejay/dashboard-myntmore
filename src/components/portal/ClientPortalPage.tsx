@@ -272,6 +272,7 @@ export function ClientPortalPage() {
     const { data: cdata } = await supabase
       .from('campaign_weekly_data')
       .select('*')
+      .eq('client_id', clientRecord.id)
       .in('campaign_id', data.map(c => c.id))
       .in('week_start', weekStarts)
 

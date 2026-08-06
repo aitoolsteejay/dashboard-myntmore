@@ -135,11 +135,13 @@ function LeadGenCampaignEntry({
     const [inactiveCampaignAllData, setInactiveCampaignAllData] = useState<Record<string, any[]>>({}) // campaignId -> all weekly rows
 
     const loadInactiveCampaignHistory = async (campaignId: string) => {
+      if (!selectedClientId) return
       if (inactiveCampaignAllData[campaignId]) return // already loaded
       const { data } = await supabase
         .from('campaign_weekly_data')
         .select('*')
         .eq('campaign_id', campaignId)
+        .eq('client_id', selectedClientId)
         .order('week_start', { ascending: false })
       const rows = data || []
       setInactiveCampaignAllData(prev => ({ ...prev, [campaignId]: rows }))
@@ -372,6 +374,11 @@ function LeadGenCampaignEntry({
     }
 
     const saveCampaignData = async (campaignId: string, silent = false) => {
+        if (!selectedClientId || !campaigns.some(campaign => campaign.id === campaignId && campaign.client_id === selectedClientId)) {
+            setSaveStatus(prev => ({ ...prev, [campaignId]: 'error' }))
+            if (!silent) toast.error("Campaign no longer belongs to the selected client. Refresh and try again.")
+            return
+        }
         const data = localCampaignDataRef.current[campaignId]
         if (!data) return
         // Use the per-campaign selected week for inactive campaigns, otherwise the global selected week
@@ -434,6 +441,7 @@ function LeadGenCampaignEntry({
     }, [selectedClientId, selectedWeek, flushExistingConn, flushInmail, saveCampaignData])
 
     const handleCreateCampaign = async () => {
+        if (!selectedClientId) return toast.error("Select a client first")
         if (!newCampaign.name) return toast.error("Campaign name is required")
         try {
             const { data, error } = await supabase
@@ -492,6 +500,10 @@ function LeadGenCampaignEntry({
         toast.error("Select a campaign and at least one week")
         return
       }
+      if (!selectedClientId || !campaigns.some(campaign => campaign.id === calibrateCampaignId && campaign.client_id === selectedClientId)) {
+        toast.error("The selected campaign does not belong to this client")
+        return
+      }
       setCalibrating(true)
       try {
         let migrated = 0, skipped = 0
@@ -500,6 +512,7 @@ function LeadGenCampaignEntry({
             .from('campaign_weekly_data')
             .select('id')
             .eq('campaign_id', calibrateCampaignId)
+            .eq('client_id', selectedClientId as string)
             .eq('week_start', weekStart)
             .maybeSingle()
           if (existing) { skipped++; continue }
@@ -1690,15 +1703,18 @@ export function DataEntryPage() {
   }
 
   const toggleCampaignStatus = async (campaignId: string, currentStatus: string) => {
+    if (!selectedClientId) return
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
     await supabase
       .from('campaigns')
       .update({ status: newStatus })
       .eq('id', campaignId)
+      .eq('client_id', selectedClientId)
     await fetchData()
   }
 
   const deleteCampaign = async (campaignId: string, name: string) => {
+    if (!selectedClientId) return
     const confirmed = window.confirm(
       `Delete campaign "${name}"? This will also delete all weekly data for this campaign. This cannot be undone.`
     )
@@ -1708,11 +1724,13 @@ export function DataEntryPage() {
       .from('campaign_weekly_data')
       .delete()
       .eq('campaign_id', campaignId)
+      .eq('client_id', selectedClientId)
 
     await supabase
       .from('campaigns')
       .delete()
       .eq('id', campaignId)
+      .eq('client_id', selectedClientId)
 
     toast.success(`Campaign "${name}" deleted.`)
     await fetchData()

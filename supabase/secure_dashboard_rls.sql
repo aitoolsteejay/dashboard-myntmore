@@ -72,6 +72,25 @@ AS $$
     )
 $$;
 
+CREATE OR REPLACE FUNCTION myntmore.is_own_campaign(target_campaign_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = myntmore, pg_temp
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM myntmore.campaigns campaign
+    JOIN myntmore.clients client ON client.id = campaign.client_id
+    JOIN myntmore.profiles profile ON profile.id = auth.uid()
+    WHERE campaign.id = target_campaign_id
+      AND client.user_id = auth.uid()
+      AND profile.department = 'client'
+      AND COALESCE(profile.disabled, false) = false
+  )
+$$;
+
 -- Remove every inherited policy, including permissive policies such as
 -- `*_open` and `*_all_auth` that allowed client accounts to see shared data.
 DO $$
@@ -186,7 +205,7 @@ CREATE POLICY targets_portal_own_read ON myntmore.targets FOR SELECT TO authenti
 CREATE POLICY campaigns_portal_own_read ON myntmore.campaigns FOR SELECT TO authenticated
   USING (myntmore.is_own_client(client_id));
 CREATE POLICY campaign_weekly_portal_own_read ON myntmore.campaign_weekly_data FOR SELECT TO authenticated
-  USING (myntmore.is_own_client(client_id));
+  USING (myntmore.is_own_campaign(campaign_id));
 CREATE POLICY aha_moments_portal_own_read ON myntmore.aha_moments FOR SELECT TO authenticated
   USING (myntmore.is_own_client(client_id));
 CREATE POLICY high_scores_portal_own_read ON myntmore.high_scores FOR SELECT TO authenticated
