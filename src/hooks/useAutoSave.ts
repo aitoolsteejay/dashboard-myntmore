@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
-import { supabase } from '../integrations/supabase/client'
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabase } from '../integrations/supabase/client'
 
 // Cached token so the beforeunload handler (synchronous) can attach auth headers
 let _cachedAccessToken: string | null = null
@@ -145,7 +145,7 @@ export function useAutoSave(options: AutoSaveOptions) {
   useEffect(() => {
     const handleUnload = () => {
       if (!pendingData || !_cachedAccessToken) return
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/${table}`
+      const url = `${SUPABASE_URL}/rest/v1/${table}`
       const payload = JSON.stringify({
         ...matchColumns,
         ...pendingData,
@@ -155,7 +155,7 @@ export function useAutoSave(options: AutoSaveOptions) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'apikey': SUPABASE_PUBLISHABLE_KEY,
           'Authorization': `Bearer ${_cachedAccessToken}`,
           'Content-Profile': 'myntmore',
           'Prefer': 'resolution=merge-duplicates',

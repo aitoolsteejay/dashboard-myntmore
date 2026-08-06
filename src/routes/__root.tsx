@@ -66,7 +66,7 @@ function RootComponent() {
         <div className="max-w-lg rounded-lg border p-8 text-center">
           <h1 className="text-xl font-semibold">Dashboard configuration missing</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY, then restart the application.
+            Set VITE_MYNTMORE_SUPABASE_URL and VITE_MYNTMORE_SUPABASE_PUBLISHABLE_KEY, then restart the application.
           </p>
         </div>
       </div>
