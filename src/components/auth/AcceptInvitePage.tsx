@@ -46,32 +46,12 @@ export function AcceptInvitePage({ token }: { token?: string }) {
       return;
     }
     setBusy(true);
-    const { data, error } = await supabase.auth.signUp({
-      email: invite.email,
-      password,
-      options: { data: { full_name: invite.full_name, myntmore_access: true } },
+    const { data, error } = await supabase.functions.invoke("create-portal-user", {
+      body: { action: "accept_invite", token, password },
     });
-    if (error || !data.user) {
+    if (error || data?.error) {
       setBusy(false);
-      toast.error(error?.message || "Could not create account.");
-      return;
-    }
-
-    // Update profile + mark invite accepted
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({ full_name: invite.full_name, department: invite.department })
-      .eq("id", data.user.id);
-    if (profileError) {
-      setBusy(false);
-      toast.error("Account created, but the profile could not be activated: " + profileError.message);
-      return;
-    }
-
-    const { error: acceptError } = await (supabase as any).rpc("accept_invite", { _token: token });
-    if (acceptError) {
-      setBusy(false);
-      toast.error("Account created, but the invite could not be marked accepted: " + acceptError.message);
+      toast.error(data?.error || error?.message || "Could not create account.");
       return;
     }
 

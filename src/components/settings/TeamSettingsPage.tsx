@@ -166,11 +166,11 @@ export function TeamSettingsPage() {
 
   const handleToggleDisable = async (userId: string, currentDisabled: boolean) => {
     try {
-      // Update both profiles and user_roles for redundancy
-      await Promise.all([
-        supabase.from('profiles').update({ disabled: !currentDisabled }).eq('id', userId),
-        supabase.from('user_roles').update({ disabled: !currentDisabled } as any).eq('user_id', userId)
-      ])
+      const { error } = await supabase
+        .from('profiles')
+        .update({ disabled: !currentDisabled })
+        .eq('id', userId)
+      if (error) throw error
       
       toast.success(currentDisabled ? "Account enabled" : "Account disabled")
       fetchData()

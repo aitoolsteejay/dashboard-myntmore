@@ -7,6 +7,7 @@ type Profile = {
   email: string | null;
   full_name: string | null;
   department: string | null;
+  disabled?: boolean | null;
 };
 
 export type ClientRecord = {
@@ -47,7 +48,6 @@ const fetchUserRole = async (userId: string): Promise<string> => {
     return 'member (not found)'
   }
   
-  console.log('Role fetched from DB:', data.role)
   return data.role
 }
 
@@ -64,11 +64,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const [role, { data: p }, { data: clientData }] = await Promise.all([
         fetchUserRole(userId),
-        supabase.from("profiles").select("id,email,full_name,department").eq("id", userId).maybeSingle(),
+        supabase.from("profiles").select("id,email,full_name,department,disabled").eq("id", userId).maybeSingle(),
         supabase.from("clients").select("id,name,company").eq("user_id" as any, userId).maybeSingle(),
       ]);
 
-      setProfile(p as Profile | null);
+      const loadedProfile = p as Profile | null;
+      if (loadedProfile?.disabled) {
+        await supabase.auth.signOut();
+        setProfile(null);
+        setUserRole(null);
+        setIsAdmin(false);
+        setIsClient(false);
+        setClientRecord(null);
+        return;
+      }
+
+      setProfile(loadedProfile);
       setUserRole(role);
       setIsAdmin(role === "admin");
       if (clientData) {
@@ -149,4 +160,3 @@ export function useAuth() {
   if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
   return ctx;
 }
-

@@ -21,11 +21,23 @@ export async function requireAdmin({ location }: { location: { href: string } })
     throw redirect({ to: '/login', search: { redirect: location.href } })
   }
 
-  const { data: roleData } = await supabase
+  const [{ data: roleData }, { data: profileData }] = await Promise.all([
+    supabase
     .from('user_roles')
     .select('role')
     .eq('user_id', session.user.id)
-    .maybeSingle()
+    .maybeSingle(),
+    supabase
+      .from('profiles')
+      .select('disabled')
+      .eq('id', session.user.id)
+      .maybeSingle(),
+  ])
+
+  if (profileData?.disabled) {
+    await supabase.auth.signOut()
+    throw redirect({ to: '/login' })
+  }
 
   if (roleData?.role !== 'admin') {
     throw redirect({ to: '/dashboard' })
@@ -47,9 +59,14 @@ export async function requireInternalUser({ location }: { location: { href: stri
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('department')
+    .select('department, disabled')
     .eq('id', session.user.id)
     .maybeSingle()
+
+  if (profile?.disabled) {
+    await supabase.auth.signOut()
+    throw redirect({ to: '/login' })
+  }
 
   if (profileError || !profile || profile.department === 'client') {
     throw redirect({ to: '/portal' })
