@@ -49,7 +49,7 @@ export function AcceptInvitePage({ token }: { token?: string }) {
     const { data, error } = await supabase.auth.signUp({
       email: invite.email,
       password,
-      options: { data: { full_name: invite.full_name } },
+      options: { data: { full_name: invite.full_name, myntmore_access: true } },
     });
     if (error || !data.user) {
       setBusy(false);

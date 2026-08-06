@@ -2,5 +2,9 @@ node_modules
 dist
 .env
 .env.local
+.env.migration.local
 .tanstack
 package-lock.json
+
+# Local database exports contain production client and user data.
+myntmore-database-export/

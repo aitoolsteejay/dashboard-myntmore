@@ -10,7 +10,7 @@ import type { Database } from '@/integrations/supabase/types'
 import { updateClientHealth } from '@/lib/health'
 import { sortAlphabetically } from '@/utils/sort'
 
-type ClientSettingsInsert = Database['public']['Tables']['client_settings']['Insert']
+type ClientSettingsInsert = Database['myntmore']['Tables']['client_settings']['Insert']
 
 async function refreshRecentHealthScores(clientId: string) {
   const { data, error } = await supabase

@@ -12,7 +12,7 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  public: {
+  myntmore: {
     Tables: {
       actionables: {
         Row: {
@@ -1263,17 +1263,17 @@ export type Database = {
       user_roles: {
         Row: {
           id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: Database["myntmore"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
           id?: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: Database["myntmore"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: Database["myntmore"]["Enums"]["app_role"]
           user_id?: string
         }
         Relationships: []
@@ -1362,7 +1362,7 @@ export type Database = {
       }
       has_role: {
         Args: {
-          _role: Database["public"]["Enums"]["app_role"]
+          _role: Database["myntmore"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
@@ -1383,7 +1383,7 @@ export type Database = {
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "myntmore">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
@@ -1499,7 +1499,7 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  public: {
+  myntmore: {
     Enums: {
       app_role: ["admin", "member"],
     },

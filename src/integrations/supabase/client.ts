@@ -8,7 +8,10 @@ export const hasSupabaseConfig = Boolean(configuredUrl && configuredKey);
 const SUPABASE_URL = configuredUrl ?? 'http://127.0.0.1:54321';
 const SUPABASE_PUBLISHABLE_KEY = configuredKey ?? 'missing-supabase-publishable-key';
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database, 'myntmore'>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  db: {
+    schema: 'myntmore',
+  },
   auth: {
     storage: localStorage,
     persistSession: true,

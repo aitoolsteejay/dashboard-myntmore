@@ -35,7 +35,9 @@ Deno.serve(async (req) => {
       })
     }
 
-    const admin = createClient(supabaseUrl, serviceRoleKey)
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      db: { schema: 'myntmore' },
+    })
 
     const { data: roleRow } = await admin
       .from('user_roles')
@@ -85,7 +87,10 @@ Deno.serve(async (req) => {
     }
 
     const { data: authData, error: authErr } = await admin.auth.admin.createUser({
-      email, password, email_confirm: true,
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { myntmore_access: true },
     })
     if (authErr) throw authErr
     const newUserId = authData.user.id

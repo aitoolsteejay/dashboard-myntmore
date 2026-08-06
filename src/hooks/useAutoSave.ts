@@ -157,6 +157,7 @@ export function useAutoSave(options: AutoSaveOptions) {
           'Content-Type': 'application/json',
           'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           'Authorization': `Bearer ${_cachedAccessToken}`,
+          'Content-Profile': 'myntmore',
           'Prefer': 'resolution=merge-duplicates',
         },
         body: payload,
