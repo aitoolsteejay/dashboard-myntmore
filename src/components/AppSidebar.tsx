@@ -1,4 +1,5 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useState } from "react";
 import myntmoreLogo from "@/assets/myntmore-logo.png";
 import {
   Home,
@@ -26,6 +27,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const groups = [
   {
@@ -55,7 +57,21 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
   const { profile, isAdmin, clientRecord, signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+      navigate({ to: "/login", replace: true });
+    } catch (error) {
+      setSigningOut(false);
+      toast.error(error instanceof Error ? error.message : "Could not sign out. Please try again.");
+    }
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -131,10 +147,11 @@ export function AppSidebar() {
           variant="ghost"
           size="sm"
           className="justify-start"
-          onClick={() => signOut()}
+          onClick={handleSignOut}
+          disabled={signingOut}
         >
           <LogOut className="h-4 w-4" />
-          {!collapsed && <span className="ml-2">Sign out</span>}
+          {!collapsed && <span className="ml-2">{signingOut ? "Signing out…" : "Sign out"}</span>}
         </Button>
       </SidebarFooter>
     </Sidebar>

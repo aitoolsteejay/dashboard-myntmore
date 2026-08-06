@@ -100,11 +100,14 @@ function AppLayout() {
   // "View as client" link instead of being forced into it on every page.
   useEffect(() => {
     if (loading || profileLoading) return;
-    if (!user) return;
+    if (!user) {
+      if (!isAuthPath) navigate({ to: '/login', replace: true });
+      return;
+    }
     if (isClient && !isAdmin && !path.startsWith('/portal') && !path.startsWith('/login')) {
       navigate({ to: '/portal' });
     }
-  }, [loading, profileLoading, user, isClient, isAdmin, path]);
+  }, [loading, profileLoading, user, isClient, isAdmin, isAuthPath, path, navigate]);
 
   if (loading || profileLoading) {
     return (
