@@ -76,15 +76,35 @@ export function EditCampaignWeekModal({ campaign, weekData, weekStart, weekLabel
         payload[f.key] = v !== '' && !isNaN(Number(v)) ? Number(v) : null
       })
 
-      const { error } = await supabase
+      const { data: savedRow, error } = await supabase
         .from('campaign_weekly_data')
         .upsert(payload, { onConflict: 'campaign_id,week_start' })
+        .select('campaign_id, client_id, week_start, conn_requests_sent, accepted, answered')
+        .single()
 
       if (error) { toast.error('Save failed: ' + error.message); setSaving(false); return }
 
+      const savedValuesMatch = savedRow
+        && savedRow.campaign_id === campaign.id
+        && savedRow.client_id === campaign.client_id
+        && savedRow.week_start === weekStart
+        && Number(savedRow.conn_requests_sent ?? 0) === Number(payload.conn_requests_sent ?? 0)
+        && Number(savedRow.accepted ?? 0) === Number(payload.accepted ?? 0)
+        && Number(savedRow.answered ?? 0) === Number(payload.answered ?? 0)
+      if (!savedValuesMatch) {
+        throw new Error('Campaign save could not be verified. Please retry before closing this window.')
+      }
+
       // Re-sync campaign totals into weekly_data. This is a genuine user save, so
       // it's fine (and correct) for this to mark the week as submitted.
-      await syncAllCampaignTotals(campaign.client_id, weekStart, true)
+      try {
+        await syncAllCampaignTotals(campaign.client_id, weekStart, true)
+      } catch (syncError) {
+        // The campaign row itself has been read back and verified. A rollup error
+        // should not misreport that primary save as lost.
+        console.error('Campaign saved, but aggregate sync failed:', syncError)
+        toast.warning('Campaign data saved, but weekly totals could not be refreshed yet.')
+      }
 
       toast.success('Campaign week data saved.')
       onSave()

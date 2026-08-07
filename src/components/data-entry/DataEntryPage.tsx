@@ -57,7 +57,7 @@ function CampaignWaalaxyImport({
       const imported = parseWaalaxyExport(await file.text(), weekStart, weekEnd)
       onImported(imported)
       setSummary(imported)
-      toast.success(`Waalaxy CSV imported for ${weekStart} to ${weekEnd}. All values remain editable.`)
+      toast.success(`Waalaxy CSV imported for ${weekStart} to ${weekEnd}. Autosaving campaign data…`)
     } catch (error) {
       setSummary(null)
       toast.error(error instanceof Error ? error.message : 'Could not import the Waalaxy CSV.')
@@ -72,7 +72,7 @@ function CampaignWaalaxyImport({
         <div>
           <Label htmlFor={inputId} className="text-xs font-black uppercase tracking-wider">Import from Waalaxy CSV</Label>
           <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted-foreground">
-            Prefills Requests Sent, Accepted and Answered. You can edit those values and manually review all remaining results before saving.
+            Prefills Requests Sent, Accepted and Answered, then autosaves. All values remain editable and later changes autosave too.
           </p>
         </div>
         <Input id={inputId} type="file" accept=".csv,text/csv" onChange={handleFile} className="h-9 max-w-xs bg-background text-xs file:mr-3 file:border-0 file:bg-transparent file:font-bold" />
@@ -80,7 +80,7 @@ function CampaignWaalaxyImport({
       {summary && (
         <div role="status" className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-medium text-emerald-800">
           Imported {weekStart}–{weekEnd}: <strong>{summary.conn_requests_sent}</strong> sent, <strong>{summary.accepted}</strong> accepted and <strong>{summary.answered}</strong> answered from {summary.totalRows} prospects
-          {summary.skippedRows ? ` · ${summary.skippedRows} blank rows skipped` : ''}. Review or edit below.
+          {summary.skippedRows ? ` · ${summary.skippedRows} blank rows skipped` : ''}. Autosaving now; review or edit below.
         </div>
       )}
     </div>
@@ -106,13 +106,14 @@ interface LeadGenCampaignEntryProps {
   showInactive: boolean
   setShowInactive: (v: boolean) => void
   setEditingCampaign: (c: Campaign | null) => void
+  registerCampaignSave: (handler: (() => Promise<void>) | null) => void
 }
 
 function LeadGenCampaignEntry({
   selectedClientId, selectedWeek, weekOptions, weeklyData, activeTab,
   campaigns, setCampaigns, campaignWeeklyData, formData, handleMetricChange,
   user, contentSaveStatus, fetchData, toggleCampaignStatus, deleteCampaign,
-  showInactive, setShowInactive, setEditingCampaign,
+  showInactive, setShowInactive, setEditingCampaign, registerCampaignSave,
 }: LeadGenCampaignEntryProps) {
     const [localCampaignData, setLocalCampaignData] = useState<Record<string, any>>({})
     const localCampaignDataRef = React.useRef(localCampaignData)
@@ -129,6 +130,7 @@ function LeadGenCampaignEntry({
     const [selectedCalibrateWeeks, setSelectedCalibrateWeeks] = useState<string[]>([])
     const [calibrating, setCalibrating] = useState(false)
     const autosaveTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+    const dirtyCampaignIds = React.useRef(new Set<string>())
 
     // Per-campaign week selection for inactive/completed campaigns
     const [inactiveCampaignWeekMap, setInactiveCampaignWeekMap] = useState<Record<string, string>>({}) // campaignId -> selected week
@@ -283,6 +285,7 @@ function LeadGenCampaignEntry({
     // Reset campaign save states when client or week changes
     useEffect(() => {
       setSaveStatus({})
+      dirtyCampaignIds.current.clear()
     }, [selectedClientId, selectedWeek])
 
     // Read helper for legacy fields stored as { value } or raw
@@ -344,6 +347,7 @@ function LeadGenCampaignEntry({
         }
         localCampaignDataRef.current = updatedCampaignData
         setLocalCampaignData(updatedCampaignData)
+        dirtyCampaignIds.current.add(campaignId)
 
         // Debounced autosave
         if (autosaveTimers.current[campaignId]) clearTimeout(autosaveTimers.current[campaignId])
@@ -365,28 +369,32 @@ function LeadGenCampaignEntry({
         }
         localCampaignDataRef.current = updatedCampaignData
         setLocalCampaignData(updatedCampaignData)
+        dirtyCampaignIds.current.add(campaignId)
         if (autosaveTimers.current[campaignId]) clearTimeout(autosaveTimers.current[campaignId])
-        setSaveStatus(previous => {
-            const next = { ...previous }
-            delete next[campaignId]
-            return next
-        })
+        setSaveStatus(previous => ({ ...previous, [campaignId]: 'saving' }))
+        // CSV values use the same persistence path as manual edits. The short
+        // debounce leaves time for an immediate correction while ensuring an
+        // import is not lost if the user forgets the per-campaign Save button.
+        autosaveTimers.current[campaignId] = setTimeout(() => {
+          saveCampaignData(campaignId, true)
+        }, 800)
     }
 
-    const saveCampaignData = async (campaignId: string, silent = false) => {
+    const saveCampaignData = async (campaignId: string, silent = false): Promise<boolean> => {
         if (!selectedClientId || !campaigns.some(campaign => campaign.id === campaignId && campaign.client_id === selectedClientId)) {
             setSaveStatus(prev => ({ ...prev, [campaignId]: 'error' }))
             if (!silent) toast.error("Campaign no longer belongs to the selected client. Refresh and try again.")
-            return
+            return false
         }
         const data = localCampaignDataRef.current[campaignId]
-        if (!data) return
+        if (!data) return true
         // Use the per-campaign selected week for inactive campaigns, otherwise the global selected week
         const effectiveWeek = inactiveCampaignWeekMap[campaignId] || selectedWeek
         const weekInfo = weekOptions.find(w => w.weekStart === effectiveWeek)
           || { weekEnd: '', label: effectiveWeek }
 
         try {
+            setSaveStatus(prev => ({ ...prev, [campaignId]: 'saving' }))
             const payload = {
                 campaign_id: campaignId,
                 client_id: selectedClientId,
@@ -402,23 +410,70 @@ function LeadGenCampaignEntry({
                 notes: data.notes || '',
                 submitted_by: user?.id
             }
-            const { error } = await supabase
+            const { data: savedRow, error } = await supabase
                 .from('campaign_weekly_data')
                 .upsert(payload, { onConflict: 'campaign_id,week_start' })
+                .select('campaign_id, client_id, week_start, conn_requests_sent, accepted, answered')
+                .single()
 
             if (error) throw error
 
-            // A real campaign save just happened, so this week is genuinely submitted.
-            await syncAllCampaignTotals(selectedClientId!, effectiveWeek, true)
+            const importedFieldsPersisted = savedRow
+              && savedRow.campaign_id === campaignId
+              && savedRow.client_id === selectedClientId
+              && savedRow.week_start === effectiveWeek
+              && Number(savedRow.conn_requests_sent ?? 0) === payload.conn_requests_sent
+              && Number(savedRow.accepted ?? 0) === payload.accepted
+              && Number(savedRow.answered ?? 0) === payload.answered
+            if (!importedFieldsPersisted) {
+                throw new Error('Campaign save could not be verified. Please retry before leaving this page.')
+            }
 
+            dirtyCampaignIds.current.delete(campaignId)
+            if (autosaveTimers.current[campaignId]) clearTimeout(autosaveTimers.current[campaignId])
+            delete autosaveTimers.current[campaignId]
             setSaveStatus(prev => ({ ...prev, [campaignId]: 'saved' }))
+
+            // A real campaign save just happened, so this week is genuinely submitted.
+            try {
+                await syncAllCampaignTotals(selectedClientId!, effectiveWeek, true)
+            } catch (syncError) {
+                // The campaign row is already verified above. Keep the primary save
+                // successful and let the page-level save retry the aggregate sync.
+                console.error('Campaign saved, but aggregate sync failed:', syncError)
+                if (!silent) toast.warning('Campaign data saved, but weekly totals could not be refreshed yet.')
+            }
+
             if (!silent) toast.success("Campaign data saved")
+            return true
         } catch (error: any) {
             setSaveStatus(prev => ({ ...prev, [campaignId]: 'error' }))
             if (!silent) toast.error(error.message)
             else console.error('Autosave failed:', error.message)
+            return false
         }
     }
+
+    const saveCampaignDataRef = React.useRef(saveCampaignData)
+    saveCampaignDataRef.current = saveCampaignData
+
+    // The page-level Save Draft / Submit Week buttons also flush any campaign
+    // autosave that is still inside its debounce window.
+    useEffect(() => {
+      registerCampaignSave(async () => {
+        const campaignIds = Array.from(dirtyCampaignIds.current)
+        if (campaignIds.length === 0) return
+
+        const results = await Promise.all(
+          campaignIds.map(campaignId => saveCampaignDataRef.current(campaignId, true)),
+        )
+        if (results.some(result => !result)) {
+          throw new Error('One or more campaign entries could not be saved. Check the campaign marked “Save failed” and retry.')
+        }
+      })
+
+      return () => registerCampaignSave(null)
+    }, [registerCampaignSave])
 
     // Flush all pending debounced syncs/saves whenever we're about to leave the
     // current client/week (or the component truly unmounts, e.g. navigating away
@@ -1303,6 +1358,10 @@ export function DataEntryPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const campaignSaveAllRef = React.useRef<(() => Promise<void>) | null>(null)
+  const registerCampaignSave = React.useCallback((handler: (() => Promise<void>) | null) => {
+    campaignSaveAllRef.current = handler
+  }, [])
 
   // Tracks the currently-selected client/week so an in-flight fetchData() call can
   // tell, once its awaits resolve, whether the user has since switched to a
@@ -1589,6 +1648,13 @@ export function DataEntryPage() {
     }
     if (!isAutoSave) setSaving(true)
     try {
+      // Campaign CSV imports live in the campaign editor until the user saves.
+      // Flush them before the weekly row so Save Draft / Submit Week is a complete
+      // save of everything currently visible on the Lead Gen screen.
+      if (campaignSaveAllRef.current) {
+        await campaignSaveAllRef.current()
+      }
+
       const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
       
       const currentFormData = formDataRef.current
@@ -1639,9 +1705,14 @@ export function DataEntryPage() {
         })
         .catch(e => console.warn('High score update failed:', e))
 
-      // Save Draft/Submit Week just ran, so this is a genuine submission.
-      syncAllCampaignTotals(selectedClientId, selectedWeek, true)
-        .catch(e => console.warn('Campaign sync failed:', e))
+      // Save Draft/Submit Week just ran, so this is a genuine submission. Await
+      // the rollup before refetching; otherwise the refetch can win the race and
+      // briefly restore the stale pre-import totals in the UI.
+      await syncAllCampaignTotals(selectedClientId, selectedWeek, true)
+        .catch(e => {
+          console.warn('Campaign sync failed:', e)
+          toast.warning('Campaign entries were saved, but weekly totals could not be refreshed yet.')
+        })
 
       const healthResult = await updateClientHealth(
         selectedClientId,
@@ -2046,6 +2117,7 @@ export function DataEntryPage() {
                 showInactive={showInactive}
                 setShowInactive={setShowInactive}
                 setEditingCampaign={setEditingCampaign}
+                registerCampaignSave={registerCampaignSave}
               />
               {renderLeadgenQualitative()}
             </TabsContent>

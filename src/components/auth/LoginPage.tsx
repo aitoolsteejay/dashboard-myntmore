@@ -54,13 +54,21 @@ export function LoginPage() {
               Use the email your invite was sent to.
             </p>
 
-            <form onSubmit={handleLogin} className="space-y-3">
+            <form
+              onSubmit={handleLogin}
+              autoComplete="on"
+              className="space-y-3"
+            >
               <div>
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
+                  name="username"
                   type="email"
-                  autoComplete="email"
+                  autoComplete="username"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -70,6 +78,7 @@ export function LoginPage() {
                 <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
+                  name="password"
                   type="password"
                   autoComplete="current-password"
                   value={password}
