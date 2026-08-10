@@ -14,7 +14,6 @@ import { updateClientHealth } from '@/lib/health'
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Progress } from "@/components/ui/progress"
 import { MetricCard } from "@/components/MetricCard"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -1995,20 +1994,6 @@ export function DataEntryPage() {
 
   const selectedClient = clients.find(c => c.id === selectedClientId)
   const selectedWeekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
-  const activeMetrics = filteredMetrics(activeTab === 'content' ? CONTENT_METRICS : LEADGEN_METRICS)
-    .filter(metric => metric.type !== 'auto' && metric.group !== 'Qualitative')
-  const completedMetrics = activeMetrics.filter(metric => {
-    const value = formData[metric.id]?.value
-    return value !== '' && value !== null && value !== undefined
-  })
-  const missingMetrics = activeMetrics.filter(metric => !completedMetrics.includes(metric))
-  const completeness = activeMetrics.length ? Math.round((completedMetrics.length / activeMetrics.length) * 100) : 0
-  const jumpToNextMissing = () => {
-    const next = missingMetrics[0]
-    if (!next) return
-    document.getElementById(`metric-${next.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    window.setTimeout(() => document.querySelector<HTMLElement>(`#metric-${next.id} input, #metric-${next.id} textarea`)?.focus(), 450)
-  }
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-muted/10">
@@ -2136,22 +2121,6 @@ export function DataEntryPage() {
             Lead Gen
           </TabsTrigger>
         </TabsList>
-
-        {selectedClientId && !loading && (
-          <div className="sticky top-12 z-10 mx-auto flex max-w-7xl flex-col gap-3 rounded-xl border bg-background/95 p-4 shadow-sm backdrop-blur md:flex-row md:items-center">
-            <div className="min-w-0 flex-1">
-              <div className="mb-2 flex items-center justify-between gap-3 text-xs">
-                <span className="font-black uppercase tracking-wider">{activeTab === 'content' ? 'Content' : 'Lead gen'} completeness</span>
-                <span className={cn("font-bold", completeness === 100 ? "text-emerald-600" : "text-amber-700")}>{completedMetrics.length}/{activeMetrics.length} fields · {completeness}%</span>
-              </div>
-              <Progress value={completeness} className="h-2" />
-            </div>
-            <Button type="button" variant="outline" disabled={!missingMetrics.length} onClick={jumpToNextMissing} className="shrink-0">
-              {missingMetrics.length ? `Next missing: ${missingMetrics[0].name}` : 'All fields complete'}
-              {missingMetrics.length ? <ChevronRight className="ml-2 h-4 w-4" /> : <Check className="ml-2 h-4 w-4 text-emerald-600" />}
-            </Button>
-          </div>
-        )}
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
