@@ -1,164 +1,227 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabase } from '../integrations/supabase/client'
 
-// Cached token so the beforeunload handler (synchronous) can attach auth headers
-let _cachedAccessToken: string | null = null
+// Cached token so the beforeunload handler (synchronous) can attach auth headers.
+let cachedAccessToken: string | null = null
 supabase.auth.getSession().then(({ data }) => {
-  _cachedAccessToken = data.session?.access_token ?? null
+  cachedAccessToken = data.session?.access_token ?? null
 })
 supabase.auth.onAuthStateChange((_event, session) => {
-  _cachedAccessToken = session?.access_token ?? null
+  cachedAccessToken = session?.access_token ?? null
 })
 
 interface AutoSaveOptions {
   table: string
-  matchColumns: Record<string, string>  // e.g. { client_id: 'abc', week_start: '2026-05-11' }
-  debounceMs?: number                   // default 1500ms
+  matchColumns: Record<string, string>
+  debounceMs?: number
   onSaveSuccess?: (cols: Record<string, string>) => void
   onSaveError?: (err: string) => void
-  saveFn?: (payload: Record<string, any>) => Promise<void> // Custom save logic (e.g. RPC)
+  saveFn?: (payload: Record<string, any>) => Promise<void>
+}
+
+type ScopedSave = {
+  data: Record<string, any>
+  cols: Record<string, string>
+}
+
+type SaveWaiter = (saved: boolean) => void
+
+type QueuedSave = ScopedSave & {
+  waiters: SaveWaiter[]
 }
 
 export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
 
+const scopeKey = (cols: Record<string, string>) => JSON.stringify(cols)
+
 export function useAutoSave(options: AutoSaveOptions) {
-  const {
-    table,
-    matchColumns,
-    debounceMs = 1500,
-    onSaveSuccess,
-    onSaveError,
-    saveFn
-  } = options
+  const { table, matchColumns, debounceMs = 1500 } = options
+  const currentScopeKey = scopeKey(matchColumns)
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
-  const [pendingData, setPendingData] = useState<Record<string, any> | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingRef = useRef<ScopedSave | null>(null)
+  const failedSaveRef = useRef<ScopedSave | null>(null)
   const isSavingRef = useRef(false)
-  const failedSaveRef = useRef<{ data: Record<string, any>; cols: Record<string, any> } | null>(null)
-  // Carries the match columns (client_id/week_start) alongside the queued data so a
-  // save that was in flight for one client can never flush another client's edits
-  // into its own row once it completes. See save()'s finally block below.
-  const pendingAfterSave = useRef<{ data: Record<string, any>; cols: Record<string, any> } | null>(null)
+  const activeSaveRef = useRef<ScopedSave | null>(null)
+  const queuedSaveRef = useRef<QueuedSave | null>(null)
+  const latestSavePromiseRef = useRef<{ key: string; promise: Promise<boolean> } | null>(null)
+  const mountedRef = useRef(true)
+  const matchColumnsRef = useRef(matchColumns)
+  const currentScopeKeyRef = useRef(currentScopeKey)
+  const callbacksRef = useRef({
+    onSaveSuccess: options.onSaveSuccess,
+    onSaveError: options.onSaveError,
+    saveFn: options.saveFn,
+  })
 
-  // Reset save status when match columns change
-  useEffect(() => {
-    setSaveStatus('idle')
-    setLastSaved(null)
-  }, [JSON.stringify(matchColumns)])
+  matchColumnsRef.current = matchColumns
+  currentScopeKeyRef.current = currentScopeKey
+  callbacksRef.current = {
+    onSaveSuccess: options.onSaveSuccess,
+    onSaveError: options.onSaveError,
+    saveFn: options.saveFn,
+  }
 
-  const save = useCallback(async (data: Record<string, any>, cols: Record<string, any> = matchColumns) => {
-    // Guard: Ensure all cols have values (not empty, undefined or null)
-    const hasMissingKeys = Object.entries(cols).some(([key, val]) => !val)
-    if (hasMissingKeys) {
-      console.warn('Auto-save skipped: missing match column values', cols)
-      return
-    }
+  const isCurrentScope = useCallback((cols: Record<string, string>) => (
+    scopeKey(cols) === currentScopeKeyRef.current
+  ), [])
 
-    // If currently saving, queue the latest data (with the columns it belongs to) for after
-    if (isSavingRef.current) {
-      pendingAfterSave.current = { data, cols }
-      return
-    }
-
+  const performSave = useCallback(async (request: QueuedSave): Promise<void> => {
     isSavingRef.current = true
-    setSaveStatus('saving')
+    activeSaveRef.current = { data: request.data, cols: request.cols }
+    if (mountedRef.current && isCurrentScope(request.cols)) setSaveStatus('saving')
 
+    let saved = false
     try {
-      const payload: Record<string, any> = {
-        ...cols,
-        ...data,
-      }
+      const payload = { ...request.cols, ...request.data }
+      const { saveFn, onSaveSuccess } = callbacksRef.current
 
       if (saveFn) {
         await saveFn(payload)
       } else {
-        // Use upsert with onConflict for atomicity
         const { error } = await (supabase as any)
           .from(table)
           .upsert(payload, {
-            onConflict: Object.keys(cols).join(','),
-            ignoreDuplicates: false  // always update
+            onConflict: Object.keys(request.cols).join(','),
+            ignoreDuplicates: false,
           })
-
         if (error) throw error
       }
 
-      setSaveStatus('saved')
-      setLastSaved(new Date())
-      setPendingData(null)
+      saved = true
       failedSaveRef.current = null
-      onSaveSuccess?.(cols)
-
-    } catch (err: any) {
-      setSaveStatus('error')
-      failedSaveRef.current = { data, cols }
-      onSaveError?.(err.message)
-      console.error('Auto-save failed:', err)
-    } finally {
-      isSavingRef.current = false
-
-      // If data changed while we were saving, save again immediately — using the
-      // columns that data was queued for, not whatever client/week is selected now.
-      if (pendingAfterSave.current) {
-        const next = pendingAfterSave.current
-        pendingAfterSave.current = null
-        setTimeout(() => save(next.data, next.cols), 100)
+      if (mountedRef.current && isCurrentScope(request.cols)) {
+        setSaveStatus('saved')
+        setLastSaved(new Date())
       }
-    }
-  }, [table, matchColumns, onSaveSuccess, onSaveError])
+      onSaveSuccess?.(request.cols)
+    } catch (error: any) {
+      failedSaveRef.current = { data: request.data, cols: request.cols }
+      if (mountedRef.current && isCurrentScope(request.cols)) setSaveStatus('error')
+      callbacksRef.current.onSaveError?.(error.message)
+      console.error('Auto-save failed:', error)
+    } finally {
+      request.waiters.forEach(resolve => resolve(saved))
+      isSavingRef.current = false
+      activeSaveRef.current = null
 
-  // Debounced trigger - call this whenever form data changes
+      const queued = queuedSaveRef.current
+      queuedSaveRef.current = null
+      if (queued) void performSave(queued)
+    }
+  }, [isCurrentScope, table])
+
+  const enqueueSave = useCallback((request: ScopedSave): Promise<boolean> => {
+    if (Object.values(request.cols).some(value => !value)) {
+      console.warn('Auto-save skipped: missing match column values', request.cols)
+      if (mountedRef.current && isCurrentScope(request.cols)) setSaveStatus('error')
+      return Promise.resolve(false)
+    }
+    const promise = new Promise<boolean>(resolve => {
+      if (isSavingRef.current) {
+        if (queuedSaveRef.current) {
+          queuedSaveRef.current = {
+            ...request,
+            waiters: [...queuedSaveRef.current.waiters, resolve],
+          }
+        } else {
+          queuedSaveRef.current = { ...request, waiters: [resolve] }
+        }
+        return
+      }
+
+      void performSave({ ...request, waiters: [resolve] })
+    })
+    latestSavePromiseRef.current = { key: scopeKey(request.cols), promise }
+    return promise
+  }, [isCurrentScope, performSave])
+
+  const flushPendingSave = useCallback(async (): Promise<boolean> => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    const pending = pendingRef.current
+    pendingRef.current = null
+    if (!pending) {
+      const latest = latestSavePromiseRef.current
+      if (latest?.key === currentScopeKeyRef.current && (isSavingRef.current || queuedSaveRef.current)) {
+        return latest.promise
+      }
+      return true
+    }
+    return enqueueSave(pending)
+  }, [enqueueSave])
+
   const triggerSave = useCallback((data: Record<string, any>) => {
-    setPendingData(data)
+    const request = { data, cols: { ...matchColumnsRef.current } }
+    pendingRef.current = request
     setSaveStatus('pending')
 
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
-      save(data)
+      timerRef.current = null
+      if (pendingRef.current === request) pendingRef.current = null
+      void enqueueSave(request)
     }, debounceMs)
-  }, [save, debounceMs])
+  }, [debounceMs, enqueueSave])
 
-  // Force immediate save (on blur, tab change, page unload)
-  const saveNow = useCallback((data: Record<string, any>) => {
-    if (timerRef.current) clearTimeout(timerRef.current)
-    save(data)
-  }, [save])
+  const saveNow = useCallback((data: Record<string, any>): Promise<boolean> => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    pendingRef.current = null
+    return enqueueSave({ data, cols: { ...matchColumnsRef.current } })
+  }, [enqueueSave])
 
   const retrySave = useCallback(() => {
-    const failedSave = failedSaveRef.current
-    if (!failedSave) return
-    if (timerRef.current) clearTimeout(timerRef.current)
-    save(failedSave.data, failedSave.cols)
-  }, [save])
+    if (!failedSaveRef.current) return
+    void enqueueSave(failedSaveRef.current)
+  }, [enqueueSave])
 
-  // Cancel any pending auto-save timer
   const cancelPendingAutoSave = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current)
       timerRef.current = null
     }
+    pendingRef.current = null
   }, [])
 
-  // Save on page unload - uses fetch with keepalive (supports auth headers, unlike sendBeacon)
+  // A context change must not relabel an old request as the new context's save.
+  useEffect(() => {
+    setSaveStatus('idle')
+    setLastSaved(null)
+  }, [currentScopeKey])
+
+  // Full page closes/reloads cannot await React cleanup. Send the pending request
+  // with the exact scope captured when the edit was made and the real conflict key.
   useEffect(() => {
     const handleUnload = () => {
-      if (!pendingData || !_cachedAccessToken) return
-      const url = `${SUPABASE_URL}/rest/v1/${table}`
+      const pending = pendingRef.current
+        ?? (queuedSaveRef.current
+          ? { data: queuedSaveRef.current.data, cols: queuedSaveRef.current.cols }
+          : null)
+        ?? activeSaveRef.current
+        ?? failedSaveRef.current
+      if (!pending || !cachedAccessToken) return
+      const conflictTarget = Object.keys(pending.cols).join(',')
+      const url = `${SUPABASE_URL}/rest/v1/${table}?on_conflict=${encodeURIComponent(conflictTarget)}`
       const payload = JSON.stringify({
-        ...matchColumns,
-        ...pendingData,
-        updated_at: new Date().toISOString()
+        ...pending.cols,
+        ...pending.data,
+        updated_at: new Date().toISOString(),
       })
-      fetch(url, {
+      void fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${_cachedAccessToken}`,
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${cachedAccessToken}`,
           'Content-Profile': 'myntmore',
-          'Prefer': 'resolution=merge-duplicates',
+          Prefer: 'resolution=merge-duplicates',
         },
         body: payload,
         keepalive: true,
@@ -167,14 +230,25 @@ export function useAutoSave(options: AutoSaveOptions) {
 
     window.addEventListener('beforeunload', handleUnload)
     return () => window.removeEventListener('beforeunload', handleUnload)
-  }, [pendingData, table, matchColumns])
+  }, [table])
 
-  // Cleanup timer on unmount
+  // SPA navigation does not fire beforeunload. Start the correctly-scoped save
+  // during unmount and suppress state updates after the component is gone.
   useEffect(() => {
+    mountedRef.current = true
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
+      mountedRef.current = false
+      void flushPendingSave()
     }
-  }, [])
+  }, [flushPendingSave])
 
-  return { triggerSave, saveNow, retrySave, saveStatus, lastSaved, cancelPendingAutoSave }
+  return {
+    triggerSave,
+    saveNow,
+    flushPendingSave,
+    retrySave,
+    saveStatus,
+    lastSaved,
+    cancelPendingAutoSave,
+  }
 }

@@ -131,6 +131,8 @@ function LeadGenCampaignEntry({
     const [calibrating, setCalibrating] = useState(false)
     const autosaveTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({})
     const dirtyCampaignIds = React.useRef(new Set<string>())
+    const campaignSaveQueues = React.useRef(new Map<string, Promise<boolean>>())
+    const flushGroupedMetricsRef = React.useRef<() => void>(() => undefined)
 
     // Per-campaign week selection for inactive/completed campaigns
     const [inactiveCampaignWeekMap, setInactiveCampaignWeekMap] = useState<Record<string, string>>({}) // campaignId -> selected week
@@ -282,6 +284,11 @@ function LeadGenCampaignEntry({
         inmailSyncTimer.current = setTimeout(flushInmail, 600)
     }
 
+    flushGroupedMetricsRef.current = () => {
+      if (existingConnSyncTimer.current) flushExistingConn()
+      if (inmailSyncTimer.current) flushInmail()
+    }
+
     // Reset campaign save states when client or week changes
     useEffect(() => {
       setSaveStatus({})
@@ -353,7 +360,8 @@ function LeadGenCampaignEntry({
         if (autosaveTimers.current[campaignId]) clearTimeout(autosaveTimers.current[campaignId])
         setSaveStatus(prev => ({ ...prev, [campaignId]: 'saving' }))
         autosaveTimers.current[campaignId] = setTimeout(() => {
-          saveCampaignData(campaignId, true)
+          delete autosaveTimers.current[campaignId]
+          void saveCampaignData(campaignId, true)
         }, 2000)
     }
 
@@ -376,7 +384,8 @@ function LeadGenCampaignEntry({
         // debounce leaves time for an immediate correction while ensuring an
         // import is not lost if the user forgets the per-campaign Save button.
         autosaveTimers.current[campaignId] = setTimeout(() => {
-          saveCampaignData(campaignId, true)
+          delete autosaveTimers.current[campaignId]
+          void saveCampaignData(campaignId, true)
         }, 800)
     }
 
@@ -392,22 +401,26 @@ function LeadGenCampaignEntry({
         const effectiveWeek = inactiveCampaignWeekMap[campaignId] || selectedWeek
         const weekInfo = weekOptions.find(w => w.weekStart === effectiveWeek)
           || { weekEnd: '', label: effectiveWeek }
-
-        try {
+        const clientId = selectedClientId
+        const dataSnapshot = { ...data }
+        const queueKey = `${clientId}:${campaignId}:${effectiveWeek}`
+        const previousSave = campaignSaveQueues.current.get(queueKey) ?? Promise.resolve(true)
+        const currentSave = previousSave.catch(() => false).then(async () => {
+          try {
             setSaveStatus(prev => ({ ...prev, [campaignId]: 'saving' }))
             const payload = {
                 campaign_id: campaignId,
-                client_id: selectedClientId,
+                client_id: clientId,
                 week_start: effectiveWeek,
                 week_end: weekInfo?.weekEnd ?? '',
                 week_label: weekInfo?.label ?? '',
-                conn_requests_sent: Number(data.conn_requests_sent) || 0,
-                accepted: Number(data.accepted) || 0,
-                answered: Number(data.answered) || 0,
-                positive_replies: Number(data.positive_replies) || 0,
-                negative_replies: Number(data.negative_replies) || 0,
-                meetings_booked: Number(data.meetings_booked) || 0,
-                notes: data.notes || '',
+                conn_requests_sent: Number(dataSnapshot.conn_requests_sent) || 0,
+                accepted: Number(dataSnapshot.accepted) || 0,
+                answered: Number(dataSnapshot.answered) || 0,
+                positive_replies: Number(dataSnapshot.positive_replies) || 0,
+                negative_replies: Number(dataSnapshot.negative_replies) || 0,
+                meetings_booked: Number(dataSnapshot.meetings_booked) || 0,
+                notes: dataSnapshot.notes || '',
                 submitted_by: user?.id
             }
             const { data: savedRow, error } = await supabase
@@ -420,7 +433,7 @@ function LeadGenCampaignEntry({
 
             const importedFieldsPersisted = savedRow
               && savedRow.campaign_id === campaignId
-              && savedRow.client_id === selectedClientId
+              && savedRow.client_id === clientId
               && savedRow.week_start === effectiveWeek
               && Number(savedRow.conn_requests_sent ?? 0) === payload.conn_requests_sent
               && Number(savedRow.accepted ?? 0) === payload.accepted
@@ -429,14 +442,20 @@ function LeadGenCampaignEntry({
                 throw new Error('Campaign save could not be verified. Please retry before leaving this page.')
             }
 
-            dirtyCampaignIds.current.delete(campaignId)
-            if (autosaveTimers.current[campaignId]) clearTimeout(autosaveTimers.current[campaignId])
-            delete autosaveTimers.current[campaignId]
-            setSaveStatus(prev => ({ ...prev, [campaignId]: 'saved' }))
+            const latestData = localCampaignDataRef.current[campaignId]
+            const savedSnapshotIsLatest = latestData
+              && ['conn_requests_sent', 'accepted', 'answered', 'positive_replies', 'negative_replies', 'meetings_booked', 'notes']
+                .every(field => String(latestData[field] ?? '') === String(dataSnapshot[field] ?? ''))
+            if (savedSnapshotIsLatest) {
+              dirtyCampaignIds.current.delete(campaignId)
+              if (autosaveTimers.current[campaignId]) clearTimeout(autosaveTimers.current[campaignId])
+              delete autosaveTimers.current[campaignId]
+              setSaveStatus(prev => ({ ...prev, [campaignId]: 'saved' }))
+            }
 
             // A real campaign save just happened, so this week is genuinely submitted.
             try {
-                await syncAllCampaignTotals(selectedClientId!, effectiveWeek, true)
+                await syncAllCampaignTotals(clientId, effectiveWeek, true)
             } catch (syncError) {
                 // The campaign row is already verified above. Keep the primary save
                 // successful and let the page-level save retry the aggregate sync.
@@ -451,6 +470,15 @@ function LeadGenCampaignEntry({
             if (!silent) toast.error(error.message)
             else console.error('Autosave failed:', error.message)
             return false
+          }
+        })
+        campaignSaveQueues.current.set(queueKey, currentSave)
+        try {
+          return await currentSave
+        } finally {
+          if (campaignSaveQueues.current.get(queueKey) === currentSave) {
+            campaignSaveQueues.current.delete(queueKey)
+          }
         }
     }
 
@@ -461,6 +489,10 @@ function LeadGenCampaignEntry({
     // autosave that is still inside its debounce window.
     useEffect(() => {
       registerCampaignSave(async () => {
+        // Move grouped local inputs into the parent's scoped autosave payload
+        // before it flushes the shared hook during navigation/submission.
+        flushGroupedMetricsRef.current()
+
         const campaignIds = Array.from(dirtyCampaignIds.current)
         if (campaignIds.length === 0) return
 
@@ -475,13 +507,9 @@ function LeadGenCampaignEntry({
       return () => registerCampaignSave(null)
     }, [registerCampaignSave])
 
-    // Flush all pending debounced syncs/saves whenever we're about to leave the
-    // current client/week (or the component truly unmounts, e.g. navigating away
-    // from Data Entry entirely). Without this, anything typed within the last
-    // debounce window would never make it into formData/the DB. The flush
-    // functions are recreated every render and included below so the cleanup
-    // always uses the client/week it's actually leaving, not a stale one frozen
-    // from whenever this effect first ran.
+    // Capture the callbacks for this exact client/week. Depending on the callback
+    // identities made this cleanup run after every render, which launched duplicate
+    // campaign writes whenever the saving indicator changed.
     useEffect(() => {
       return () => {
         if (existingConnSyncTimer.current) flushExistingConn()
@@ -490,10 +518,14 @@ function LeadGenCampaignEntry({
         // Flush any pending campaign saves
         Object.keys(autosaveTimers.current).forEach(campaignId => {
           clearTimeout(autosaveTimers.current[campaignId])
-          saveCampaignData(campaignId, true)
+          delete autosaveTimers.current[campaignId]
+          void saveCampaignData(campaignId, true)
         })
       }
-    }, [selectedClientId, selectedWeek, flushExistingConn, flushInmail, saveCampaignData])
+      // The callbacks intentionally belong to the client/week captured when this
+      // effect was installed; adding them would reintroduce render-time flushing.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedClientId, selectedWeek])
 
     const handleCreateCampaign = async () => {
         if (!selectedClientId) return toast.error("Select a client first")
@@ -1378,7 +1410,7 @@ export function DataEntryPage() {
     retrySave: retryContentSave,
     saveStatus: contentSaveStatus,
     lastSaved: contentLastSaved,
-    cancelPendingAutoSave: cancelContentAutoSave
+    flushPendingSave: flushContentAutoSave,
   } = useAutoSave({
     table: 'weekly_data',
     matchColumns: {
@@ -1405,6 +1437,18 @@ export function DataEntryPage() {
       }
     }
   })
+
+  const flushAllDataEntrySaves = async (): Promise<boolean> => {
+    try {
+      // The child first moves grouped fields into this hook and persists any
+      // campaign rows. Then the shared hook flushes its resulting weekly payload.
+      if (campaignSaveAllRef.current) await campaignSaveAllRef.current()
+      return await flushContentAutoSave()
+    } catch (error) {
+      console.error('Could not flush Data Entry autosaves:', error)
+      return false
+    }
+  }
 
   const buildMetricsPayload = (metrics: Metric[], source: Record<string, any>) => {
     const payload: Record<string, any> = {}
@@ -1568,6 +1612,28 @@ export function DataEntryPage() {
     setActiveTab(tab)
   }
 
+  const handleWeekChange = async (week: string) => {
+    const saved = await flushAllDataEntrySaves()
+    if (!saved) {
+      toast.error('Could not save the current week. Retry before switching weeks.')
+      return
+    }
+    formDataRef.current = {}
+    setFormData({})
+    setSelectedWeek(week)
+  }
+
+  const handleClientChange = async (clientId: string) => {
+    const saved = await flushAllDataEntrySaves()
+    if (!saved) {
+      toast.error('Could not save the current client. Retry before switching clients.')
+      return
+    }
+    formDataRef.current = {}
+    setFormData({})
+    setSelectedClientId(clientId)
+  }
+
   useEffect(() => {
     fetchData()
   }, [selectedClientId, selectedWeek])
@@ -1582,13 +1648,16 @@ export function DataEntryPage() {
         'postgres_changes',
         {
           event: '*',
-          schema: 'public',
+          schema: 'myntmore',
           table: 'weekly_data',
           filter: `client_id=eq.${selectedClientId}`
         },
         (payload) => {
           const updated = payload.new as any
           if (updated?.week_start !== selectedWeek) return
+          // Never replace local edits while their debounced save is pending or in
+          // flight. The save completion will leave the database as source of truth.
+          if (contentSaveStatus === 'pending' || contentSaveStatus === 'saving') return
           // Refresh if:
           //  a) we have never saved (contentLastSaved is null) - catches campaign syncs
           //  b) the DB row is newer than our last save - catches team-member edits
@@ -1607,7 +1676,7 @@ export function DataEntryPage() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [selectedClientId, selectedWeek, contentLastSaved])
+  }, [selectedClientId, selectedWeek, contentLastSaved, contentSaveStatus])
 
   const saveFieldAtomic = async (
     _metricId: string,
@@ -1635,9 +1704,6 @@ export function DataEntryPage() {
   }
 
   const handleSave = async (isSubmit = false, isAutoSave = false) => {
-    // Cancel any pending auto-save first
-    cancelContentAutoSave()
-
     if (!selectedClientId) {
       toast.error('Please select a client.')
       return
@@ -1648,11 +1714,12 @@ export function DataEntryPage() {
     }
     if (!isAutoSave) setSaving(true)
     try {
-      // Campaign CSV imports live in the campaign editor until the user saves.
-      // Flush them before the weekly row so Save Draft / Submit Week is a complete
-      // save of everything currently visible on the Lead Gen screen.
-      if (campaignSaveAllRef.current) {
-        await campaignSaveAllRef.current()
+      // Finish any debounced/in-flight write before the explicit save. Otherwise
+      // an older autosave can complete last and overwrite the submitted values.
+      const autosaveSucceeded = await flushAllDataEntrySaves()
+      if (!autosaveSucceeded) {
+        toast.error('Pending changes could not be saved. Retry before submitting the week.')
+        return
       }
 
       const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
@@ -1999,7 +2066,7 @@ export function DataEntryPage() {
         <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
           <div className="space-y-1.5 min-w-[240px]">
             <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Select Week</Label>
-            <Select value={selectedWeek} onValueChange={(v) => { cancelContentAutoSave(); formDataRef.current = {}; setFormData({}); setSelectedWeek(v) }}>
+            <Select value={selectedWeek} onValueChange={handleWeekChange}>
               <SelectTrigger className="bg-background font-bold h-11">
                 <SelectValue />
               </SelectTrigger>
@@ -2010,7 +2077,7 @@ export function DataEntryPage() {
           </div>
           <div className="space-y-1.5 min-w-[240px]">
             <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Select Client</Label>
-            <Select value={selectedClientId || ""} onValueChange={(v) => { cancelContentAutoSave(); formDataRef.current = {}; setFormData({}); setSelectedClientId(v) }}>
+            <Select value={selectedClientId || ""} onValueChange={handleClientChange}>
               <SelectTrigger className="bg-background font-bold h-11">
                 <SelectValue placeholder="Choose client" />
               </SelectTrigger>

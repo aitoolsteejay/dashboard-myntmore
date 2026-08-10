@@ -52,7 +52,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
   const weekOptions = useMemo(() => getWeekOptions(12), [])
   const { selectedWeek, setSelectedWeek } = useWorkspace()
 
-  const { triggerSave, retrySave, saveStatus, lastSaved } = useAutoSave({
+  const { triggerSave, flushPendingSave, retrySave, saveStatus, lastSaved } = useAutoSave({
     table: 'sales_weekly_data',
     matchColumns: { week_start: selectedWeek },
     debounceMs: 1500
@@ -64,6 +64,15 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
     cold_email: {},
     meeting_tracker: {}
   })
+
+  const handleWeekChange = async (week: string) => {
+    const saved = await flushPendingSave()
+    if (!saved) {
+      toast.error('Could not save the current week. Retry before switching weeks.')
+      return
+    }
+    setSelectedWeek(week)
+  }
 
   // Hot Leads State
   const [hotLeads, setHotLeads] = useState<HotLead[]>([])
@@ -350,7 +359,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
         {activeTab === 'weekly-data' && (
            <div className="flex flex-col gap-1 min-w-[240px]">
              <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Select Week</Label>
-             <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+             <Select value={selectedWeek} onValueChange={handleWeekChange}>
                <SelectTrigger className="bg-background font-bold h-11">
                  <SelectValue />
                </SelectTrigger>
