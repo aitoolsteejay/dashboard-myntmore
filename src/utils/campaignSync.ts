@@ -41,8 +41,8 @@ const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string, 
 
   // Sum across all campaigns
   let connReq = 0, accepted = 0, answered = 0
-  let positive = 0, negative = 0, hotLeads = 0
-  let meetings = 0, existSent = 0, existRply = 0
+  let positive = 0, negative = 0
+  let meetings = 0
 
   const numberOrZero = (value: unknown) => {
     const number = Number(value)
@@ -55,10 +55,7 @@ const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string, 
     answered  += numberOrZero(row.answered)
     positive  += numberOrZero(row.positive_replies)
     negative  += numberOrZero(row.negative_replies)
-    hotLeads  += numberOrZero(row.hot_leads)
     meetings  += numberOrZero(row.meetings_booked)
-    existSent += numberOrZero(row.existing_conn_sent)
-    existRply += numberOrZero(row.existing_conn_replied)
   })
 
   // Get existing weekly_data to preserve qualitative fields
@@ -71,7 +68,9 @@ const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string, 
 
   const current = (existing?.leadgen_metrics as Record<string, any>) ?? {}
 
-  // Merge - only update numeric fields, keep text/qualitative untouched
+  // Merge only campaign-owned metrics. Existing Connections (L19/L20/L22 and
+  // its notes) is client-level manual outreach in Data Entry, so a campaign
+  // rollup must preserve it instead of replacing it with campaign-row zeros.
   const merged = {
     ...current,
     L10: { ...(typeof current.L10 === 'object' ? current.L10 : {}), value: connReq },
@@ -79,10 +78,7 @@ const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string, 
     L13: { ...(typeof current.L13 === 'object' ? current.L13 : {}), value: answered },
     L15: { ...(typeof current.L15 === 'object' ? current.L15 : {}), value: positive },
     L16: { ...(typeof current.L16 === 'object' ? current.L16 : {}), value: negative },
-    L22: { ...(typeof current.L22 === 'object' ? current.L22 : {}), value: hotLeads },
     L24: { ...(typeof current.L24 === 'object' ? current.L24 : {}), value: meetings },
-    L19: { ...(typeof current.L19 === 'object' ? current.L19 : {}), value: existSent },
-    L20: { ...(typeof current.L20 === 'object' ? current.L20 : {}), value: existRply },
   }
   
   const weekOptions = getWeekOptions(52)
