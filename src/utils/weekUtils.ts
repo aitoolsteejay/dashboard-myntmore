@@ -52,29 +52,26 @@ export function getWeekLabel(weekStart: string): string {
   return `${fmtShort(monday)} – ${fmtFull(sunday)}`
 }
 
-export function getCurrentWeekStart(): string {
-  const now = new Date()
-  const day = now.getUTCDay()
-  const monday = new Date(now)
-  monday.setUTCDate(now.getUTCDate() - (day === 0 ? 6 : day - 1))
+function getMondayStart(now: Date, offsetWeeks = 0): string {
+  const day = now.getDay()
+  const daysSinceMonday = day === 0 ? 6 : day - 1
+  const monday = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+  monday.setUTCDate(monday.getUTCDate() - daysSinceMonday - (offsetWeeks * 7))
   return monday.toISOString().split('T')[0]
 }
 
-export function getPreviousWeekStart(): string {
-  const now = new Date()
-  const day = now.getUTCDay()
-  const monday = new Date(now)
-  monday.setUTCDate(now.getUTCDate() - (day === 0 ? 6 : day - 1) - 7)
-  return monday.toISOString().split('T')[0]
+export function getCurrentWeekStart(now = new Date()): string {
+  return getMondayStart(now)
 }
 
-export function getWeekOptions(count = 12) {
+export function getPreviousWeekStart(now = new Date()): string {
+  return getMondayStart(now, 1)
+}
+
+export function getWeekOptions(count = 12, now = new Date()) {
   return Array.from({ length: count }, (_, i) => {
-    const now = new Date()
-    const day = now.getUTCDay()
-    const monday = new Date(now)
-    monday.setUTCDate(now.getUTCDate() - (day === 0 ? 6 : day - 1) - (i * 7))
-    const weekStart = monday.toISOString().split('T')[0]
+    // Reporting always starts with the most recently completed Monday–Sunday week.
+    const weekStart = getMondayStart(now, i + 1)
     return {
       weekStart,
       weekEnd: getWeekEnd(weekStart),
@@ -93,12 +90,8 @@ export function isLastWeekOfMonth(weekStart: string): boolean {
   return nextMonday.getUTCMonth() !== monday.getUTCMonth() || nextMonday.getUTCFullYear() !== monday.getUTCFullYear()
 }
 
-export function getWeekStart(offsetWeeks: number): string {
-  const now = new Date()
-  const day = now.getUTCDay()
-  const monday = new Date(now)
-  monday.setUTCDate(now.getUTCDate() - (day === 0 ? 6 : day - 1) - (offsetWeeks * 7))
-  return monday.toISOString().split('T')[0]
+export function getWeekStart(offsetWeeks: number, now = new Date()): string {
+  return getMondayStart(now, offsetWeeks)
 }
 
 

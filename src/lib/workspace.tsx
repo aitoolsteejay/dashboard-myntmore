@@ -12,16 +12,24 @@ const WorkspaceContext = createContext<WorkspaceState | null>(null);
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [selectedWeek, setSelectedWeekState] = useState(() => {
+    const reportingWeek = getPreviousWeekStart();
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-      return saved.selectedWeek || getPreviousWeekStart();
+      // Keep a deliberate historical selection during the same real-life week,
+      // but advance automatically when a new reporting week begins.
+      return saved.reportingWeek === reportingWeek && saved.selectedWeek
+        ? saved.selectedWeek
+        : reportingWeek;
     } catch {
-      return getPreviousWeekStart();
+      return reportingWeek;
     }
   });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ selectedWeek }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      selectedWeek,
+      reportingWeek: getPreviousWeekStart(),
+    }));
   }, [selectedWeek]);
 
   const value = useMemo(() => ({ selectedWeek, setSelectedWeek: setSelectedWeekState }), [selectedWeek]);
