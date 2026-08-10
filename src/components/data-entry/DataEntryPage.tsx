@@ -26,7 +26,7 @@ import { readMetric, formatMetricValue } from "@/utils/dataUtils"
 import { detectAndUpdateHighScores } from '@/utils/highScores'
 import { formatWeekDate } from '@/utils/dateUtils'
 import { syncAllCampaignTotals } from '@/utils/campaignSync'
-import { calcRateCapped, fmtRate } from '@/utils/readMetric'
+import { calcRateCapped, fmtRate, readMetricScalar } from '@/utils/readMetric'
 import { SaveIndicator } from '../ui/SaveIndicator'
 import { useAutoSave, SaveStatus } from '../../hooks/useAutoSave'
 import { EditCampaignModal } from '../monday/EditCampaignModal'
@@ -296,11 +296,9 @@ function LeadGenCampaignEntry({
     }, [selectedClientId, selectedWeek])
 
     // Read helper for legacy fields stored as { value } or raw
-    const readLegacy = (id: string): any => {
+    const readLegacy = (id: string): number | string | boolean | null => {
       const f = (weeklyData?.leadgen_metrics as any)?.[id]
-      if (f === null || f === undefined) return null
-      if (typeof f === 'object' && 'value' in f) return f.value ?? null
-      return f
+      return readMetricScalar(f)
     }
 
     const hasLegacyData = Boolean(
@@ -1576,13 +1574,19 @@ export function DataEntryPage() {
             : m.type === 'boolean'
               ? false
               : ''
-        const storedValue = val && typeof val === 'object' && 'value' in val ? val.value : val
+        const storedValue = readMetricScalar(val)
         const storedTarget = val && typeof val === 'object' && 'target' in val ? val.target : undefined
         const storedNote = val && typeof val === 'object' && 'note' in val ? val.note : undefined
+        const customTarget = (settings?.custom_targets as Record<string, unknown> | null)?.[m.id]
+        const safeTarget = typeof storedTarget === 'number' && Number.isFinite(storedTarget)
+          ? storedTarget
+          : typeof customTarget === 'number' && Number.isFinite(customTarget)
+            ? customTarget
+            : 0
         initialForm[m.id] = {
           value: storedValue ?? emptyValue,
-          target: storedTarget ?? (settings?.custom_targets as Record<string, any> | null)?.[m.id] ?? 0,
-          note: storedNote ?? ''
+          target: safeTarget,
+          note: typeof storedNote === 'string' ? storedNote : ''
         }
       })
       // Preserve legacy count-based splits by presenting them as percentage shares.
@@ -1891,7 +1895,7 @@ export function DataEntryPage() {
               target={data.target}
               weeklyTarget={weeklyTargets[m.id]}
               monthlyTarget={monthlyTargets[m.id]}
-              previousValue={prev?.value as number | string | undefined}
+              previousValue={readMetricScalar(prev) ?? undefined}
               lifetimeHigh={score?.lifetime_high ?? undefined}
               lifetimeHighWeek={formatWeekDate(score?.achieved_week ?? undefined)}
               onChange={(v) => handleMetricChange(m.id, 'value', v)}
@@ -1921,7 +1925,7 @@ export function DataEntryPage() {
               target={data.target}
               weeklyTarget={weeklyTargets[m.id]}
               monthlyTarget={monthlyTargets[m.id]}
-              previousValue={prev?.value as number | string | undefined}
+              previousValue={readMetricScalar(prev) ?? undefined}
               lifetimeHigh={score?.lifetime_high ?? undefined}
               lifetimeHighWeek={formatWeekDate(score?.achieved_week ?? undefined)}
               onChange={(v) => handleMetricChange(m.id, 'value', v)}
@@ -1971,7 +1975,7 @@ export function DataEntryPage() {
                       target={data.target}
                       weeklyTarget={weeklyTargets[m.id]}
                       monthlyTarget={monthlyTargets[m.id]}
-                      previousValue={prev?.value as number | string | undefined}
+                      previousValue={readMetricScalar(prev) ?? undefined}
                       lifetimeHigh={score?.lifetime_high ?? undefined}
                       lifetimeHighWeek={formatWeekDate(score?.achieved_week ?? undefined)}
                       onChange={(v) => handleMetricChange(m.id, 'value', v)}

@@ -1,3 +1,27 @@
+export type MetricScalar = string | number | boolean
+
+/**
+ * Safely unwrap the scalar stored in a metric entry. Older rows can contain
+ * malformed JSON objects (for example `{}`) which React must never render.
+ */
+export function readMetricScalar(value: unknown): MetricScalar | null {
+  let current = value
+  const seen = new Set<object>()
+
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (current === null || current === undefined) return null
+    if (typeof current === 'string' || typeof current === 'boolean') return current
+    if (typeof current === 'number') return Number.isFinite(current) ? current : null
+    if (typeof current !== 'object' || Array.isArray(current) || seen.has(current)) return null
+
+    seen.add(current)
+    if (!('value' in current)) return null
+    current = (current as Record<string, unknown>).value
+  }
+
+  return null
+}
+
 export function readNum(
   metrics: Record<string, any> | null | undefined,
   metricId: string

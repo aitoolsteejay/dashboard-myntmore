@@ -10,12 +10,13 @@ import { Trophy, MessageSquare, ChevronDown, ChevronUp } from "lucide-react"
 import { Metric, resolveAutoCalc } from "@/data/metrics"
 import { cn } from "@/lib/utils"
 import { fmtDelta } from "@/utils/format"
+import { readMetricScalar } from "@/utils/readMetric"
 
 interface MetricCardProps {
   metric: Metric
   value: number | string | boolean
   target?: number
-  previousValue?: number | string
+  previousValue?: number | string | boolean
   lifetimeHigh?: number
   lifetimeHighWeek?: string
   isNewRecord?: boolean
@@ -45,13 +46,20 @@ export function MetricCard({
   allValues = {}
 }: MetricCardProps) {
   const [showNote, setShowNote] = useState(!!note)
+  const scalarValue = readMetricScalar(value)
+  const safeValue = metric.type === 'boolean'
+    ? (typeof scalarValue === 'boolean' ? scalarValue : false)
+    : metric.type === 'textarea'
+      ? (typeof scalarValue === 'string' ? scalarValue : '')
+      : (typeof scalarValue === 'number' || typeof scalarValue === 'string' ? scalarValue : 0)
+  const safePreviousValue = readMetricScalar(previousValue)
 
-  const achievement = (target && typeof value === 'number') 
-    ? Math.round((value / target) * 100) 
+  const achievement = (target && typeof safeValue === 'number')
+    ? Math.round((safeValue / target) * 100)
     : null
 
-  const deltaFormat = (typeof value === 'number' && typeof previousValue === 'number')
-    ? fmtDelta(value, previousValue, { unit: metric.type === 'percentage' ? '%' : undefined })
+  const deltaFormat = (typeof safeValue === 'number' && typeof safePreviousValue === 'number')
+    ? fmtDelta(safeValue, safePreviousValue, { unit: metric.type === 'percentage' ? '%' : undefined })
     : null
 
   const renderInput = () => {
@@ -74,7 +82,7 @@ export function MetricCard({
               min={metric.type === 'percentage' ? 0 : undefined}
               max={metric.type === 'percentage' ? 100 : undefined}
               step={metric.type === 'percentage' ? 0.1 : undefined}
-              value={value as number}
+              value={safeValue as number | string}
               onChange={(e) => {
                 const parsed = parseFloat(e.target.value) || 0
                 onChange(metric.type === 'percentage' ? Math.min(100, Math.max(0, parsed)) : parsed)
@@ -93,7 +101,7 @@ export function MetricCard({
       case 'textarea':
         return (
           <Textarea
-            value={value as string}
+            value={safeValue as string}
             onChange={(e) => onChange(e.target.value)}
             disabled={readOnly}
             placeholder="Enter details..."
@@ -104,7 +112,7 @@ export function MetricCard({
         return (
           <div className="flex justify-center py-2">
             <Switch
-              checked={!!value}
+              checked={safeValue === true}
               onCheckedChange={onChange}
               disabled={readOnly}
               className="scale-150 data-[state=checked]:bg-gold"
@@ -115,11 +123,11 @@ export function MetricCard({
         return (
           <div className="space-y-4 py-2">
             <div className="flex justify-between items-end">
-              <span className="text-4xl font-bold text-gold">{value}</span>
+              <span className="text-4xl font-bold text-gold">{safeValue}</span>
               <span className="text-muted-foreground text-sm">/ 10</span>
             </div>
             <Slider
-              value={[value as number || 0]}
+              value={[typeof safeValue === 'number' ? safeValue : Number(safeValue) || 0]}
               max={10}
               step={1}
               onValueChange={([val]) => onChange(val)}
@@ -195,7 +203,9 @@ export function MetricCard({
         <div className="flex justify-between items-center text-[11px] text-muted-foreground pt-1 border-t border-border/30">
           <div className="flex items-center gap-1">
             <span>← Previous:</span>
-            <span className="font-bold text-foreground">{previousValue ?? '-'}</span>
+            <span className="font-bold text-foreground">
+              {safePreviousValue === null ? '-' : typeof safePreviousValue === 'boolean' ? (safePreviousValue ? 'Yes' : 'No') : safePreviousValue}
+            </span>
             {deltaFormat && deltaFormat.text !== '-' && (
               <span className={cn(
                 "font-bold ml-1",
