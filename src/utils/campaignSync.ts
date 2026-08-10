@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client"
 import { getWeekOptions } from "@/utils/weekUtils"
+import { mergeCampaignRollupMetrics } from "@/utils/campaignRollup"
 
 // Serialize rollups for the same client+week. A previous implementation simply
 // dropped a sync request while another was running. When two campaign autosaves
@@ -68,18 +69,14 @@ const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string, 
 
   const current = (existing?.leadgen_metrics as Record<string, any>) ?? {}
 
-  // Merge only campaign-owned metrics. Existing Connections (L19/L20/L22 and
-  // its notes) is client-level manual outreach in Data Entry, so a campaign
-  // rollup must preserve it instead of replacing it with campaign-row zeros.
-  const merged = {
-    ...current,
-    L10: { ...(typeof current.L10 === 'object' ? current.L10 : {}), value: connReq },
-    L11: { ...(typeof current.L11 === 'object' ? current.L11 : {}), value: accepted },
-    L13: { ...(typeof current.L13 === 'object' ? current.L13 : {}), value: answered },
-    L15: { ...(typeof current.L15 === 'object' ? current.L15 : {}), value: positive },
-    L16: { ...(typeof current.L16 === 'object' ? current.L16 : {}), value: negative },
-    L24: { ...(typeof current.L24 === 'object' ? current.L24 : {}), value: meetings },
-  }
+  const merged = mergeCampaignRollupMetrics(current, {
+    connRequestsSent: connReq,
+    accepted,
+    answered,
+    positiveReplies: positive,
+    negativeReplies: negative,
+    meetingsBooked: meetings,
+  })
   
   const weekOptions = getWeekOptions(52)
   const weekInfo = weekOptions.find((w: any) => w.weekStart === weekStart)

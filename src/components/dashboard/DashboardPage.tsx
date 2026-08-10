@@ -17,7 +17,6 @@ import { EditCampaignModal } from "../monday/EditCampaignModal"
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS } from "@/data/metrics"
 import { mv, mt, fmt, delta, deltaColor, tjVal, salesVal, sv, readMetric, formatMetricValue, formatDashboardValue } from "@/utils/dataUtils"
 
-import { syncAllCampaignTotals } from '@/utils/campaignSync'
 import { fmt as gFmt, fmtDelta, Delta, fmtPct, fmtPctDelta } from "@/utils/format"
 import { calcRateCapped, readNum } from "@/utils/readMetric"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -152,7 +151,6 @@ export function DashboardPage() {
   const [processesUpdates, setProcessesUpdates] = useState<ProcessUpdate[]>([])
   const [expandedProcesses, setExpandedProcesses] = useState<Set<string>>(new Set())
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
-  const [loadingClients, setLoadingClients] = useState<Set<string>>(new Set())
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['alerts']))
   const [loading, setLoading] = useState(true)
   const [isMonthlyView, setIsMonthlyView] = useState(false)
@@ -268,44 +266,14 @@ export function DashboardPage() {
     setNotifications(upcoming)
   }
 
-  const reloadClientWeekData = async (clientId: string, weekStart: string) => {
-    const { data } = await supabase
-      .from('weekly_data')
-      .select('*')
-      .eq('client_id', clientId)
-      .eq('week_start', weekStart)
-      .maybeSingle()
-    if (data) {
-      setWeeklyData(prev => {
-        const next = [...prev]
-        const idx = next.findIndex(r => r.client_id === clientId && r.week_start === weekStart)
-        if (idx >= 0) next[idx] = data
-        else next.push(data)
-        return next
-      })
-    }
-  }
-
-  const toggleClient = async (id: string) => {
+  const toggleClient = (id: string) => {
     const next = new Set(expandedClients)
     if (next.has(id)) {
       next.delete(id)
       setExpandedClients(next)
     } else {
-      setLoadingClients(prev => new Set(prev).add(id))
       next.add(id)
       setExpandedClients(next)
-      if (displayWeek) {
-        // Merely expanding a card to view it -- keep the rollup numbers fresh, but
-        // this must never mark the week as submitted (default markSubmitted=false).
-        await syncAllCampaignTotals(id, displayWeek)
-        await reloadClientWeekData(id, displayWeek)
-      }
-      setLoadingClients(prev => {
-        const nextSet = new Set(prev)
-        nextSet.delete(id)
-        return nextSet
-      })
     }
   }
 
@@ -1429,12 +1397,6 @@ export function DashboardPage() {
                           {/* Expanded Details */}
                           {isExpanded && (
                             <div className="border-t bg-muted/10 p-6 animate-in slide-in-from-top-2 duration-200">
-                                {loadingClients.has(client.id) ? (
-                                  <div className="py-12 flex flex-col items-center justify-center text-muted-foreground animate-pulse gap-3">
-                                    <div className="w-6 h-6 border-2 border-gold border-t-transparent rounded-full animate-spin" />
-                                    <p className="text-xs font-black uppercase tracking-widest">Loading latest client metrics...</p>
-                                  </div>
-                                ) : (
                                   <>
                                     {weeklyBreakdownClients.has(client.id) && (
                                   <div className="mb-8 border-b pb-8">
@@ -1596,7 +1558,6 @@ export function DashboardPage() {
                                     )
                                   })()}
                                   </>
-                                )}
                             </div>
                           )}
                         </Card>

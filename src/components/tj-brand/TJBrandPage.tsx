@@ -64,6 +64,7 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
     newsletter_podcast: {},
     video_pipeline: {}
   })
+  const fetchRequestRef = React.useRef(0)
 
   const handleWeekChange = async (week: string) => {
     const saved = await flushPendingSave()
@@ -106,13 +107,20 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
   }, [selectedWeek])
 
   const fetchWeeklyData = async () => {
+    const requestId = ++fetchRequestRef.current
+    const requestedWeek = selectedWeek
     setLoading(true)
     try {
       const { data, error } = await supabase
         .from('tj_weekly_data')
         .select('*')
-        .eq('week_start', selectedWeek)
+        .eq('week_start', requestedWeek)
         .maybeSingle()
+
+      if (error) throw error
+      // A slower response for the previous week must never replace the form
+      // after the user has already selected a different week.
+      if (requestId !== fetchRequestRef.current) return
       
       if (data) {
         const row = data as any
@@ -131,9 +139,9 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
         })
       }
     } catch (error: any) {
-      toast.error(error.message)
+      if (requestId === fetchRequestRef.current) toast.error(error.message)
     } finally {
-      setLoading(false)
+      if (requestId === fetchRequestRef.current) setLoading(false)
     }
   }
 

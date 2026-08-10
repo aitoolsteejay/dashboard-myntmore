@@ -317,15 +317,6 @@ function LeadGenCampaignEntry({
       else setLeadGenMode('campaigns')
     }, [hasCampaignRows, hasLegacyData, selectedWeek, selectedClientId])
 
-    // When Lead Gen tab is selected and client + week are set, keep the rollup
-    // numbers fresh. This is a passive view action (not a save), so it must never
-    // mark the week as submitted -- leave markSubmitted at its default (false).
-    useEffect(() => {
-      if (activeTab === 'leadgen' && selectedClientId && selectedWeek) {
-        syncAllCampaignTotals(selectedClientId, selectedWeek)
-      }
-    }, [activeTab, selectedClientId, selectedWeek])
-
     useEffect(() => {
         const initial: Record<string, any> = {}
         campaigns.forEach(c => {
