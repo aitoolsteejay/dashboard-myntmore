@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Globe, KeyRound, RefreshCw, Unlink, UserPlus } from 'lucide-react'
+import { Globe, KeyRound, Link2, RefreshCw, Unlink, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 
 type ClientPortalRow = {
@@ -18,8 +18,16 @@ type ClientPortalRow = {
   user_id: string | null
 }
 
+type InternalProfile = {
+  id: string
+  email: string | null
+  full_name: string | null
+  department: string | null
+}
+
 export function ClientSettingsPage() {
   const [clients, setClients] = useState<ClientPortalRow[]>([])
+  const [internalProfiles, setInternalProfiles] = useState<InternalProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [isPortalModalOpen, setIsPortalModalOpen] = useState(false)
   const [portalForm, setPortalForm] = useState({ email: '', password: '', clientId: '' })
@@ -27,16 +35,31 @@ export function ClientSettingsPage() {
   const [resetClient, setResetClient] = useState<ClientPortalRow | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [resetLoading, setResetLoading] = useState(false)
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
+  const [linkClientId, setLinkClientId] = useState('')
+  const [linkUserId, setLinkUserId] = useState('')
+  const [linkLoading, setLinkLoading] = useState(false)
 
   const fetchClients = async () => {
     setLoading(true)
-    const { data, error } = await (supabase as any)
-      .from('clients')
-      .select('id, name, company, user_id')
-      .eq('status', 'active')
-      .order('name')
-    if (error) toast.error(error.message)
-    setClients(sortAlphabetically((data || []) as ClientPortalRow[], client => client.name))
+    const [clientsResult, profilesResult] = await Promise.all([
+      (supabase as any)
+        .from('clients')
+        .select('id, name, company, user_id')
+        .eq('status', 'active')
+        .order('name'),
+      supabase
+        .from('profiles')
+        .select('id, email, full_name, department')
+        .order('full_name'),
+    ])
+    if (clientsResult.error) toast.error(clientsResult.error.message)
+    if (profilesResult.error) toast.error(profilesResult.error.message)
+    setClients(sortAlphabetically((clientsResult.data || []) as ClientPortalRow[], client => client.name))
+    setInternalProfiles(sortAlphabetically(
+      ((profilesResult.data || []) as InternalProfile[]).filter(profile => profile.department?.toLowerCase() !== 'client'),
+      profile => profile.full_name || profile.email || '',
+    ))
     setLoading(false)
   }
 
@@ -87,6 +110,47 @@ export function ClientSettingsPage() {
   const openResetPassword = (client: ClientPortalRow) => {
     setResetClient(client)
     setNewPassword('')
+  }
+
+  const openLinkTeamMember = (client?: ClientPortalRow) => {
+    setLinkClientId(client?.id || '')
+    setLinkUserId('')
+    setIsLinkModalOpen(true)
+  }
+
+  const handleLinkTeamMember = async () => {
+    if (!linkClientId || !linkUserId) {
+      toast.error('Select a client and an internal team member.')
+      return
+    }
+    const client = clients.find(item => item.id === linkClientId)
+    const profile = internalProfiles.find(item => item.id === linkUserId)
+    if (!client || client.user_id || !profile) {
+      toast.error('This client or team member is no longer available for linking.')
+      return
+    }
+
+    setLinkLoading(true)
+    try {
+      const { data, error } = await (supabase as any)
+        .from('clients')
+        .update({ user_id: linkUserId })
+        .eq('id', linkClientId)
+        .is('user_id', null)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('The client was linked by someone else. Refresh and try again.')
+
+      toast.success(`${profile.full_name || profile.email} can now use both the internal dashboard and ${client.name}'s client portal.`)
+      setIsLinkModalOpen(false)
+      setLinkClientId('')
+      setLinkUserId('')
+      await fetchClients()
+    } catch (error: any) {
+      toast.error('Failed to link team member: ' + error.message)
+    } finally {
+      setLinkLoading(false)
+    }
   }
 
   const handleResetPassword = async () => {
@@ -145,12 +209,17 @@ export function ClientSettingsPage() {
             Manage client login credentials and portal access.
           </p>
         </div>
-        <Button
-          onClick={() => openCreateLogin()}
-          className="bg-gold font-bold text-black hover:bg-gold/90"
-        >
-          <UserPlus className="mr-2 h-4 w-4" /> Create Portal Account
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => openLinkTeamMember()} className="font-bold">
+            <Link2 className="mr-2 h-4 w-4" /> Link Team Member
+          </Button>
+          <Button
+            onClick={() => openCreateLogin()}
+            className="bg-gold font-bold text-black hover:bg-gold/90"
+          >
+            <UserPlus className="mr-2 h-4 w-4" /> Create Portal Account
+          </Button>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border bg-card">
@@ -165,13 +234,16 @@ export function ClientSettingsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {clients.map(client => (
-              <TableRow key={client.id}>
+            {clients.map(client => {
+              const linkedProfile = client.user_id ? internalProfiles.find(profile => profile.id === client.user_id) : null
+              return <TableRow key={client.id}>
                 <TableCell className="font-bold">{client.name}</TableCell>
                 <TableCell className="text-muted-foreground">{client.company}</TableCell>
                 <TableCell>
                   {client.user_id ? (
-                    <Badge className="border-green-200 bg-green-100 font-bold text-green-700">✓ Active</Badge>
+                    <Badge className="border-green-200 bg-green-100 font-bold text-green-700">
+                      {linkedProfile ? '✓ Team linked' : '✓ Active'}
+                    </Badge>
                   ) : (
                     <Badge variant="outline" className="text-muted-foreground">No access</Badge>
                   )}
@@ -183,14 +255,14 @@ export function ClientSettingsPage() {
                   <div className="flex justify-end gap-1">
                     {client.user_id ? (
                       <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openResetPassword(client)}
-                          className="gap-1.5 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700"
-                        >
-                          <KeyRound className="h-3.5 w-3.5" /> Reset Password
-                        </Button>
+                        {!linkedProfile && <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openResetPassword(client)}
+                            className="gap-1.5 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                          >
+                            <KeyRound className="h-3.5 w-3.5" /> Reset Password
+                          </Button>}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -201,19 +273,29 @@ export function ClientSettingsPage() {
                         </Button>
                       </>
                     ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openCreateLogin(client)}
-                        className="gap-1.5 text-xs font-bold text-amber-600 hover:bg-amber-50 hover:text-amber-700"
-                      >
-                        <UserPlus className="h-3.5 w-3.5" /> Create Login
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openLinkTeamMember(client)}
+                          className="gap-1.5 text-xs font-bold text-foreground hover:bg-muted"
+                        >
+                          <Link2 className="h-3.5 w-3.5" /> Link Team Member
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openCreateLogin(client)}
+                          className="gap-1.5 text-xs font-bold text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" /> Create Login
+                        </Button>
+                      </>
                     )}
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+            })}
             {!loading && clients.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="py-10 text-center italic text-muted-foreground">
@@ -231,6 +313,59 @@ export function ClientSettingsPage() {
           </TableBody>
         </Table>
       </div>
+
+      <Dialog open={isLinkModalOpen} onOpenChange={open => {
+        setIsLinkModalOpen(open)
+        if (!open) {
+          setLinkClientId('')
+          setLinkUserId('')
+        }
+      }}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-black">
+              <Link2 className="h-5 w-5 text-gold" /> Link Existing Team Member
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="font-bold">Client *</Label>
+              <Select value={linkClientId} onValueChange={setLinkClientId}>
+                <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                <SelectContent>
+                  {clients.filter(client => !client.user_id).map(client => (
+                    <SelectItem key={client.id} value={client.id}>{client.name} - {client.company}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="font-bold">Internal team member *</Label>
+              <Select value={linkUserId} onValueChange={setLinkUserId}>
+                <SelectTrigger><SelectValue placeholder="Select existing account" /></SelectTrigger>
+                <SelectContent>
+                  {internalProfiles
+                    .filter(profile => !clients.some(client => client.user_id === profile.id))
+                    .map(profile => (
+                      <SelectItem key={profile.id} value={profile.id}>
+                        {profile.full_name || 'Unnamed'}{profile.email ? ` - ${profile.email}` : ''}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="rounded-lg border border-gold/20 bg-gold/10 p-3 text-xs text-muted-foreground">
+              This adds client-portal access to the existing login. The team member's internal role, password and profile stay unchanged.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLinkModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleLinkTeamMember} disabled={linkLoading || !linkUserId} className="bg-gold font-black text-black">
+              {linkLoading ? 'Linking...' : 'Link Existing Account →'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isPortalModalOpen} onOpenChange={setIsPortalModalOpen}>
         <DialogContent className="sm:max-w-[420px]">

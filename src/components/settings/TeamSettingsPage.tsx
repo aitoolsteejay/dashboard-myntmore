@@ -43,20 +43,17 @@ export function TeamSettingsPage() {
         { data: rolesData },
         { data: assignmentsData },
         { data: invitesData },
-        { data: portalClientsData },
       ] = await Promise.all([
         supabase.from('profiles').select('*'),
         supabase.from('user_roles').select('*'),
         supabase.from('client_assignments').select('user_id'),
         supabase.from('invites').select('*').order('created_at', { ascending: false }),
-        (supabase as any).from('clients').select('user_id').not('user_id', 'is', null),
       ])
 
-      const portalUserIds = new Set(
-        (portalClientsData || []).map((client: { user_id: string | null }) => client.user_id).filter(Boolean),
-      )
       const enrichedTeam = (profilesData || [])
-        .filter(profile => profile.department !== 'client' && !portalUserIds.has(profile.id))
+        // A team member may also be linked to a client workspace. Department,
+        // rather than the client link, distinguishes internal and client-only users.
+        .filter(profile => profile.department !== 'client')
         .map(p => {
         const role = rolesData?.find(r => r.user_id === p.id) as any
         const assignmentsCount = assignmentsData?.filter(a => a.user_id === p.id).length || 0
