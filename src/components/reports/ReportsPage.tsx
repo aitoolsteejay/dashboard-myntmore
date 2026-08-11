@@ -15,10 +15,15 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuSeparator, DropdownMenuLabel
 } from "@/components/ui/dropdown-menu"
 import {
-  BarChart2, TrendingUp, Table2, Users, Calendar, Filter, ChevronDown, X, Info
+  BarChart2, TrendingUp, Table2, Users, Calendar, Filter, ChevronDown, X, Info, Download, FileText, Loader2
 } from "lucide-react"
 import type { WeeklyData, MetricTarget } from "@/types"
 import { sortAlphabetically } from "@/utils/sort"
+import { generateEomReport } from "@/utils/eomReport"
+import myntmoreLogo from '@/assets/myntmore-logo.png'
+import { toast } from 'sonner'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -126,6 +131,35 @@ export function ReportsPage() {
   const [category, setCategory] = useState<CategoryFilter>('all')
   const [selectedMetricIds, setSelectedMetricIds] = useState<string[]>([])
   const [view, setView] = useState<ViewMode>('table')
+  const [eomOpen, setEomOpen] = useState(false)
+  const [eomClientId, setEomClientId] = useState('')
+  const [eomMonth, setEomMonth] = useState(() => getMonthRange(-1).from.slice(0, 7))
+  const [generatingEom, setGeneratingEom] = useState(false)
+
+  const eomMonths = useMemo(() => Array.from({ length: 18 }, (_, offset) => {
+    const date = new Date()
+    date.setUTCDate(1)
+    date.setUTCMonth(date.getUTCMonth() - offset)
+    return {
+      value: date.toISOString().slice(0, 7),
+      label: date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+    }
+  }), [])
+
+  const downloadEom = async () => {
+    const client = clients.find(item => item.id === eomClientId)
+    if (!client) return toast.error('Select a client first.')
+    setGeneratingEom(true)
+    try {
+      await generateEomReport({ client, month: eomMonth, logoUrl: myntmoreLogo })
+      toast.success(`${client.name}'s EOM report has been downloaded.`)
+      setEomOpen(false)
+    } catch (error: any) {
+      toast.error(error?.message || 'Could not generate the EOM report.')
+    } finally {
+      setGeneratingEom(false)
+    }
+  }
 
   // Load clients once
   useEffect(() => {
@@ -472,21 +506,65 @@ export function ReportsPage() {
 
       {/* Page header */}
       <div className="border-b bg-card px-6 py-5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold tracking-tight">Reports</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Analyze performance across clients, metrics, and time periods</p>
           </div>
-          {hasSelection && !loading && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
-              <Calendar className="h-3.5 w-3.5" />
-              <span className="font-medium">{weekList.length} weeks</span>
-              <span>·</span>
-              <span>{fmtWeekShort(weekList[0])} → {fmtWeekShort(weekList[weekList.length - 1])}</span>
-              <span>·</span>
-              <span className="font-medium">{displayMetrics.length} metrics</span>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {hasSelection && !loading && (
+              <div className="hidden lg:flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+                <Calendar className="h-3.5 w-3.5" />
+                <span className="font-medium">{weekList.length} weeks</span>
+                <span>·</span>
+                <span>{fmtWeekShort(weekList[0])} → {fmtWeekShort(weekList[weekList.length - 1])}</span>
+                <span>·</span>
+                <span className="font-medium">{displayMetrics.length} metrics</span>
+              </div>
+            )}
+            <Dialog open={eomOpen} onOpenChange={setEomOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2 bg-gold text-black hover:bg-gold/90 font-bold">
+                  <Download className="h-4 w-4" /> Download EOM Report
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <DialogTitle>Generate End-of-Month Report</DialogTitle>
+                  <DialogDescription>Create a polished, client-ready PDF from submitted dashboard and campaign data.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black uppercase tracking-wider text-muted-foreground">Client</label>
+                    <Select value={eomClientId} onValueChange={setEomClientId}>
+                      <SelectTrigger><SelectValue placeholder="Choose a client" /></SelectTrigger>
+                      <SelectContent>
+                        {clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}{client.company ? ` - ${client.company}` : ''}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black uppercase tracking-wider text-muted-foreground">Reporting month</label>
+                    <Select value={eomMonth} onValueChange={setEomMonth}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {eomMonths.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="rounded-lg border bg-muted/25 p-3 text-xs leading-relaxed text-muted-foreground">
+                    Includes an executive summary, three-month content trends, outreach conversion, campaign performance and recommended next steps. Empty campaign sections are handled automatically.
+                  </div>
+                  <Button onClick={downloadEom} disabled={!eomClientId || generatingEom} className="w-full bg-gold text-black hover:bg-gold/90 font-bold">
+                    {generatingEom ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating PDF...</> : <><Download className="mr-2 h-4 w-4" />Generate and Download</>}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </div>
 
