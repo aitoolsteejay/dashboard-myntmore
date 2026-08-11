@@ -2,14 +2,17 @@ import React, { useState } from 'react'
 import { calcRateCapped, fmtRate, fmt } from '../../utils/readMetric'
 import { EditCampaignWeekModal } from './EditCampaignWeekModal'
 
-export function CampaignMonthTable({ campaign, monthWeeks, onEdit, onWeekSaved, readOnly = false }: {
+export function CampaignMonthTable({ campaign, monthWeeks, onEdit, onWeekSaved, onViewDetails, readOnly = false }: {
   campaign: any,
   monthWeeks: any[],
   onEdit?: (c: any) => void,
   onWeekSaved?: () => void,
+  onViewDetails?: (campaign: any) => void,
   readOnly?: boolean,
 }) {
-  const [open, setOpen] = useState(true)
+  // Keep the denser client-facing campaign list collapsed initially while
+  // preserving the existing expanded data-entry experience.
+  const [open, setOpen] = useState(() => !readOnly)
   const [editingWeek, setEditingWeek] = useState<{ weekStart: string; weekLabel: string; weekData: any } | null>(null)
 
   const ROWS = [
@@ -43,6 +46,16 @@ export function CampaignMonthTable({ campaign, monthWeeks, onEdit, onWeekSaved, 
       <div style={{ border: '1px solid #E5E5E5', borderRadius: '8px', overflow: 'hidden', marginBottom: '10px' }}>
         <div
           onClick={() => setOpen(o => !o)}
+          onKeyDown={event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              setOpen(value => !value)
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-expanded={open}
+          aria-label={`${open ? 'Collapse' : 'Expand'} ${campaign.name}`}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '10px 16px', background: '#F9F9F9', cursor: 'pointer',
@@ -70,6 +83,18 @@ export function CampaignMonthTable({ campaign, monthWeeks, onEdit, onWeekSaved, 
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {readOnly && onViewDetails && (
+              <button
+                onClick={event => { event.stopPropagation(); onViewDetails(campaign) }}
+                onKeyDown={event => event.stopPropagation()}
+                style={{
+                  background: 'white', border: '1px solid #F4C54F', borderRadius: '6px',
+                  padding: '4px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer',
+                }}
+              >
+                View Details
+              </button>
+            )}
             {!readOnly && (
               <button
                 onClick={e => { e.stopPropagation(); onEdit?.(campaign) }}

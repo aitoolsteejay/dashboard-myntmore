@@ -7,6 +7,7 @@ import {
   CircleDot,
   Clock3,
   Edit2,
+  Eye,
   GripVertical,
   LayoutGrid,
   List,
@@ -46,9 +47,10 @@ type ActionableRow = Actionable & {
 };
 type ClientSummary = Pick<Client, "id" | "name">;
 type ProfileSummary = Pick<Profile, "id" | "full_name">;
-type FormState = { title: string; client_id: string; assignee_id: string; due_date: string; description: string; status: string };
+type CampaignSummary = { id: string; client_id: string | null; name: string };
+type FormState = { title: string; client_id: string; assignee_id: string; due_date: string; description: string; status: string; client_visible: boolean; responsibility: "myntmore" | "client"; campaign_id: string };
 
-const EMPTY_FORM: FormState = { title: "", client_id: "", assignee_id: "", due_date: "", description: "", status: "open" };
+const EMPTY_FORM: FormState = { title: "", client_id: "", assignee_id: "", due_date: "", description: "", status: "open", client_visible: false, responsibility: "myntmore", campaign_id: "" };
 
 const COLUMNS = [
   { id: "open", title: "Open", description: "Ready to be picked up", color: "bg-blue-500", soft: "bg-blue-50 text-blue-700", icon: CircleDot },
@@ -102,6 +104,7 @@ function SortableActionableCard({ actionable, expanded, onToggle, onEdit, onDele
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <Badge variant="outline" className="max-w-full truncate text-[9px] font-bold">{actionable.clients?.name || "Internal"}</Badge>
+              {actionable.client_visible && <Badge className="border-gold/40 bg-gold/10 text-[9px] font-black text-amber-700">Portal · {actionable.responsibility === "client" ? "Client action" : "Myntmore action"}</Badge>}
               {overdue && <Badge className="border-red-200 bg-red-50 text-[9px] font-black text-red-700">Overdue</Badge>}
               {actionable.is_carried_forward && <Badge className="border-orange-200 bg-orange-50 text-[9px] font-black text-orange-700">Carried</Badge>}
             </div>
@@ -158,6 +161,7 @@ export function ActionablesPage() {
   const [actionables, setActionables] = useState<ActionableRow[]>([]);
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -175,17 +179,20 @@ export function ActionablesPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [{ data: actionsData, error: actionsError }, { data: clientsData, error: clientsError }, { data: profilesData, error: profilesError }] = await Promise.all([
+      const [{ data: actionsData, error: actionsError }, { data: clientsData, error: clientsError }, { data: profilesData, error: profilesError }, { data: campaignsData, error: campaignsError }] = await Promise.all([
         supabase.from("actionables").select("*, clients(name, company), assignee:profiles!assignee_id(full_name), assigner:profiles!assigner_id(full_name)").order("created_at", { ascending: false }),
         supabase.from("clients").select("id, name").eq("status", "active"),
         supabase.from("profiles").select("id, full_name, department"),
+        supabase.from("campaigns").select("id, client_id, name").order("name"),
       ]);
       if (actionsError) throw actionsError;
       if (clientsError) throw clientsError;
       if (profilesError) throw profilesError;
+      if (campaignsError) throw campaignsError;
       setActionables((actionsData || []).map(actionable => ({ ...actionable, is_carried_forward: actionable.status === "carried_forward" || (actionable.status === "open" && Boolean(actionable.week_start) && actionable.week_start! < currentWeekStart) })) as ActionableRow[]);
       setClients(sortAlphabetically(clientsData || [], client => client.name));
       setProfiles(sortAlphabetically((profilesData || []).filter(profile => profile.department !== "client"), profile => profile.full_name));
+      setCampaigns(sortAlphabetically(campaignsData || [], campaign => campaign.name));
     } catch (error: any) {
       toast.error("Could not load actionables: " + error.message);
     } finally {
@@ -218,7 +225,7 @@ export function ActionablesPage() {
 
   const openCreate = () => { setEditingActionable(null); setForm({ ...EMPTY_FORM, assignee_id: scope === "mine" ? user?.id || "" : "" }); setIsModalOpen(true); };
   const changeScope = (nextScope: "mine" | "team") => { setScope(nextScope); setFilterAssignee("all"); };
-  const openEdit = (actionable: ActionableRow) => { setEditingActionable(actionable); setForm({ title: actionable.title, client_id: actionable.client_id || "", assignee_id: actionable.assignee_id || "", due_date: actionable.due_date || "", description: actionable.description || "", status: statusForColumn(actionable) }); setIsModalOpen(true); };
+  const openEdit = (actionable: ActionableRow) => { setEditingActionable(actionable); setForm({ title: actionable.title, client_id: actionable.client_id || "", assignee_id: actionable.assignee_id || "", due_date: actionable.due_date || "", description: actionable.description || "", status: statusForColumn(actionable), client_visible: actionable.client_visible, responsibility: actionable.responsibility === "client" ? "client" : "myntmore", campaign_id: actionable.campaign_id || "" }); setIsModalOpen(true); };
   const toggleExpanded = (id: string) => setExpandedIds(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
   const handleDragEnd = async ({ active, over }: DragEndEvent) => {
@@ -244,7 +251,8 @@ export function ActionablesPage() {
   const handleSave = async () => {
     if (!form.title.trim() || !form.assignee_id) { toast.error("Title and assignee are required."); return; }
     setSaving(true);
-    const payload = { ...form, title: form.title.trim(), client_id: form.client_id || null, due_date: form.due_date || null, description: form.description.trim() || null, assigner_id: editingActionable?.assigner_id || user?.id, week_start: editingActionable?.week_start || currentWeekStart };
+    if (form.client_visible && !form.client_id) { toast.error("Select a client before making an action visible in the portal."); setSaving(false); return; }
+    const payload = { ...form, title: form.title.trim(), client_id: form.client_id || null, campaign_id: form.campaign_id || null, due_date: form.due_date || null, description: form.description.trim() || null, assigner_id: editingActionable?.assigner_id || user?.id, week_start: editingActionable?.week_start || currentWeekStart };
     const { error } = editingActionable ? await supabase.from("actionables").update(payload).eq("id", editingActionable.id) : await supabase.from("actionables").insert(payload);
     setSaving(false);
     if (error) { toast.error("Could not save actionable: " + error.message); return; }
@@ -295,7 +303,29 @@ export function ActionablesPage() {
         <Card className="overflow-hidden"><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Actionable</TableHead><TableHead>Client</TableHead><TableHead>Assignee</TableHead><TableHead>Due date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{filteredActionables.map(actionable => { const status = statusForColumn(actionable); const column = COLUMNS.find(item => item.id === status); return <TableRow key={actionable.id}><TableCell><div className="font-bold">{actionable.title}</div>{actionable.description && <div className="mt-1 max-w-md truncate text-xs text-muted-foreground">{actionable.description}</div>}</TableCell><TableCell>{actionable.clients?.name || "Internal"}</TableCell><TableCell>{actionable.assignee?.full_name || "Unassigned"}</TableCell><TableCell className={cn(isOverdue(actionable) && "font-bold text-red-600")}>{formatDate(actionable.due_date)}</TableCell><TableCell><Badge className={cn("border-0", column?.soft)}>{column?.title || status}</Badge></TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => openEdit(actionable)} aria-label={`Edit ${actionable.title}`}><Edit2 className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDelete(actionable.id)} aria-label={`Delete ${actionable.title}`} className="text-red-500"><Trash2 className="h-4 w-4" /></Button></TableCell></TableRow>; })}{filteredActionables.length === 0 && <TableRow><TableCell colSpan={6} className="py-16 text-center text-muted-foreground">No actionables match these filters.</TableCell></TableRow>}</TableBody></Table></CardContent></Card>
       )}
 
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}><DialogContent className="sm:max-w-[560px]"><DialogHeader><DialogTitle className="text-xl font-black">{editingActionable ? "Edit Actionable" : "Create an Actionable"}</DialogTitle></DialogHeader><div className="grid gap-4 py-2"><div className="grid gap-1.5"><Label htmlFor="actionable-title">Title *</Label><Input id="actionable-title" value={form.title} onChange={event => setForm(current => ({ ...current, title: event.target.value }))} placeholder="What needs to get done?" autoFocus /></div><div className="grid gap-1.5"><Label htmlFor="actionable-notes">Context and expected outcome</Label><Textarea id="actionable-notes" value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} placeholder="Add the context, deliverable or next step." className="min-h-[100px]" /></div><div className="grid gap-4 sm:grid-cols-2"><div className="grid gap-1.5"><Label>Client</Label><Select value={form.client_id || "none"} onValueChange={value => setForm(current => ({ ...current, client_id: value === "none" ? "" : value }))}><SelectTrigger><SelectValue placeholder="Internal" /></SelectTrigger><SelectContent><SelectItem value="none">Internal</SelectItem>{clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent></Select></div><div className="grid gap-1.5"><Label>Assignee *</Label><Select value={form.assignee_id} onValueChange={assignee_id => setForm(current => ({ ...current, assignee_id }))}><SelectTrigger><SelectValue placeholder="Select a member" /></SelectTrigger><SelectContent>{profiles.map(profile => <SelectItem key={profile.id} value={profile.id}>{profile.full_name || "Unnamed member"}</SelectItem>)}</SelectContent></Select></div></div><div className="grid gap-4 sm:grid-cols-2"><div className="grid gap-1.5"><Label htmlFor="actionable-due">Due date</Label><Input id="actionable-due" type="date" value={form.due_date} onChange={event => setForm(current => ({ ...current, due_date: event.target.value }))} /></div><div className="grid gap-1.5"><Label>Status</Label><Select value={form.status} onValueChange={status => setForm(current => ({ ...current, status }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{COLUMNS.map(column => <SelectItem key={column.id} value={column.id}>{column.title}</SelectItem>)}</SelectContent></Select></div></div></div><DialogFooter><Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button><Button onClick={handleSave} disabled={saving} className="bg-gold font-black text-black hover:bg-gold/90">{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{editingActionable ? "Save Changes" : "Create Actionable"}</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[620px]">
+          <DialogHeader><DialogTitle className="text-xl font-black">{editingActionable ? "Edit Actionable" : "Create an Actionable"}</DialogTitle></DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-1.5"><Label htmlFor="actionable-title">Title *</Label><Input id="actionable-title" value={form.title} onChange={event => setForm(current => ({ ...current, title: event.target.value }))} placeholder="What needs to get done?" autoFocus /></div>
+            <div className="grid gap-1.5"><Label htmlFor="actionable-notes">Context and expected outcome</Label><Textarea id="actionable-notes" value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} placeholder="Add the context, deliverable or next step." className="min-h-[100px]" /></div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-1.5"><Label>Client</Label><Select value={form.client_id || "none"} onValueChange={value => setForm(current => ({ ...current, client_id: value === "none" ? "" : value, campaign_id: "", client_visible: value === "none" ? false : current.client_visible }))}><SelectTrigger><SelectValue placeholder="Internal" /></SelectTrigger><SelectContent><SelectItem value="none">Internal</SelectItem>{clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="grid gap-1.5"><Label>Internal coordinator *</Label><Select value={form.assignee_id} onValueChange={assignee_id => setForm(current => ({ ...current, assignee_id }))}><SelectTrigger><SelectValue placeholder="Select a member" /></SelectTrigger><SelectContent>{profiles.map(profile => <SelectItem key={profile.id} value={profile.id}>{profile.full_name || "Unnamed member"}</SelectItem>)}</SelectContent></Select></div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-1.5"><Label>Related campaign</Label><Select value={form.campaign_id || "none"} onValueChange={value => setForm(current => ({ ...current, campaign_id: value === "none" ? "" : value }))} disabled={!form.client_id}><SelectTrigger><SelectValue placeholder="No campaign" /></SelectTrigger><SelectContent><SelectItem value="none">No campaign</SelectItem>{campaigns.filter(campaign => campaign.client_id === form.client_id).map(campaign => <SelectItem key={campaign.id} value={campaign.id}>{campaign.name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="grid gap-1.5"><Label>Responsibility</Label><Select value={form.responsibility} onValueChange={(responsibility: "myntmore" | "client") => setForm(current => ({ ...current, responsibility }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="myntmore">Myntmore</SelectItem><SelectItem value="client">Client</SelectItem></SelectContent></Select></div>
+            </div>
+            <label className={cn("flex items-start gap-3 rounded-lg border p-3", form.client_visible && "border-gold bg-gold/5", !form.client_id && "opacity-50")}>
+              <input type="checkbox" checked={form.client_visible} disabled={!form.client_id} onChange={event => setForm(current => ({ ...current, client_visible: event.target.checked }))} className="mt-1 h-4 w-4 accent-yellow-500" />
+              <span><span className="flex items-center gap-1.5 text-sm font-black"><Eye className="h-4 w-4 text-gold" />Show in client portal</span><span className="mt-0.5 block text-xs text-muted-foreground">The client will see this task. Client-responsibility tasks can be updated by the client.</span></span>
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2"><div className="grid gap-1.5"><Label htmlFor="actionable-due">Due date</Label><Input id="actionable-due" type="date" value={form.due_date} onChange={event => setForm(current => ({ ...current, due_date: event.target.value }))} /></div><div className="grid gap-1.5"><Label>Status</Label><Select value={form.status} onValueChange={status => setForm(current => ({ ...current, status }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{COLUMNS.map(column => <SelectItem key={column.id} value={column.id}>{column.title}</SelectItem>)}</SelectContent></Select></div></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button><Button onClick={handleSave} disabled={saving} className="bg-gold font-black text-black hover:bg-gold/90">{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{editingActionable ? "Save Changes" : "Create Actionable"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       <AlertDialog open={!!pendingDelete} onOpenChange={open => !open && setPendingDelete(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this actionable?</AlertDialogTitle><AlertDialogDescription>“{pendingDelete?.title}” will be permanently removed. This cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep actionable</AlertDialogCancel><AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );

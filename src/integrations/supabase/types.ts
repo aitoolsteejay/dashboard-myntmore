@@ -18,11 +18,16 @@ export type Database = {
         Row: {
           assignee_id: string | null
           assigner_id: string | null
+          campaign_id: string | null
+          client_comment: string | null
           client_id: string | null
+          client_updated_at: string | null
+          client_visible: boolean
           created_at: string | null
           description: string | null
           due_date: string | null
           id: string
+          responsibility: string
           status: string | null
           title: string
           week_start: string | null
@@ -30,11 +35,16 @@ export type Database = {
         Insert: {
           assignee_id?: string | null
           assigner_id?: string | null
+          campaign_id?: string | null
+          client_comment?: string | null
           client_id?: string | null
+          client_updated_at?: string | null
+          client_visible?: boolean
           created_at?: string | null
           description?: string | null
           due_date?: string | null
           id?: string
+          responsibility?: string
           status?: string | null
           title: string
           week_start?: string | null
@@ -42,11 +52,16 @@ export type Database = {
         Update: {
           assignee_id?: string | null
           assigner_id?: string | null
+          campaign_id?: string | null
+          client_comment?: string | null
           client_id?: string | null
+          client_updated_at?: string | null
+          client_visible?: boolean
           created_at?: string | null
           description?: string | null
           due_date?: string | null
           id?: string
+          responsibility?: string
           status?: string | null
           title?: string
           week_start?: string | null
@@ -64,6 +79,13 @@ export type Database = {
             columns: ["assigner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actionables_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
             referencedColumns: ["id"]
           },
           {
@@ -168,6 +190,7 @@ export type Database = {
       }
       campaigns: {
         Row: {
+          account_manager_interpretation: string | null
           client_id: string | null
           created_at: string | null
           created_by: string | null
@@ -175,11 +198,13 @@ export type Database = {
           id: string
           message_narrative: string | null
           name: string
+          objective: string | null
           started_date: string | null
           status: string | null
           updated_at: string | null
         }
         Insert: {
+          account_manager_interpretation?: string | null
           client_id?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -187,11 +212,13 @@ export type Database = {
           id?: string
           message_narrative?: string | null
           name: string
+          objective?: string | null
           started_date?: string | null
           status?: string | null
           updated_at?: string | null
         }
         Update: {
+          account_manager_interpretation?: string | null
           client_id?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -199,6 +226,7 @@ export type Database = {
           id?: string
           message_narrative?: string | null
           name?: string
+          objective?: string | null
           started_date?: string | null
           status?: string | null
           updated_at?: string | null

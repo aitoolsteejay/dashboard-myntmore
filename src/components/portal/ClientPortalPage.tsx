@@ -7,6 +7,8 @@ import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS } from '@/data/metrics'
 import { formatDashboardValue } from '@/utils/dataUtils'
 import { getWeekOptions, getPreviousWeekStart, getWeeksInSameMonth } from '@/utils/weekUtils'
 import { CampaignMonthTable } from '@/components/monday/CampaignMonthTable'
+import { CampaignDetailsDialog } from '@/components/portal/CampaignDetailsDialog'
+import { ClientActionPlan } from '@/components/portal/ClientActionPlan'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -19,7 +21,6 @@ import {
 import { LogOut, TrendingUp, Users, FileText, BarChart2, Loader2, ArrowUpRight, ArrowDownRight, Minus, Calendar, Table2, ArrowLeftRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import myntmoreLogo from '@/assets/myntmore-logo.png'
-import { sortAlphabetically } from '@/utils/sort'
 
 // ─── Reports tab helpers ────────────────────────────────────────────────────
 
@@ -96,6 +97,7 @@ function achBadge(pct: number | null) {
 type DatePreset = '4w' | '8w' | '12w' | 'this_month' | 'last_month' | 'custom'
 type ViewMode = 'table' | 'trends' | 'summary'
 type CategoryFilter = 'all' | 'content' | 'leadgen'
+type PerformancePeriod = 'weekly' | 'monthly'
 
 const DATE_PRESETS: { id: DatePreset; label: string }[] = [
   { id: '4w', label: 'Last 4W' },
@@ -145,22 +147,89 @@ function Delta({ curr, prev }: { curr: any; prev: any }) {
     : <span className="text-red-500 font-bold flex items-center gap-0.5"><ArrowDownRight className="w-3 h-3" />{formatVal(diff)} <span className="text-xs font-normal opacity-70">({pct}%)</span></span>
 }
 
+function aggregatePeriodMetrics(rows: any[]): Record<string, any> | null {
+  if (!rows.length) return null
+  const builtRows = rows
+    .slice()
+    .sort((a, b) => (a.week_start ?? '').localeCompare(b.week_start ?? ''))
+    .map(row => buildWeekMetrics(row))
+    .filter(Boolean) as Record<string, any>[]
+  if (!builtRows.length) return null
+
+  const totals: Record<string, any> = {}
+  const latestValueMetrics = new Set(['C16', 'C32'])
+  const averageMetrics = new Set(['C34', 'C35'])
+
+  for (const metric of ALL_METRICS) {
+    if (metric.type === 'auto' || metric.type === 'textarea' || metric.type === 'boolean') continue
+    const values = builtRows.map(row => Number(row[metric.id])).filter(Number.isFinite)
+    if (!values.length) {
+      totals[metric.id] = null
+    } else if (latestValueMetrics.has(metric.id)) {
+      totals[metric.id] = values[values.length - 1]
+    } else if (averageMetrics.has(metric.id)) {
+      totals[metric.id] = Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 100) / 100
+    } else {
+      totals[metric.id] = values.reduce((sum, value) => sum + value, 0)
+    }
+  }
+
+  const impressions = Number(totals.C10 || 0)
+  const networkWeights = builtRows.reduce((acc, row) => {
+    const rowImpressions = Number(row.C10 || 0)
+    if (rowImpressions <= 0) return acc
+    acc.total += rowImpressions
+    acc.inNetwork += rowImpressions * Number(row.C36 || 0)
+    acc.outNetwork += rowImpressions * Number(row.C37 || 0)
+    return acc
+  }, { total: 0, inNetwork: 0, outNetwork: 0 })
+
+  totals.C09 = Number(totals.C06 || 0) + Number(totals.C07 || 0) + Number(totals.C08 || 0)
+  totals.C26 = totals.C09 > 0 ? Math.round((impressions / totals.C09) * 100) / 100 : null
+  totals.C36 = networkWeights.total > 0 ? Math.round((networkWeights.inNetwork / networkWeights.total) * 100) / 100 : null
+  totals.C37 = networkWeights.total > 0 ? Math.round((networkWeights.outNetwork / networkWeights.total) * 100) / 100 : null
+  totals.L05 = totals.L02 > 0 ? Math.min(100, Math.round((totals.L03 / totals.L02) * 10000) / 100) : null
+  totals.L12 = totals.L10 > 0 ? Math.min(100, Math.round((totals.L11 / totals.L10) * 10000) / 100) : null
+  totals.L14 = totals.L11 > 0 ? Math.min(100, Math.round((totals.L13 / totals.L11) * 10000) / 100) : null
+  totals.L17 = totals.L13 > 0 ? Math.min(100, Math.round((totals.L15 / totals.L13) * 10000) / 100) : null
+  totals.L18 = totals.L13 > 0 ? Math.min(100, Math.round((totals.L16 / totals.L13) * 10000) / 100) : null
+  totals.L21 = totals.L19 > 0 ? Math.min(100, Math.round((totals.L20 / totals.L19) * 10000) / 100) : null
+  totals.L26 = totals.L24 > 0 ? Math.min(100, Math.round((totals.L25 / totals.L24) * 10000) / 100) : null
+  return totals
+}
+
 export function ClientPortalPage() {
   const { user, clientRecord, isClient, isAdmin, loading: authLoading, signOut } = useAuth()
   const navigate = useNavigate()
   const weekOptions = useMemo(() => getWeekOptions(12), [])
   const [selectedWeek, setSelectedWeek] = useState(getPreviousWeekStart())
-  const [activeTab, setActiveTab] = useState<'overview' | 'content' | 'leadgen' | 'campaigns' | 'trends' | 'reports' | 'highlights'>('overview')
+  const [performancePeriod, setPerformancePeriod] = useState<PerformancePeriod>('weekly')
+  const [selectedMonth, setSelectedMonth] = useState(() => getPreviousWeekStart().slice(0, 7))
+  const [activeTab, setActiveTab] = useState<'overview' | 'content' | 'leadgen' | 'campaigns' | 'actions' | 'trends' | 'reports' | 'highlights'>('overview')
   const [currentData, setCurrentData] = useState<any>(null)
   const [prevData, setPrevData] = useState<any>(null)
   const [historyData, setHistoryData] = useState<any[]>([])
   const [campaigns, setCampaigns] = useState<any[]>([])
+  const [selectedCampaign, setSelectedCampaign] = useState<any | null>(null)
   const [ahaMoments, setAhaMoments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [weeklyTargets, setWeeklyTargets] = useState<any[]>([])
   const [monthlyTargets, setMonthlyTargets] = useState<any[]>([])
   const [mtdData, setMtdData] = useState<any[]>([])
-  const monthWeeks = useMemo(() => getWeeksInSameMonth(selectedWeek), [selectedWeek])
+  const [previousMonthData, setPreviousMonthData] = useState<any[]>([])
+  const monthOptions = useMemo(() => Array.from({ length: 12 }, (_, offset) => {
+    const date = new Date()
+    date.setUTCDate(1)
+    date.setUTCMonth(date.getUTCMonth() - offset)
+    return {
+      value: date.toISOString().slice(0, 7),
+      label: date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+    }
+  }), [])
+  const monthWeeks = useMemo(
+    () => getWeeksInSameMonth(performancePeriod === 'monthly' ? `${selectedMonth}-01` : selectedWeek),
+    [performancePeriod, selectedMonth, selectedWeek],
+  )
 
   // Reports tab state
   const [reportWeeklyData, setReportWeeklyData] = useState<any[]>([])
@@ -253,7 +322,7 @@ export function ClientPortalPage() {
       .eq('client_id', clientRecord.id)
       .order('created_at', { ascending: false })
       .then(({ data }: { data: any[] | null }) => setAhaMoments(data || []))
-  }, [clientRecord, selectedWeek])
+  }, [clientRecord, selectedWeek, selectedMonth, performancePeriod])
 
   const fetchCampaigns = async () => {
     if (!clientRecord) return
@@ -268,13 +337,11 @@ export function ClientPortalPage() {
       return
     }
 
-    const weekStarts = monthWeeks.map((w: any) => w.weekStart)
     const { data: cdata } = await supabase
       .from('campaign_weekly_data')
       .select('*')
       .eq('client_id', clientRecord.id)
       .in('campaign_id', data.map(c => c.id))
-      .in('week_start', weekStarts)
 
     const enriched = data.map(c => {
       const byWeek: Record<string, any> = {}
@@ -284,18 +351,33 @@ export function ClientPortalPage() {
       return { ...c, byWeek }
     })
 
-    setCampaigns(sortAlphabetically(enriched, campaign => campaign.name))
+    const sortedCampaigns = enriched.slice().sort((a, b) => {
+      const aActive = String(a.status).toLowerCase() === 'active'
+      const bActive = String(b.status).toLowerCase() === 'active'
+      if (aActive !== bActive) return aActive ? -1 : 1
+
+      const aDate = a.started_date || a.created_at || ''
+      const bDate = b.started_date || b.created_at || ''
+      const dateOrder = bDate.localeCompare(aDate)
+      if (dateOrder !== 0) return dateOrder
+      return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' })
+    })
+
+    setCampaigns(sortedCampaigns)
   }
 
   const fetchData = async () => {
     if (!clientRecord) return
     setLoading(true)
     try {
-      // Month boundaries for the selected week
-      const selDate = new Date(selectedWeek + 'T00:00:00Z')
+      // Month boundaries for the selected reporting period
+      const periodMonth = performancePeriod === 'monthly' ? selectedMonth : selectedWeek.slice(0, 7)
+      const selDate = new Date(`${periodMonth}-01T00:00:00Z`)
       const year = selDate.getUTCFullYear(), month = selDate.getUTCMonth()
       const monthStart = new Date(Date.UTC(year, month, 1)).toISOString().split('T')[0]
       const monthEnd = new Date(Date.UTC(year, month + 1, 0)).toISOString().split('T')[0]
+      const previousMonthStart = new Date(Date.UTC(year, month - 1, 1)).toISOString().split('T')[0]
+      const previousMonthEnd = new Date(Date.UTC(year, month, 0)).toISOString().split('T')[0]
 
       const [
         { data: curr },
@@ -303,6 +385,7 @@ export function ClientPortalPage() {
         { data: wTargets },
         { data: mTargets },
         { data: mtdRows },
+        { data: previousMonthRows },
       ] = await Promise.all([
         supabase.from('weekly_data').select('content_metrics, leadgen_metrics, week_start')
           .eq('client_id', clientRecord.id).eq('week_start', selectedWeek).maybeSingle(),
@@ -316,11 +399,16 @@ export function ClientPortalPage() {
           .eq('client_id', clientRecord.id)
           .gte('week_start', monthStart)
           .lte('week_start', monthEnd),
+        supabase.from('weekly_data').select('content_metrics, leadgen_metrics, week_start')
+          .eq('client_id', clientRecord.id)
+          .gte('week_start', previousMonthStart)
+          .lte('week_start', previousMonthEnd),
       ])
       setCurrentData(curr)
       setWeeklyTargets(wTargets || [])
       setMonthlyTargets(mTargets || [])
       setMtdData(mtdRows || [])
+      setPreviousMonthData(previousMonthRows || [])
 
       // Previous week
       const selectedIdx = weekOptions.findIndex(w => w.weekStart === selectedWeek)
@@ -371,8 +459,8 @@ export function ClientPortalPage() {
     )
   }
 
-  const currentBuilt = buildWeekMetrics(currentData)
-  const prevBuilt = buildWeekMetrics(prevData)
+  const currentBuilt = performancePeriod === 'monthly' ? aggregatePeriodMetrics(mtdData) : buildWeekMetrics(currentData)
+  const prevBuilt = performancePeriod === 'monthly' ? aggregatePeriodMetrics(previousMonthData) : buildWeekMetrics(prevData)
 
   // MTD totals - sum each metric across all weeks in the selected month
   const mtdTotals: Record<string, number> = {}
@@ -398,8 +486,10 @@ export function ClientPortalPage() {
     { id: 'L24', label: 'Meetings Booked' },
   ]
 
-  const selDate = new Date(selectedWeek + 'T00:00:00Z')
+  const selDate = new Date(`${performancePeriod === 'monthly' ? selectedMonth : selectedWeek.slice(0, 7)}-01T00:00:00Z`)
   const monthName = selDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  const currentPeriodLabel = performancePeriod === 'monthly' ? 'This Month' : 'This Week'
+  const previousPeriodLabel = performancePeriod === 'monthly' ? 'Prev Month' : 'Prev Week'
 
   // Chart data
   const chartData = historyData.map(row => {
@@ -420,6 +510,7 @@ export function ClientPortalPage() {
     { id: 'content', label: 'Content' },
     { id: 'leadgen', label: 'Lead Gen' },
     { id: 'campaigns', label: 'Campaigns' },
+    { id: 'actions', label: 'Action Plan' },
     { id: 'trends', label: 'Trends' },
     { id: 'highlights', label: '✨ Highlights' },
     { id: 'reports', label: 'Reports' },
@@ -463,22 +554,55 @@ export function ClientPortalPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-black tracking-tight">Your Campaign Performance</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Weekly metrics for your LinkedIn campaign.</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {performancePeriod === 'monthly' ? 'Monthly' : 'Weekly'} metrics for your LinkedIn campaign.
+            </p>
           </div>
-          <div className="min-w-[220px]">
-            <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-              <SelectTrigger className="bg-white font-bold h-10 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {weekOptions.map(w => <SelectItem key={w.weekStart} value={w.weekStart}>{w.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          <div className="flex flex-col sm:flex-row items-stretch gap-2">
+            <div className="grid grid-cols-2 rounded-lg border bg-white p-1 shadow-sm" aria-label="Performance period">
+              {(['weekly', 'monthly'] as const).map(period => (
+                <button
+                  key={period}
+                  type="button"
+                  onClick={() => setPerformancePeriod(period)}
+                  aria-pressed={performancePeriod === period}
+                  className={cn(
+                    'rounded-md px-4 py-2 text-xs font-black transition-all',
+                    performancePeriod === period
+                      ? 'bg-gold text-black shadow-sm'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  {period === 'weekly' ? 'Weekly' : 'Monthly'}
+                </button>
+              ))}
+            </div>
+            <div className="min-w-[220px]">
+              {performancePeriod === 'weekly' ? (
+                <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                  <SelectTrigger className="bg-white font-bold h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {weekOptions.map(w => <SelectItem key={w.weekStart} value={w.weekStart}>{w.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="bg-white font-bold h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {monthOptions.map(month => <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Tab bar */}
-        <div className="flex gap-1 border-b">
+        <div className="flex gap-1 overflow-x-auto border-b">
           {tabs.map(t => (
             <button
               key={t.id}
@@ -664,8 +788,8 @@ export function ClientPortalPage() {
                     <TableHeader className="bg-muted/20">
                       <TableRow>
                         <TableHead className="text-[10px] font-black uppercase pl-6">Metric</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase text-right">This Week</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase text-right">Prev Week</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase text-right">{currentPeriodLabel}</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase text-right">{previousPeriodLabel}</TableHead>
                         <TableHead className="text-[10px] font-black uppercase text-right pr-6">Change</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -701,8 +825,8 @@ export function ClientPortalPage() {
                     <TableHeader className="bg-muted/20">
                       <TableRow>
                         <TableHead className="text-[10px] font-black uppercase pl-6">Metric</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase text-right">This Week</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase text-right">Prev Week</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase text-right">{currentPeriodLabel}</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase text-right">{previousPeriodLabel}</TableHead>
                         <TableHead className="text-[10px] font-black uppercase text-right pr-6">Change</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -744,12 +868,17 @@ export function ClientPortalPage() {
                   ) : (
                     <div className="space-y-4">
                       {campaigns.map(c => (
-                        <CampaignMonthTable key={c.id} campaign={c} monthWeeks={monthWeeks} readOnly />
+                        <CampaignMonthTable key={c.id} campaign={c} monthWeeks={monthWeeks} onViewDetails={setSelectedCampaign} readOnly />
                       ))}
                     </div>
                   )}
                 </CardContent>
               </Card>
+            )}
+
+            {/* ACTION PLAN TAB */}
+            {activeTab === 'actions' && (
+              <ClientActionPlan clientId={clientRecord.id} canManageInternally={isAdmin} />
             )}
 
             {/* TRENDS TAB */}
@@ -1134,6 +1263,7 @@ export function ClientPortalPage() {
           </p>
         </div>
       </div>
+      <CampaignDetailsDialog campaign={selectedCampaign} open={!!selectedCampaign} onOpenChange={open => !open && setSelectedCampaign(null)} />
     </div>
   )
 }
