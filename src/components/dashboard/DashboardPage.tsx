@@ -547,8 +547,44 @@ export function DashboardPage() {
   }
 
   const MonthComparisonView = () => {
-    // Current month totals
-    const prevMonthStr = new Date(new Date(displayWeek).setMonth(new Date(displayWeek).getMonth() - 1)).toISOString().slice(0, 7)
+    const [displayYear, displayMonth] = displayWeek.slice(0, 7).split('-').map(Number)
+    const previousMonthDate = new Date(Date.UTC(displayYear, displayMonth - 2, 1))
+    const prevMonthStr = previousMonthDate.toISOString().slice(0, 7)
+    const previousMonthEnd = new Date(Date.UTC(
+      previousMonthDate.getUTCFullYear(),
+      previousMonthDate.getUTCMonth() + 1,
+      0,
+    )).toISOString().slice(0, 10)
+
+    const aggregateClientRows = (rows: any[]) => {
+      const totals: Record<string, Record<string, number>> = {}
+
+      rows.forEach(row => {
+        const clientId = row.client_id
+        if (!clientId) return
+
+        const built = buildWeekMetrics(row)
+        if (!built) return
+        if (!totals[clientId]) totals[clientId] = {}
+
+        ALL_METRICS.forEach(metric => {
+          if (metric.type === 'textarea' || metric.type === 'boolean' || metric.type === 'auto') return
+          const value = built[metric.id]
+          if (value !== null && value !== undefined && !isNaN(Number(value))) {
+            totals[clientId][metric.id] = (totals[clientId][metric.id] ?? 0) + Number(value)
+          }
+        })
+      })
+
+      Object.values(totals).forEach(total => {
+        total.L12 = calcRateCapped(total.L11, total.L10) || 0
+        total.L14 = calcRateCapped(total.L13, total.L11) || 0
+        total.L17 = calcRateCapped(total.L15, total.L13) || 0
+        total.C26 = total.C09 > 0 ? total.C10 / total.C09 : 0
+      })
+
+      return totals
+    }
     
     const [prevMonthTotals, setPrevMonthTotals] = useState<Record<string, Record<string, number>>>({})
     const [loadingPrev, setLoadingPrev] = useState(true)
@@ -558,55 +594,22 @@ export function DashboardPage() {
         setLoadingPrev(true)
         const { data } = await supabase
           .from('weekly_data')
-          .select('client_id, content_metrics, leadgen_metrics')
+          .select('client_id, content_metrics, leadgen_metrics, content_submitted_at, leadgen_submitted_at')
           .gte('week_start', `${prevMonthStr}-01`)
-          .lte('week_start', `${prevMonthStr}-31`)
-        
-        const totals: Record<string, Record<string, number>> = {}
-        data?.forEach(row => {
-          const clientId = row.client_id
-          if (!clientId) return
-          if (!totals[clientId]) totals[clientId] = {}
-          ALL_METRICS.forEach(m => {
-            const val = readMetric(row, m.category === 'content' ? 'content_metrics' : 'leadgen_metrics', m.id)
-            if (val !== null && !isNaN(Number(val))) {
-              totals[clientId][m.id] = (totals[clientId][m.id] ?? 0) + Number(val)
-            }
-          })
-        })
+          .lte('week_start', previousMonthEnd)
 
-        // Recalculate rates correctly for month comparison
-        Object.keys(totals).forEach(cid => {
-          const t = totals[cid]
-          t['L12'] = calcRateCapped(t['L11'], t['L10']) || 0
-          t['L14'] = calcRateCapped(t['L13'], t['L11']) || 0
-          t['L17'] = calcRateCapped(t['L15'], t['L13']) || 0
-          t['C26'] = t['C09'] > 0 ? t['C10'] / t['C09'] : 0
-        })
-
-        setPrevMonthTotals(totals)
+        setPrevMonthTotals(aggregateClientRows(data || []))
         setLoadingPrev(false)
       }
       fetchPrevMonth()
-    }, [])
+    }, [prevMonthStr, previousMonthEnd])
+
+    const currentMonthTotals = aggregateClientRows(monthWeeklyData)
 
     return (
       <div className="space-y-6 w-full box-border">
         {clients.map(client => {
-          const cWeeks = monthWeeklyData.filter(w => w.client_id === client.id)
-          const cTotals: Record<string, number> = {}
-          cWeeks.forEach(week => {
-            ALL_METRICS.forEach(m => {
-              const val = readMetric(week, m.category === 'content' ? 'content_metrics' : 'leadgen_metrics', m.id)
-              if (val !== null && !isNaN(Number(val))) {
-                cTotals[m.id] = (cTotals[m.id] ?? 0) + Number(val)
-              }
-            })
-          })
-          cTotals['L12'] = calcRateCapped(cTotals['L11'], cTotals['L10']) || 0
-          cTotals['L14'] = calcRateCapped(cTotals['L13'], cTotals['L11']) || 0
-          cTotals['C26'] = cTotals['C09'] > 0 ? cTotals['C10'] / cTotals['C09'] : 0
-
+          const cTotals = currentMonthTotals[client.id] || {}
           const pTotals = prevMonthTotals[client.id] || {}
 
           return (
