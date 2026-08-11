@@ -403,19 +403,19 @@ export function ClientPortalPage() {
         { data: mtdRows },
         { data: previousMonthRows },
       ] = await Promise.all([
-        supabase.from('weekly_data').select('client_id, content_metrics, leadgen_metrics, week_start')
+        supabase.from('weekly_data').select('client_id, content_metrics, leadgen_metrics, content_submitted_at, leadgen_submitted_at, week_start')
           .eq('client_id', clientRecord.id).eq('week_start', selectedWeek).maybeSingle(),
-        supabase.from('weekly_data').select('client_id, content_metrics, leadgen_metrics, week_start, week_label')
+        supabase.from('weekly_data').select('client_id, content_metrics, leadgen_metrics, content_submitted_at, leadgen_submitted_at, week_start, week_label')
           .eq('client_id', clientRecord.id).order('week_start', { ascending: false }).limit(12),
         supabase.from('targets').select('client_id, metric_id, target_value')
           .eq('client_id', clientRecord.id).eq('target_type', 'weekly'),
         supabase.from('targets').select('client_id, metric_id, target_value')
           .eq('client_id', clientRecord.id).eq('target_type', 'monthly'),
-        supabase.from('weekly_data').select('client_id, content_metrics, leadgen_metrics, week_start')
+        supabase.from('weekly_data').select('client_id, content_metrics, leadgen_metrics, content_submitted_at, leadgen_submitted_at, week_start')
           .eq('client_id', clientRecord.id)
           .gte('week_start', monthStart)
           .lte('week_start', monthEnd),
-        supabase.from('weekly_data').select('client_id, content_metrics, leadgen_metrics, week_start')
+        supabase.from('weekly_data').select('client_id, content_metrics, leadgen_metrics, content_submitted_at, leadgen_submitted_at, week_start')
           .eq('client_id', clientRecord.id)
           .gte('week_start', previousMonthStart)
           .lte('week_start', previousMonthEnd),
@@ -431,7 +431,7 @@ export function ClientPortalPage() {
       const prevWeek = weekOptions[selectedIdx + 1]?.weekStart
       if (prevWeek) {
         const { data: prev } = await supabase.from('weekly_data')
-          .select('client_id, content_metrics, leadgen_metrics').eq('client_id', clientRecord.id)
+          .select('client_id, content_metrics, leadgen_metrics, content_submitted_at, leadgen_submitted_at').eq('client_id', clientRecord.id)
           .eq('week_start', prevWeek).maybeSingle()
         setPrevData(assertClientRow(prev, clientRecord.id, 'previous weekly data'))
       } else {
