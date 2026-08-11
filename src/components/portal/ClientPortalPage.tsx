@@ -527,6 +527,30 @@ export function ClientPortalPage() {
 
   const contentMetrics = CONTENT_METRICS.filter(m => m.group !== 'Qualitative' && m.type !== 'boolean' && m.type !== 'textarea')
   const leadgenMetrics = LEADGEN_METRICS.filter(m => m.group !== 'Qualitative' && m.type !== 'boolean' && m.type !== 'textarea')
+  const contentMetricGroups = [
+    { name: 'Performance', label: 'Audience Performance', description: 'How your published content performed with your audience.' },
+    { name: 'Post Output', label: 'Content Published', description: 'The content delivered and published during this period.' },
+    { name: 'Production Pipeline', label: 'Content Pipeline', description: 'Work currently moving through ideation, drafting and approval.' },
+    { name: 'Newsletter', label: 'Newsletter Performance', description: 'Newsletter output, audience and engagement.' },
+  ].map(group => ({
+    ...group,
+    metrics: contentMetrics.filter(metric => metric.group === group.name),
+  })).filter(group => group.metrics.length > 0)
+
+  const formatContentMetric = (metric: typeof CONTENT_METRICS[number], value: unknown) =>
+    metric.unit === '%' ? formatPct(value as number) : formatVal(value)
+  const leadgenMetricGroups = [
+    { name: 'Connection Request Outreach', label: 'Campaign Outreach', description: 'Prospects contacted and how they responded to the campaign.' },
+    { name: 'InMail Outreach', label: 'InMail Outreach', description: 'Performance of direct LinkedIn InMail activity.' },
+    { name: 'Existing Connections', label: 'Existing Network', description: 'Conversations and opportunities generated from existing connections.' },
+    { name: 'Pipeline & Conversion', label: 'Leads & Meetings', description: 'Qualified outcomes created from outreach activity.' },
+  ].map(group => ({
+    ...group,
+    metrics: leadgenMetrics.filter(metric => metric.group === group.name),
+  })).filter(group => group.metrics.length > 0)
+
+  const formatLeadgenMetric = (metric: typeof LEADGEN_METRICS[number], value: unknown) =>
+    metric.unit === '%' ? formatPct(value as number) : formatVal(value)
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -800,81 +824,156 @@ export function ClientPortalPage() {
 
             {/* CONTENT TAB */}
             {activeTab === 'content' && (
-              <Card className="bg-white border shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-gold" /> Content Metrics
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader className="bg-muted/20">
-                      <TableRow>
-                        <TableHead className="text-[10px] font-black uppercase pl-6">Metric</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase text-right">{currentPeriodLabel}</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase text-right">{previousPeriodLabel}</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase text-right pr-6">Change</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {contentMetrics.map(m => {
-                        const curr = currentBuilt?.[m.id as keyof typeof currentBuilt] ?? null
-                        const prev = prevBuilt?.[m.id as keyof typeof prevBuilt] ?? null
-                        return (
-                          <TableRow key={m.id}>
-                            <TableCell className="text-sm font-medium pl-6">{m.name}</TableCell>
-                            <TableCell className="text-right font-black">{formatVal(curr)}</TableCell>
-                            <TableCell className="text-right text-muted-foreground text-sm">{formatVal(prev)}</TableCell>
-                            <TableCell className="text-right pr-6"><Delta curr={curr} prev={prev} /></TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+              <div className="space-y-6">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">Content performance</p>
+                  <h2 className="mt-1 text-2xl font-black">What your content achieved</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">A clear view of reach, output and the work currently in progress.</p>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { id: 'C09', label: 'Posts Published', icon: FileText },
+                    { id: 'C10', label: 'Total Impressions', icon: BarChart2 },
+                    { id: 'C26', label: 'Avg. Impressions / Post', icon: TrendingUp },
+                    { id: 'C15', label: 'New Followers', icon: Users },
+                  ].map(item => {
+                    const curr = currentBuilt?.[item.id as keyof typeof currentBuilt] ?? null
+                    const prev = prevBuilt?.[item.id as keyof typeof prevBuilt] ?? null
+                    const Icon = item.icon
+                    return (
+                      <Card key={item.id} className="bg-white border shadow-sm overflow-hidden">
+                        <CardContent className="p-5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{item.label}</p>
+                              <p className="mt-2 text-3xl font-black tabular-nums">{formatVal(curr)}</p>
+                            </div>
+                            <div className="rounded-lg bg-gold/10 p-2 text-gold"><Icon className="h-4 w-4" /></div>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3 text-xs">
+                            <span className="text-muted-foreground">vs {previousPeriodLabel.toLowerCase()}</span>
+                            <Delta curr={curr} prev={prev} />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
+                  {contentMetricGroups.map(group => (
+                    <Card key={group.name} className="bg-white border shadow-sm overflow-hidden">
+                      <CardHeader className="border-b bg-muted/10 py-4">
+                        <CardTitle className="text-sm font-black flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-gold" /> {group.label}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">{group.description}</p>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-4 border-b bg-muted/20 px-5 py-2.5 text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+                          <span>Metric</span>
+                          <span className="text-right">{currentPeriodLabel}</span>
+                          <span className="hidden text-right sm:block">Change</span>
+                        </div>
+                        <div className="divide-y">
+                          {group.metrics.map(metric => {
+                            const curr = currentBuilt?.[metric.id as keyof typeof currentBuilt] ?? null
+                            const prev = prevBuilt?.[metric.id as keyof typeof prevBuilt] ?? null
+                            return (
+                              <div key={metric.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-4 px-5 py-3.5 hover:bg-muted/10">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium">{metric.name}</p>
+                                  <p className="mt-0.5 text-[10px] text-muted-foreground">Previously {formatContentMetric(metric, prev)}</p>
+                                </div>
+                                <span className="min-w-16 text-right text-base font-black tabular-nums">{formatContentMetric(metric, curr)}</span>
+                                <span className="hidden min-w-24 justify-end text-xs sm:flex"><Delta curr={curr} prev={prev} /></span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
             )}
 
             {/* LEAD GEN TAB */}
             {activeTab === 'leadgen' && (
-              <Card className="bg-white border shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
-                    <Users className="w-4 h-4 text-gold" /> Lead Generation Metrics
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader className="bg-muted/20">
-                      <TableRow>
-                        <TableHead className="text-[10px] font-black uppercase pl-6">Metric</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase text-right">{currentPeriodLabel}</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase text-right">{previousPeriodLabel}</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase text-right pr-6">Change</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {leadgenMetrics.map(m => {
-                        const curr = currentBuilt?.[m.id as keyof typeof currentBuilt] ?? null
-                        const prev = prevBuilt?.[m.id as keyof typeof prevBuilt] ?? null
-                        const isRate = ['L05','L12','L14','L17','L18','L21','L26'].includes(m.id)
-                        return (
-                          <TableRow key={m.id}>
-                            <TableCell className="text-sm font-medium pl-6">{m.name}</TableCell>
-                            <TableCell className="text-right font-black">
-                              {isRate ? formatPct(curr as number) : formatVal(curr)}
-                            </TableCell>
-                            <TableCell className="text-right text-muted-foreground text-sm">
-                              {isRate ? formatPct(prev as number) : formatVal(prev)}
-                            </TableCell>
-                            <TableCell className="text-right pr-6"><Delta curr={curr} prev={prev} /></TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+              <div className="space-y-6">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-gold">Lead generation</p>
+                  <h2 className="mt-1 text-2xl font-black">How outreach is converting</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">See campaign activity, response quality and pipeline outcomes at a glance.</p>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { id: 'L10', label: 'Prospects Contacted', icon: Users, rate: false },
+                    { id: 'L12', label: 'Acceptance Rate', icon: ArrowLeftRight, rate: true },
+                    { id: 'L15', label: 'Positive Replies', icon: TrendingUp, rate: false },
+                    { id: 'L24', label: 'Meetings Booked', icon: Calendar, rate: false },
+                  ].map(item => {
+                    const curr = currentBuilt?.[item.id as keyof typeof currentBuilt] ?? null
+                    const prev = prevBuilt?.[item.id as keyof typeof prevBuilt] ?? null
+                    const Icon = item.icon
+                    return (
+                      <Card key={item.id} className="bg-white border shadow-sm overflow-hidden">
+                        <CardContent className="p-5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{item.label}</p>
+                              <p className="mt-2 text-3xl font-black tabular-nums">{item.rate ? formatPct(curr as number) : formatVal(curr)}</p>
+                            </div>
+                            <div className="rounded-lg bg-gold/10 p-2 text-gold"><Icon className="h-4 w-4" /></div>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3 text-xs">
+                            <span className="text-muted-foreground">vs {previousPeriodLabel.toLowerCase()}</span>
+                            <Delta curr={curr} prev={prev} />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
+                  {leadgenMetricGroups.map(group => (
+                    <Card key={group.name} className="bg-white border shadow-sm overflow-hidden">
+                      <CardHeader className="border-b bg-muted/10 py-4">
+                        <CardTitle className="text-sm font-black flex items-center gap-2">
+                          <Users className="w-4 h-4 text-gold" /> {group.label}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">{group.description}</p>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-4 border-b bg-muted/20 px-5 py-2.5 text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+                          <span>Metric</span>
+                          <span className="text-right">{currentPeriodLabel}</span>
+                          <span className="hidden text-right sm:block">Change</span>
+                        </div>
+                        <div className="divide-y">
+                          {group.metrics.map(metric => {
+                            const curr = currentBuilt?.[metric.id as keyof typeof currentBuilt] ?? null
+                            const prev = prevBuilt?.[metric.id as keyof typeof prevBuilt] ?? null
+                            return (
+                              <div key={metric.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-4 px-5 py-3.5 hover:bg-muted/10">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium">{metric.name}</p>
+                                  <p className="mt-0.5 text-[10px] text-muted-foreground">Previously {formatLeadgenMetric(metric, prev)}</p>
+                                </div>
+                                <span className="min-w-16 text-right text-base font-black tabular-nums">{formatLeadgenMetric(metric, curr)}</span>
+                                <span className="hidden min-w-24 justify-end text-xs sm:flex"><Delta curr={curr} prev={prev} /></span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
             )}
 
             {/* CAMPAIGNS TAB */}
