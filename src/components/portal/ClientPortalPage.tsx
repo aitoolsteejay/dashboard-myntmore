@@ -21,6 +21,8 @@ import {
 import { LogOut, TrendingUp, Users, FileText, BarChart2, Loader2, ArrowUpRight, ArrowDownRight, Minus, Calendar, Table2, ArrowLeftRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import myntmoreLogo from '@/assets/myntmore-logo.png'
+import { assertClientRow, assertClientRows } from '@/utils/clientScope'
+import { toast } from 'sonner'
 
 // ─── Reports tab helpers ────────────────────────────────────────────────────
 
@@ -265,9 +267,14 @@ export function ClientPortalPage() {
         .eq('target_type', 'weekly')
         .in('period', reportWeekList),
     ]).then(([{ data: wd }, { data: tg }]) => {
-      setReportWeeklyData(wd || [])
-      setReportTargets(tg || [])
+      setReportWeeklyData(assertClientRows(wd, clientRecord.id, 'report metrics'))
+      setReportTargets(assertClientRows(tg, clientRecord.id, 'report targets'))
       setReportLoading(false)
+    }).catch(error => {
+      setReportWeeklyData([])
+      setReportTargets([])
+      setReportLoading(false)
+      toast.error(error.message)
     })
   }, [clientRecord, activeTab, reportWeekList.join(',')])
 
@@ -321,18 +328,21 @@ export function ClientPortalPage() {
     ;(supabase as any).from('aha_moments').select('*')
       .eq('client_id', clientRecord.id)
       .order('created_at', { ascending: false })
-      .then(({ data }: { data: any[] | null }) => setAhaMoments(data || []))
+      .then(({ data }: { data: any[] | null }) => setAhaMoments(assertClientRows(data, clientRecord.id, 'highlights')))
+      .catch((error: Error) => { setAhaMoments([]); toast.error(error.message) })
   }, [clientRecord, selectedWeek, selectedMonth, performancePeriod])
 
   const fetchCampaigns = async () => {
     if (!clientRecord) return
-    const { data } = await supabase
+    try {
+      const { data } = await supabase
       .from('campaigns')
       .select('*')
       .eq('client_id', clientRecord.id)
       .order('created_at', { ascending: false })
 
-    if (!data || data.length === 0) {
+    const scopedCampaigns = assertClientRows(data, clientRecord.id, 'campaigns')
+    if (scopedCampaigns.length === 0) {
       setCampaigns([])
       return
     }
@@ -341,11 +351,13 @@ export function ClientPortalPage() {
       .from('campaign_weekly_data')
       .select('*')
       .eq('client_id', clientRecord.id)
-      .in('campaign_id', data.map(c => c.id))
+      .in('campaign_id', scopedCampaigns.map(c => c.id))
 
-    const enriched = data.map(c => {
+    const scopedCampaignWeeks = assertClientRows(cdata, clientRecord.id, 'campaign weekly data')
+
+    const enriched = scopedCampaigns.map(c => {
       const byWeek: Record<string, any> = {}
-      cdata?.filter(r => r.campaign_id === c.id).forEach(r => {
+      scopedCampaignWeeks.filter(r => r.campaign_id === c.id).forEach(r => {
         byWeek[r.week_start] = r
       })
       return { ...c, byWeek }
@@ -363,7 +375,11 @@ export function ClientPortalPage() {
       return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' })
     })
 
-    setCampaigns(sortedCampaigns)
+      setCampaigns(sortedCampaigns)
+    } catch (error: any) {
+      setCampaigns([])
+      toast.error(error.message || 'Campaign isolation check failed.')
+    }
   }
 
   const fetchData = async () => {
@@ -387,42 +403,49 @@ export function ClientPortalPage() {
         { data: mtdRows },
         { data: previousMonthRows },
       ] = await Promise.all([
-        supabase.from('weekly_data').select('content_metrics, leadgen_metrics, week_start')
+        supabase.from('weekly_data').select('client_id, content_metrics, leadgen_metrics, week_start')
           .eq('client_id', clientRecord.id).eq('week_start', selectedWeek).maybeSingle(),
-        supabase.from('weekly_data').select('content_metrics, leadgen_metrics, week_start, week_label')
+        supabase.from('weekly_data').select('client_id, content_metrics, leadgen_metrics, week_start, week_label')
           .eq('client_id', clientRecord.id).order('week_start', { ascending: false }).limit(12),
-        supabase.from('targets').select('metric_id, target_value')
+        supabase.from('targets').select('client_id, metric_id, target_value')
           .eq('client_id', clientRecord.id).eq('target_type', 'weekly'),
-        supabase.from('targets').select('metric_id, target_value')
+        supabase.from('targets').select('client_id, metric_id, target_value')
           .eq('client_id', clientRecord.id).eq('target_type', 'monthly'),
-        supabase.from('weekly_data').select('content_metrics, leadgen_metrics, week_start')
+        supabase.from('weekly_data').select('client_id, content_metrics, leadgen_metrics, week_start')
           .eq('client_id', clientRecord.id)
           .gte('week_start', monthStart)
           .lte('week_start', monthEnd),
-        supabase.from('weekly_data').select('content_metrics, leadgen_metrics, week_start')
+        supabase.from('weekly_data').select('client_id, content_metrics, leadgen_metrics, week_start')
           .eq('client_id', clientRecord.id)
           .gte('week_start', previousMonthStart)
           .lte('week_start', previousMonthEnd),
       ])
-      setCurrentData(curr)
-      setWeeklyTargets(wTargets || [])
-      setMonthlyTargets(mTargets || [])
-      setMtdData(mtdRows || [])
-      setPreviousMonthData(previousMonthRows || [])
+      setCurrentData(assertClientRow(curr, clientRecord.id, 'weekly data'))
+      setWeeklyTargets(assertClientRows(wTargets, clientRecord.id, 'weekly targets'))
+      setMonthlyTargets(assertClientRows(mTargets, clientRecord.id, 'monthly targets'))
+      setMtdData(assertClientRows(mtdRows, clientRecord.id, 'monthly metrics'))
+      setPreviousMonthData(assertClientRows(previousMonthRows, clientRecord.id, 'previous monthly metrics'))
 
       // Previous week
       const selectedIdx = weekOptions.findIndex(w => w.weekStart === selectedWeek)
       const prevWeek = weekOptions[selectedIdx + 1]?.weekStart
       if (prevWeek) {
         const { data: prev } = await supabase.from('weekly_data')
-          .select('content_metrics, leadgen_metrics').eq('client_id', clientRecord.id)
+          .select('client_id, content_metrics, leadgen_metrics').eq('client_id', clientRecord.id)
           .eq('week_start', prevWeek).maybeSingle()
-        setPrevData(prev)
+        setPrevData(assertClientRow(prev, clientRecord.id, 'previous weekly data'))
       } else {
         setPrevData(null)
       }
 
-      setHistoryData((history || []).reverse())
+      setHistoryData(assertClientRows(history, clientRecord.id, 'history').reverse())
+    } catch (error: any) {
+      setCurrentData(null)
+      setPrevData(null)
+      setHistoryData([])
+      setMtdData([])
+      setPreviousMonthData([])
+      toast.error(error.message || 'Client data isolation check failed.')
     } finally {
       setLoading(false)
     }

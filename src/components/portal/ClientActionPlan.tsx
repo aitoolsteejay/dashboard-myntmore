@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { assertClientRows } from '@/utils/clientScope'
 
 type ClientActionPlanProps = { clientId: string; canManageInternally: boolean }
 
@@ -24,12 +25,17 @@ export function ClientActionPlan({ clientId, canManageInternally }: ClientAction
   const loadActions = async () => {
     setLoading(true)
     const { data, error } = await (supabase as any).from('actionables')
-      .select('id, title, description, due_date, status, responsibility, client_comment, client_updated_at, campaign_id, campaigns(name)')
+      .select('id, client_id, title, description, due_date, status, responsibility, client_comment, client_updated_at, campaign_id, campaigns(name)')
       .eq('client_id', clientId)
       .eq('client_visible', true)
       .order('due_date', { ascending: true, nullsFirst: false })
     if (error) toast.error('Could not load the action plan: ' + error.message)
-    const next = data || []
+    let next: any[] = []
+    try {
+      next = assertClientRows(data, clientId, 'client action plan')
+    } catch (scopeError: any) {
+      toast.error(scopeError.message)
+    }
     setItems(next)
     setDrafts(Object.fromEntries(next.map((item: any) => [item.id, { status: clientStatus(item.status), comment: item.client_comment || '' }])))
     setLoading(false)
