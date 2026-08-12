@@ -122,7 +122,7 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   const [{ data: weeksRaw, error: weeksError }, { data: campaignsRaw, error: campaignsError }, { data: campaignRowsRaw, error: campaignRowsError }, { data: momentsRaw }] = await Promise.all([
     supabase.from('weekly_data').select('client_id, week_start, week_label, content_metrics, leadgen_metrics, content_submitted_at, leadgen_submitted_at')
       .eq('client_id', client.id).gte('week_start', historyStart).lte('week_start', current.end).order('week_start'),
-    supabase.from('campaigns').select('id, client_id, name, status, icp_description, message_narrative, started_date')
+    supabase.from('campaigns').select('id, client_id, name, status, objective, icp_description, message_narrative, account_manager_interpretation, started_date')
       .eq('client_id', client.id).order('started_date'),
     supabase.from('campaign_weekly_data').select('campaign_id, client_id, week_start, conn_requests_sent, accepted, answered, positive_replies, negative_replies, hot_leads, meetings_booked, existing_conn_sent, existing_conn_replied, notes')
       .eq('client_id', client.id).gte('week_start', current.start).lte('week_start', current.end).order('week_start'),
@@ -156,7 +156,7 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
       negative: rows.reduce((sum, row) => sum + count(row.negative_replies), 0),
       hotLeads: rows.reduce((sum, row) => sum + count(row.hot_leads), 0),
       meetings: rows.reduce((sum, row) => sum + count(row.meetings_booked), 0),
-      notes: rows.map(row => row.notes).filter(Boolean).join(' '),
+      notes: rows.map(row => cleanNote(row.notes)).filter(Boolean).join(' '),
     }
   }).filter(campaign => campaign.sent || campaign.accepted || campaign.answered || campaign.hotLeads || campaign.meetings)
 
@@ -200,9 +200,15 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
     text(title.toUpperCase(), margin, y, 12, NAVY, 'bold')
     if (subtitle) text(subtitle, margin, y + 6, 8.5, MUTED, 'normal', contentWidth)
   }
-  const wrappedLines = (body: string, maxWidth: number) => doc.splitTextToSize(body, maxWidth) as string[]
-  const limitedLines = (body: string, maxWidth: number, maxLines: number) => {
-    const lines = wrappedLines(body, maxWidth)
+  const wrappedLines = (body: string, maxWidth: number, size = 9, style: 'normal' | 'bold' | 'italic' | 'bolditalic' = 'normal') => {
+    // jsPDF measures wrapping with the currently selected font. Set the exact
+    // render font first or text measured at 7pt can overflow when drawn at 9pt.
+    doc.setFont('helvetica', style)
+    doc.setFontSize(size)
+    return doc.splitTextToSize(body, maxWidth) as string[]
+  }
+  const limitedLines = (body: string, maxWidth: number, maxLines: number, size = 9, style: 'normal' | 'bold' | 'italic' | 'bolditalic' = 'normal') => {
+    const lines = wrappedLines(body, maxWidth, size, style)
     if (lines.length <= maxLines) return lines
     const visible = lines.slice(0, maxLines)
     visible[maxLines - 1] = `${visible[maxLines - 1].replace(/[.,;:]?$/, '')}...`
@@ -252,7 +258,8 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   snapshotY += insightBox(snapshotY, 'Content', `${fmt(currentMetrics.C09)} posts generated ${fmt(currentMetrics.C10)} impressions and ${fmt(totalEngagement)} engagements, averaging ${fmt(currentMetrics.C26)} impressions per post.`, 27) + 6
   snapshotY += insightBox(snapshotY, 'Outreach', `${fmt(currentMetrics.L10)} connection requests produced ${fmt(currentMetrics.L11)} acceptances (${fmt(currentMetrics.L12, true)}), ${fmt(currentMetrics.L13)} replies and ${fmt(currentMetrics.L15)} positive conversations.`, 27) + 6
   const highlightLines = moments.slice(0, 3).map((moment: any) => moment.title || moment.description).filter(Boolean)
-  insightBox(snapshotY, 'Highlights', highlightLines.length ? highlightLines.join('  |  ') : 'See the following sections for monthly trends, campaign outcomes and recommended next actions.', 27)
+  const highlightBody = highlightLines.length ? highlightLines.join('  |  ') : 'See the following sections for monthly trends, campaign outcomes and recommended next actions.'
+  insightBox(snapshotY, 'Highlights', limitedLines(highlightBody, contentWidth - 12, 4, 9).join(' '), 27)
   finish()
 
   // Page 2 - Content
@@ -310,10 +317,15 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   if (!campaignSummaries.length) insightBox(65, 'Campaign data', 'No campaign-level activity was recorded for this month. Aggregate lead-generation results are available on the previous page.', 36)
   campaignSummaries.forEach((campaign, index) => {
     const rate = campaign.sent > 0 ? campaign.accepted / campaign.sent * 100 : 0
-    const strategy = String(campaign.message_narrative || 'Campaign strategy recorded in dashboard').replace(/\s+/g, ' ').trim()
-    const summary = `${fmt(rate, true)} acceptance | ${strategy}`
-    const summaryLines = limitedLines(summary, contentWidth - 10, 7)
-    const icpLines = limitedLines(campaign.icp_description || 'ICP not specified', 88, 4)
+    const narrativeParts = [
+      `${fmt(rate, true)} acceptance rate`,
+      campaign.objective ? `Objective: ${String(campaign.objective).replace(/\s+/g, ' ').trim()}` : null,
+      campaign.message_narrative ? `Messaging: ${String(campaign.message_narrative).replace(/\s+/g, ' ').trim()}` : null,
+      campaign.notes ? `Monthly notes: ${campaign.notes}` : null,
+      campaign.account_manager_interpretation ? `Account manager: ${String(campaign.account_manager_interpretation).replace(/\s+/g, ' ').trim()}` : null,
+    ].filter(Boolean).join('\n')
+    const summaryLines = limitedLines(narrativeParts, contentWidth - 10, 11, 7)
+    const icpLines = limitedLines(campaign.icp_description || 'ICP not specified', 88, 4, 7.5, 'italic')
     // The second KPI row ends around y + 38. Keep the narrative in a dedicated
     // band below it; positioning it at y + 35 made the text run through the
     // Positive / Hot Leads / Meetings values.
@@ -340,7 +352,7 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
     if (index === campaignSummaries.length - 1) {
       const strongest = [...campaignSummaries].sort((a, b) => b.positive - a.positive)[0]
       const accountManagerBody = strongest ? `${strongest.name} generated the most positive replies (${fmt(strongest.positive)}). Use reply quality and conversion to hot leads to decide where to scale next.` : 'Continue testing targeting and messaging using response quality as the primary signal.'
-      const accountManagerHeight = Math.max(23, 18 + wrappedLines(accountManagerBody, contentWidth - 12).length * 4.2)
+      const accountManagerHeight = Math.max(23, 18 + wrappedLines(accountManagerBody, contentWidth - 12, 9).length * 4.2)
       if (campaignY + accountManagerHeight > 278) addCampaignPage()
       insightBox(campaignY, 'Account manager view', accountManagerBody, 23)
     }
