@@ -314,7 +314,11 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
     const summary = `${fmt(rate, true)} acceptance | ${strategy}`
     const summaryLines = limitedLines(summary, contentWidth - 10, 7)
     const icpLines = limitedLines(campaign.icp_description || 'ICP not specified', 88, 4)
-    const cardHeight = Math.max(43, 34 + Math.max(summaryLines.length, 1) * 3.5, 18 + icpLines.length * 3.5)
+    // The second KPI row ends around y + 38. Keep the narrative in a dedicated
+    // band below it; positioning it at y + 35 made the text run through the
+    // Positive / Hot Leads / Meetings values.
+    const summaryY = campaignY + 45
+    const cardHeight = Math.max(54, 49 + Math.max(summaryLines.length, 1) * 3.3, 20 + icpLines.length * 3.5)
     if (campaignY + cardHeight > 270) addCampaignPage()
     rounded(margin, campaignY, contentWidth, cardHeight, '#ffffff', '#d9deea')
     text(campaign.name, margin + 5, campaignY + 8, 10, NAVY, 'bold')
@@ -328,7 +332,10 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
       text(label.toUpperCase(), x, y + 4, 5.5, MUTED, 'bold')
       text(fmt(value), x, y + 12, 10, cellIndex >= 4 ? GREEN : NAVY, 'bold')
     })
-    text(summaryLines, margin + 5, campaignY + 35, 7, MUTED, 'normal', contentWidth - 10)
+    doc.setDrawColor('#edf0f5')
+    doc.setLineWidth(0.25)
+    doc.line(margin + 5, campaignY + 41, margin + contentWidth - 5, campaignY + 41)
+    text(summaryLines, margin + 5, summaryY, 7, MUTED, 'normal', contentWidth - 10)
     campaignY += cardHeight + 6
     if (index === campaignSummaries.length - 1) {
       const strongest = [...campaignSummaries].sort((a, b) => b.positive - a.positive)[0]
