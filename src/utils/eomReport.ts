@@ -60,7 +60,7 @@ function count(value: unknown) {
 // punctuation) without rewriting what was actually said.
 function cleanNote(value: unknown): string | null {
   if (typeof value !== 'string') return null
-  const trimmed = value.trim()
+  const trimmed = value.replace(/\s+/g, ' ').trim()
   if (!trimmed) return null
   const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
   return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`
@@ -200,6 +200,14 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
     text(title.toUpperCase(), margin, y, 12, NAVY, 'bold')
     if (subtitle) text(subtitle, margin, y + 6, 8.5, MUTED, 'normal', contentWidth)
   }
+  const wrappedLines = (body: string, maxWidth: number) => doc.splitTextToSize(body, maxWidth) as string[]
+  const limitedLines = (body: string, maxWidth: number, maxLines: number) => {
+    const lines = wrappedLines(body, maxWidth)
+    if (lines.length <= maxLines) return lines
+    const visible = lines.slice(0, maxLines)
+    visible[maxLines - 1] = `${visible[maxLines - 1].replace(/[.,;:]?$/, '')}...`
+    return visible
+  }
   const barChart = (x: number, y: number, w: number, h: number, title: string, metricId: string, percentage = false) => {
     rounded(x, y, w, h, '#ffffff', '#d9deea')
     text(title.toUpperCase(), x + 5, y + 8, 9, NAVY, 'bold')
@@ -217,14 +225,13 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
       doc.text(monthLabel(previousMonths[index], true), bx + bw / 2, y + h - 4, { align: 'center' })
     })
   }
-  const insightBox = (y: number, title: string, body: string, h = 30) => {
+  const insightBox = (y: number, title: string, body: string, minHeight = 23) => {
+    const lines = wrappedLines(body, contentWidth - 12)
+    const h = Math.max(minHeight, 18 + lines.length * 4.2)
     rounded(margin, y, contentWidth, h, LAVENDER, '#8073d5')
     text(title.toUpperCase(), margin + 6, y + 8, 8, PURPLE, 'bold')
-    const maxLines = Math.max(1, Math.floor((h - 17) / 4.2))
-    const wrapped = doc.splitTextToSize(body, contentWidth - 12) as string[]
-    const lines = wrapped.slice(0, maxLines)
-    if (wrapped.length > maxLines) lines[maxLines - 1] = `${lines[maxLines - 1].replace(/[.,;:]?$/, '')}...`
     text(lines, margin + 6, y + 15, 9, INK, 'normal')
+    return h
   }
 
   // Page 1 - Executive summary
@@ -234,17 +241,18 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   text(monthLabel(month).toUpperCase(), margin, 45, 28, NAVY, 'bold')
   text(client.name, margin, 58, 18, INK, 'bold')
   if (client.company) text(client.company, margin, 66, 10, MUTED)
-  text('A concise view of content, outreach, campaigns and next steps.', margin, 78, 10, MUTED)
-  kpi(margin, 93, 42, 'Posts published', fmt(currentMetrics.C09), `${fmt(currentMetrics.C10)} impressions`)
-  kpi(margin + 46, 93, 42, 'New followers', fmt(currentMetrics.C15), `${fmt(currentMetrics.C16)} total`)
-  kpi(margin + 92, 93, 42, 'Positive replies', fmt(currentMetrics.L15), `${fmt(currentMetrics.L17, true)} of replies`)
-  kpi(margin + 138, 93, 42, 'Meetings booked', fmt(currentMetrics.L24), `${fmt(currentMetrics.L27)} leads`)
-  sectionTitle('Executive snapshot', 143)
+  text('Content, audience growth, outreach performance and next actions.', margin, 77, 9.5, MUTED)
+  kpi(margin, 88, 42, 'Posts published', fmt(currentMetrics.C09), `${fmt(currentMetrics.C10)} impressions`)
+  kpi(margin + 46, 88, 42, 'New followers', fmt(currentMetrics.C15), `${fmt(currentMetrics.C16)} total audience`)
+  kpi(margin + 92, 88, 42, 'Positive replies', fmt(currentMetrics.L15), `${fmt(currentMetrics.L17, true)} positive rate`)
+  kpi(margin + 138, 88, 42, 'Meetings booked', fmt(currentMetrics.L24), `${fmt(currentMetrics.L27)} total leads`)
+  sectionTitle('Executive snapshot', 132)
   const totalEngagement = num(currentMetrics.C13) || num(currentMetrics.C11) + num(currentMetrics.C12)
-  insightBox(151, 'Content', `${fmt(currentMetrics.C09)} posts generated ${fmt(currentMetrics.C10)} impressions and ${fmt(totalEngagement)} recorded engagements. Average impressions per post were ${fmt(currentMetrics.C26)}.`, 35)
-  insightBox(192, 'Outreach', `${fmt(currentMetrics.L10)} connection requests produced ${fmt(currentMetrics.L11)} acceptances (${fmt(currentMetrics.L12, true)}), ${fmt(currentMetrics.L13)} replies and ${fmt(currentMetrics.L15)} positive conversations.`, 35)
+  let snapshotY = 140
+  snapshotY += insightBox(snapshotY, 'Content', `${fmt(currentMetrics.C09)} posts generated ${fmt(currentMetrics.C10)} impressions and ${fmt(totalEngagement)} engagements, averaging ${fmt(currentMetrics.C26)} impressions per post.`, 27) + 6
+  snapshotY += insightBox(snapshotY, 'Outreach', `${fmt(currentMetrics.L10)} connection requests produced ${fmt(currentMetrics.L11)} acceptances (${fmt(currentMetrics.L12, true)}), ${fmt(currentMetrics.L13)} replies and ${fmt(currentMetrics.L15)} positive conversations.`, 27) + 6
   const highlightLines = moments.slice(0, 3).map((moment: any) => moment.title || moment.description).filter(Boolean)
-  insightBox(233, 'Highlights', highlightLines.length ? highlightLines.join('  •  ') : 'The detailed sections that follow identify monthly performance, campaign outcomes and recommended next actions.', 35)
+  insightBox(snapshotY, 'Highlights', highlightLines.length ? highlightLines.join('  |  ') : 'See the following sections for monthly trends, campaign outcomes and recommended next actions.', 27)
   finish()
 
   // Page 2 - Content
@@ -301,10 +309,16 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   }
   if (!campaignSummaries.length) insightBox(65, 'Campaign data', 'No campaign-level activity was recorded for this month. Aggregate lead-generation results are available on the previous page.', 36)
   campaignSummaries.forEach((campaign, index) => {
-    if (campaignY > 230) addCampaignPage()
-    rounded(margin, campaignY, contentWidth, 50, '#ffffff', '#d9deea')
+    const rate = campaign.sent > 0 ? campaign.accepted / campaign.sent * 100 : 0
+    const strategy = String(campaign.message_narrative || 'Campaign strategy recorded in dashboard').replace(/\s+/g, ' ').trim()
+    const summary = `${fmt(rate, true)} acceptance | ${strategy}`
+    const summaryLines = limitedLines(summary, contentWidth - 10, 7)
+    const icpLines = limitedLines(campaign.icp_description || 'ICP not specified', 88, 4)
+    const cardHeight = Math.max(43, 34 + Math.max(summaryLines.length, 1) * 3.5, 18 + icpLines.length * 3.5)
+    if (campaignY + cardHeight > 270) addCampaignPage()
+    rounded(margin, campaignY, contentWidth, cardHeight, '#ffffff', '#d9deea')
     text(campaign.name, margin + 5, campaignY + 8, 10, NAVY, 'bold')
-    text(campaign.icp_description || 'ICP not specified', margin + 5, campaignY + 15, 7.5, MUTED, 'italic', 88)
+    text(icpLines, margin + 5, campaignY + 15, 7.5, MUTED, 'italic')
     const cells = [
       ['Sent', campaign.sent], ['Accepted', campaign.accepted], ['Answered', campaign.answered],
       ['Positive', campaign.positive], ['Hot leads', campaign.hotLeads], ['Meetings', campaign.meetings],
@@ -314,22 +328,14 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
       text(label.toUpperCase(), x, y + 4, 5.5, MUTED, 'bold')
       text(fmt(value), x, y + 12, 10, cellIndex >= 4 ? GREEN : NAVY, 'bold')
     })
-    const rate = campaign.sent > 0 ? campaign.accepted / campaign.sent * 100 : 0
-    const strategy = String(campaign.message_narrative || 'Campaign strategy recorded in dashboard').trim()
-    const summary = `${fmt(rate, true)} acceptance  |  ${strategy}`
-    // Wrap at word boundaries (splitTextToSize never breaks mid-word) instead of
-    // slicing at a fixed character count, which used to cut notes off mid-thought.
-    const summaryMaxLines = 2
-    const wrappedSummary = doc.splitTextToSize(summary, contentWidth - 10) as string[]
-    const summaryLines = wrappedSummary.slice(0, summaryMaxLines)
-    if (wrappedSummary.length > summaryMaxLines) {
-      summaryLines[summaryMaxLines - 1] = `${summaryLines[summaryMaxLines - 1].replace(/[.,;:]?$/, '')}...`
-    }
     text(summaryLines, margin + 5, campaignY + 35, 7, MUTED, 'normal', contentWidth - 10)
-    campaignY += 56
-    if (index === campaignSummaries.length - 1 && campaignY < 230) {
+    campaignY += cardHeight + 6
+    if (index === campaignSummaries.length - 1) {
       const strongest = [...campaignSummaries].sort((a, b) => b.positive - a.positive)[0]
-      insightBox(campaignY + 3, 'Account manager view', strongest ? `${strongest.name} generated the highest number of positive replies this month. Continue refining targeting and message strategy using the campaign notes and response quality.` : 'Continue testing targeting and messaging using response quality as the primary signal.', 36)
+      const accountManagerBody = strongest ? `${strongest.name} generated the most positive replies (${fmt(strongest.positive)}). Use reply quality and conversion to hot leads to decide where to scale next.` : 'Continue testing targeting and messaging using response quality as the primary signal.'
+      const accountManagerHeight = Math.max(23, 18 + wrappedLines(accountManagerBody, contentWidth - 12).length * 4.2)
+      if (campaignY + accountManagerHeight > 278) addCampaignPage()
+      insightBox(campaignY, 'Account manager view', accountManagerBody, 23)
     }
   })
   finish()
@@ -342,12 +348,18 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   const contentBlocker = cleanNote(latestBuilt.C25) || 'Review lower-performing formats and sharpen the opening hook, relevance and distribution rhythm.'
   const leadWorking = cleanNote(latestBuilt.L28) || 'Prioritise ICPs and campaign narratives that produced positive replies and qualified conversations.'
   const leadBlocker = cleanNote(latestBuilt.L29) || 'Refine segments with weaker acceptance or response rates before increasing outreach volume.'
-  insightBox(60, 'Content - continue', String(contentWorking), 42)
-  insightBox(109, 'Content - improve', String(contentBlocker), 42)
-  insightBox(158, 'Outreach - continue', String(leadWorking), 42)
-  insightBox(207, 'Outreach - improve', String(leadBlocker), 42)
-  text('Prepared by Myntmore', margin, 270, 11, NAVY, 'bold')
-  text(`Generated from dashboard data for ${monthLabel(month)}.`, margin, 276, 8, MUTED)
+  let recommendationY = 59
+  ;[
+    ['Content - continue', String(contentWorking)],
+    ['Content - improve', String(contentBlocker)],
+    ['Outreach - continue', String(leadWorking)],
+    ['Outreach - improve', String(leadBlocker)],
+  ].forEach(([title, body]) => {
+    const conciseBody = limitedLines(body, contentWidth - 12, 4).join(' ')
+    recommendationY += insightBox(recommendationY, title, conciseBody, 27) + 7
+  })
+  text('Prepared by Myntmore', margin, 267, 10, NAVY, 'bold')
+  text(`Generated from dashboard data for ${monthLabel(month)}.`, margin, 274, 8, MUTED)
   finish()
 
   const safeName = client.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')
