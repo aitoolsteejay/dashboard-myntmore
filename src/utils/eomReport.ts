@@ -48,6 +48,24 @@ function num(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+// Counts (posts, requests, replies, etc.) should never be negative -- a stray
+// negative entry (data-entry mistake) would otherwise render as an impossible
+// number like "-1 positive replies" in a client-facing report.
+function count(value: unknown) {
+  return Math.max(0, num(value))
+}
+
+// Qualitative notes are typed by the team week-to-week and pulled in verbatim;
+// this only fixes obviously broken presentation (no capital, no terminal
+// punctuation) without rewriting what was actually said.
+function cleanNote(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+  return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`
+}
+
 function aggregateWeeks(rows: any[]): MetricMap {
   const builtRows = rows
     .slice()
@@ -62,11 +80,13 @@ function aggregateWeeks(rows: any[]): MetricMap {
   ids.forEach(id => {
     const values = builtRows.map(row => Number(row[id])).filter(Number.isFinite)
     if (!values.length) return
-    total[id] = latest.has(id)
+    // None of these business metrics are ever legitimately negative -- clamp so
+    // a stray data-entry mistake can't surface as an impossible number here.
+    total[id] = Math.max(0, latest.has(id)
       ? values[values.length - 1]
       : averages.has(id)
         ? values.reduce((sum, value) => sum + value, 0) / values.length
-        : values.reduce((sum, value) => sum + value, 0)
+        : values.reduce((sum, value) => sum + value, 0))
   })
 
   total.C09 = num(total.C06) + num(total.C07) + num(total.C08)
@@ -129,13 +149,13 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
     const rows = campaignRows.filter(row => row.campaign_id === campaign.id)
     return {
       ...campaign,
-      sent: rows.reduce((sum, row) => sum + num(row.conn_requests_sent), 0),
-      accepted: rows.reduce((sum, row) => sum + num(row.accepted), 0),
-      answered: rows.reduce((sum, row) => sum + num(row.answered), 0),
-      positive: rows.reduce((sum, row) => sum + num(row.positive_replies), 0),
-      negative: rows.reduce((sum, row) => sum + num(row.negative_replies), 0),
-      hotLeads: rows.reduce((sum, row) => sum + num(row.hot_leads), 0),
-      meetings: rows.reduce((sum, row) => sum + num(row.meetings_booked), 0),
+      sent: rows.reduce((sum, row) => sum + count(row.conn_requests_sent), 0),
+      accepted: rows.reduce((sum, row) => sum + count(row.accepted), 0),
+      answered: rows.reduce((sum, row) => sum + count(row.answered), 0),
+      positive: rows.reduce((sum, row) => sum + count(row.positive_replies), 0),
+      negative: rows.reduce((sum, row) => sum + count(row.negative_replies), 0),
+      hotLeads: rows.reduce((sum, row) => sum + count(row.hot_leads), 0),
+      meetings: rows.reduce((sum, row) => sum + count(row.meetings_booked), 0),
       notes: rows.map(row => row.notes).filter(Boolean).join(' '),
     }
   }).filter(campaign => campaign.sent || campaign.accepted || campaign.answered || campaign.hotLeads || campaign.meetings)
@@ -281,8 +301,8 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   }
   if (!campaignSummaries.length) insightBox(65, 'Campaign data', 'No campaign-level activity was recorded for this month. Aggregate lead-generation results are available on the previous page.', 36)
   campaignSummaries.forEach((campaign, index) => {
-    if (campaignY > 235) addCampaignPage()
-    rounded(margin, campaignY, contentWidth, 45, '#ffffff', '#d9deea')
+    if (campaignY > 230) addCampaignPage()
+    rounded(margin, campaignY, contentWidth, 50, '#ffffff', '#d9deea')
     text(campaign.name, margin + 5, campaignY + 8, 10, NAVY, 'bold')
     text(campaign.icp_description || 'ICP not specified', margin + 5, campaignY + 15, 7.5, MUTED, 'italic', 88)
     const cells = [
@@ -295,11 +315,18 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
       text(fmt(value), x, y + 12, 10, cellIndex >= 4 ? GREEN : NAVY, 'bold')
     })
     const rate = campaign.sent > 0 ? campaign.accepted / campaign.sent * 100 : 0
-    const strategy = String(campaign.message_narrative || 'Campaign strategy recorded in dashboard')
+    const strategy = String(campaign.message_narrative || 'Campaign strategy recorded in dashboard').trim()
     const summary = `${fmt(rate, true)} acceptance  |  ${strategy}`
-    const clippedSummary = summary.length > 150 ? `${summary.slice(0, 147)}...` : summary
-    text(clippedSummary, margin + 5, campaignY + 39, 7, MUTED, 'normal', contentWidth - 10)
-    campaignY += 51
+    // Wrap at word boundaries (splitTextToSize never breaks mid-word) instead of
+    // slicing at a fixed character count, which used to cut notes off mid-thought.
+    const summaryMaxLines = 2
+    const wrappedSummary = doc.splitTextToSize(summary, contentWidth - 10) as string[]
+    const summaryLines = wrappedSummary.slice(0, summaryMaxLines)
+    if (wrappedSummary.length > summaryMaxLines) {
+      summaryLines[summaryMaxLines - 1] = `${summaryLines[summaryMaxLines - 1].replace(/[.,;:]?$/, '')}...`
+    }
+    text(summaryLines, margin + 5, campaignY + 35, 7, MUTED, 'normal', contentWidth - 10)
+    campaignY += 56
     if (index === campaignSummaries.length - 1 && campaignY < 230) {
       const strongest = [...campaignSummaries].sort((a, b) => b.positive - a.positive)[0]
       insightBox(campaignY + 3, 'Account manager view', strongest ? `${strongest.name} generated the highest number of positive replies this month. Continue refining targeting and message strategy using the campaign notes and response quality.` : 'Continue testing targeting and messaging using response quality as the primary signal.', 36)
@@ -311,10 +338,10 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   header('Strategy going ahead', 'Recommendations')
   sectionTitle('What the data suggests', 49)
   const latestBuilt = buildWeekMetrics(monthRows.slice().sort((a, b) => String(b.week_start).localeCompare(String(a.week_start)))[0]) || {}
-  const contentWorking = latestBuilt.C24 || `Continue the formats that produced the strongest reach and engagement during ${monthLabel(month)}.`
-  const contentBlocker = latestBuilt.C25 || 'Review lower-performing formats and sharpen the opening hook, relevance and distribution rhythm.'
-  const leadWorking = latestBuilt.L28 || 'Prioritise ICPs and campaign narratives that produced positive replies and qualified conversations.'
-  const leadBlocker = latestBuilt.L29 || 'Refine segments with weaker acceptance or response rates before increasing outreach volume.'
+  const contentWorking = cleanNote(latestBuilt.C24) || `Continue the formats that produced the strongest reach and engagement during ${monthLabel(month)}.`
+  const contentBlocker = cleanNote(latestBuilt.C25) || 'Review lower-performing formats and sharpen the opening hook, relevance and distribution rhythm.'
+  const leadWorking = cleanNote(latestBuilt.L28) || 'Prioritise ICPs and campaign narratives that produced positive replies and qualified conversations.'
+  const leadBlocker = cleanNote(latestBuilt.L29) || 'Refine segments with weaker acceptance or response rates before increasing outreach volume.'
   insightBox(60, 'Content - continue', String(contentWorking), 42)
   insightBox(109, 'Content - improve', String(contentBlocker), 42)
   insightBox(158, 'Outreach - continue', String(leadWorking), 42)
