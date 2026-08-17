@@ -23,27 +23,22 @@ function getMonthOptions(count = 12) {
   })
 }
 
-/** Returns all Monday week-starts that fall fully or partially inside the month */
+/** Returns Monday week-starts that begin inside the month.
+ * A week belongs to the month containing its Monday, even if it ends next month.
+ */
 function getWeeksInMonth(yearMonth: string): string[] {
   const [year, month] = yearMonth.split('-').map(Number)
   const lastDay = new Date(Date.UTC(year, month, 0)) // last day of month
 
-  // Start from the Monday on or before the 1st of the month
+  // Start from the first Monday on or after the 1st of the month.
   const cursor = new Date(Date.UTC(year, month - 1, 1))
   const dow = cursor.getUTCDay()
-  cursor.setUTCDate(cursor.getUTCDate() - (dow === 0 ? 6 : dow - 1))
+  const daysUntilMonday = dow === 0 ? 1 : (8 - dow) % 7
+  cursor.setUTCDate(cursor.getUTCDate() + daysUntilMonday)
 
   const weeks: string[] = []
   while (cursor <= lastDay) {
-    const weekEnd = new Date(cursor)
-    weekEnd.setUTCDate(cursor.getUTCDate() + 6)
-    // Include if week overlaps with the month at all
-    const overlap = cursor.getUTCMonth() + 1 === month ||
-      (cursor.getUTCFullYear() * 12 + cursor.getUTCMonth()) < (year * 12 + month - 1) &&
-      weekEnd.getUTCMonth() + 1 === month
-    if (overlap || weekEnd >= new Date(Date.UTC(year, month - 1, 1))) {
-      weeks.push(cursor.toISOString().split('T')[0])
-    }
+    weeks.push(cursor.toISOString().split('T')[0])
     cursor.setUTCDate(cursor.getUTCDate() + 7)
   }
   return weeks
