@@ -35,6 +35,16 @@ window.addEventListener('error', (event) => {
 
 const router = getRouter()
 
+// Prevent mouse-wheel and trackpad scrolling from silently changing focused
+// number inputs. Capture runs before the browser's native increment/decrement
+// behavior, while leaving the wheel event untouched so the page still scrolls.
+document.addEventListener('wheel', event => {
+  const target = event.target
+  if (target instanceof HTMLInputElement && target.type === 'number' && document.activeElement === target) {
+    target.blur()
+  }
+}, { capture: true, passive: true })
+
 ReactDOM.createRoot(document.getElementById('app')!).render(
   <StrictMode>
     <RouterProvider router={router} />
