@@ -344,8 +344,7 @@ export function DashboardPage() {
           {stickyHeader ? '📌 Unfreeze' : '📌 Freeze'}
         </button>
       </div>
-      <div className={stickyHeader ? "overflow-x-auto overflow-y-auto max-h-[70vh]" : "overflow-x-auto"}>
-      <Table>
+      <Table wrapperClassName={stickyHeader ? "max-h-[70vh]" : undefined}>
         <TableHeader className={`bg-muted/30${stickyHeader ? ' sticky top-0 z-10' : ''}`}>
           <TableRow>
             <TableHead className="text-[10px] font-black uppercase">Metric Name</TableHead>
@@ -464,7 +463,6 @@ export function DashboardPage() {
           })}
         </TableBody>
       </Table>
-      </div>
     </div>
     )
   }
