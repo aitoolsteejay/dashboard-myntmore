@@ -328,8 +328,8 @@ export function DashboardPage() {
     const [expandedTextareas, setExpandedTextareas] = React.useState<Set<string>>(new Set())
     const [stickyHeader, setStickyHeader] = React.useState(false)
     return (
-    <div className={stickyHeader ? "overflow-x-auto overflow-y-auto max-h-[70vh]" : "overflow-x-auto"}>
-      <div className={`flex items-center gap-3 px-1 py-1.5 text-[10px] font-semibold text-muted-foreground border-b mb-1${stickyHeader ? ' sticky top-0 z-20 bg-card' : ''}`}>
+    <div>
+      <div className="flex items-center gap-3 px-1 py-1.5 text-[10px] font-semibold text-muted-foreground border-b mb-1">
         <span className="uppercase tracking-wide">Ach% key:</span>
         <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-100 border border-green-400"></span><span className="text-green-700">≥100% On target</span></span>
         <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-yellow-100 border border-yellow-400"></span><span className="text-yellow-700">75–99% Close</span></span>
@@ -344,8 +344,9 @@ export function DashboardPage() {
           {stickyHeader ? '📌 Unfreeze' : '📌 Freeze'}
         </button>
       </div>
+      <div className={stickyHeader ? "overflow-x-auto overflow-y-auto max-h-[70vh]" : "overflow-x-auto"}>
       <Table>
-        <TableHeader className={`bg-muted/30${stickyHeader ? ' sticky top-[33px] z-10' : ' sticky top-0 z-10'}`}>
+        <TableHeader className={`bg-muted/30${stickyHeader ? ' sticky top-0 z-10' : ''}`}>
           <TableRow>
             <TableHead className="text-[10px] font-black uppercase">Metric Name</TableHead>
             <TableHead className="text-[10px] font-black uppercase text-center">Current Week</TableHead>
@@ -463,6 +464,7 @@ export function DashboardPage() {
           })}
         </TableBody>
       </Table>
+      </div>
     </div>
     )
   }
