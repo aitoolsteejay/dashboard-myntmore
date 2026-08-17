@@ -1372,6 +1372,8 @@ export function DataEntryPage() {
   const [showInactive, setShowInactive] = useState(false)
   const [formData, setFormData] = useState<Record<string, any>>({})
   const formDataRef = React.useRef(formData)
+  const metricEditVersionsRef = React.useRef(new Map<string, number>())
+  const nextMetricEditVersionRef = React.useRef(0)
   useEffect(() => {
     formDataRef.current = formData
   }, [formData])
@@ -1392,6 +1394,69 @@ export function DataEntryPage() {
     selectionRef.current = { clientId: selectedClientId, week: selectedWeek }
   }, [selectedClientId, selectedWeek])
 
+  const saveMetricPatch = async (payload: Record<string, any>) => {
+    const {
+      __metric_category: category,
+      __metric_patch: patch,
+      __metric_versions: versions,
+      client_id: clientId,
+      week_start: weekStart,
+      ...metadata
+    } = payload
+    if (!category || !patch || !clientId || !weekStart) return
+
+    // Optimistic compare-and-swap keeps edits to different fields from replacing
+    // one another when multiple teammates save the same week concurrently.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const { data: current, error: readError } = await supabase
+        .from('weekly_data')
+        .select(`id, ${category}`)
+        .eq('client_id', clientId)
+        .eq('week_start', weekStart)
+        .maybeSingle()
+      if (readError) throw readError
+
+      const mergedMetrics = {
+        ...((current as any)?.[category] || {}),
+        ...patch,
+      }
+
+      if (!current) {
+        const { error: insertError } = await supabase.from('weekly_data').insert({
+          client_id: clientId,
+          week_start: weekStart,
+          ...metadata,
+          [category]: mergedMetrics,
+        } as any)
+        if (!insertError) break
+        if (insertError.code === '23505') continue
+        throw insertError
+      }
+
+      let updateQuery = (supabase
+        .from('weekly_data')
+        .update({ ...metadata, [category]: mergedMetrics } as any)
+        .eq('client_id', clientId)
+        .eq('week_start', weekStart) as any)
+      const previousMetrics = (current as any)[category]
+      updateQuery = previousMetrics === null
+        ? updateQuery.is(category, null)
+        : updateQuery.eq(category, previousMetrics)
+      const { data: updated, error: updateError } = await updateQuery
+        .select('id')
+        .maybeSingle()
+      if (updateError) throw updateError
+      if (updated) break
+      if (attempt === 3) throw new Error('Another teammate updated this week at the same time. Please retry.')
+    }
+
+    Object.entries(versions as Record<string, number>).forEach(([metricId, version]) => {
+      if (metricEditVersionsRef.current.get(metricId) === version) {
+        metricEditVersionsRef.current.delete(metricId)
+      }
+    })
+  }
+
   const {
     triggerSave: triggerContentSave,
     saveNow: saveContentNow,
@@ -1406,6 +1471,7 @@ export function DataEntryPage() {
       week_start: selectedWeek
     },
     debounceMs: 1500,
+    saveFn: saveMetricPatch,
     onSaveSuccess: (savedCols) => {
       // Use the client/week that was actually just written, not whatever happens
       // to be selected right now — a queued flush can complete after the user has
@@ -1453,19 +1519,24 @@ export function DataEntryPage() {
   ) => {
     if (!selectedClientId || !selectedWeek) return
 
+    const metricIds = (tab === 'content' ? CONTENT_METRICS : LEADGEN_METRICS)
+      .map(metric => metric.id)
+      .filter(metricId => metricEditVersionsRef.current.has(metricId))
+    if (metricIds.length === 0) return
+
     const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
+    const category = tab === 'content' ? 'content_metrics' : 'leadgen_metrics'
+    const metricPatch = Object.fromEntries(metricIds.map(metricId => [metricId, source[metricId] || {}]))
+    const metricVersions = Object.fromEntries(metricIds.map(metricId => [metricId, metricEditVersionsRef.current.get(metricId)]))
     const payload = {
       week_end: weekInfo?.weekEnd || getWeekEnd(selectedWeek),
       week_label: weekInfo?.label || getWeekLabel(selectedWeek),
+      __metric_category: category,
+      __metric_patch: metricPatch,
+      __metric_versions: metricVersions,
       ...(tab === 'content'
-        ? {
-            content_metrics: buildMetricsPayload(CONTENT_METRICS, source),
-            content_submitted_at: new Date().toISOString(),
-          }
-        : {
-            leadgen_metrics: buildMetricsPayload(LEADGEN_METRICS, source),
-            leadgen_submitted_at: new Date().toISOString(),
-          }),
+        ? { content_submitted_at: new Date().toISOString() }
+        : { leadgen_submitted_at: new Date().toISOString() }),
     }
 
     if (immediate) saveContentNow(payload)
@@ -1613,6 +1684,7 @@ export function DataEntryPage() {
       return
     }
     formDataRef.current = {}
+    metricEditVersionsRef.current.clear()
     setFormData({})
     setSelectedWeek(week)
   }
@@ -1624,6 +1696,7 @@ export function DataEntryPage() {
       return
     }
     formDataRef.current = {}
+    metricEditVersionsRef.current.clear()
     setFormData({})
     setSelectedClientId(clientId)
   }
@@ -1693,6 +1766,8 @@ export function DataEntryPage() {
     }
     formDataRef.current = updatedFormData
     setFormData(updatedFormData)
+    nextMetricEditVersionRef.current += 1
+    metricEditVersionsRef.current.set(metricId, nextMetricEditVersionRef.current)
 
     queueTabSave(updatedFormData, activeTab)
   }
@@ -1732,11 +1807,9 @@ export function DataEntryPage() {
       // Every save (draft or submit) marks the data as submitted so it shows
       // on the dashboard immediately - there's no separate review/approval step.
       if (activeTab === 'content') {
-        payload.content_metrics = contentMetrics
         payload.content_submitted_at = new Date().toISOString()
         payload.content_submitted_by = user?.id ?? null
       } else {
-        payload.leadgen_metrics = leadGenMetrics
         payload.leadgen_submitted_at = new Date().toISOString()
         payload.leadgen_submitted_by = user?.id ?? null
       }

@@ -200,6 +200,10 @@ export function useAutoSave(options: AutoSaveOptions) {
   // with the exact scope captured when the edit was made and the real conflict key.
   useEffect(() => {
     const handleUnload = () => {
+      // Custom save functions may transform internal patch metadata and perform
+      // optimistic retries. Sending their raw queued payload directly to PostgREST
+      // would treat internal keys as database columns.
+      if (callbacksRef.current.saveFn) return
       const pending = pendingRef.current
         ?? (queuedSaveRef.current
           ? { data: queuedSaveRef.current.data, cols: queuedSaveRef.current.cols }
