@@ -13,7 +13,6 @@ export function EditCampaignModal({ campaign, onSave, onClose }: {
     started_date: campaign.started_date ?? '',
     icp_description: campaign.icp_description ?? '',
     message_narrative: campaign.message_narrative ?? '',
-    account_manager_interpretation: campaign.account_manager_interpretation ?? '',
     status: campaign.status ?? 'active',
   })
   const [saving, setSaving] = useState(false)
@@ -28,7 +27,6 @@ export function EditCampaignModal({ campaign, onSave, onClose }: {
         started_date: form.started_date || null,
         icp_description: form.icp_description,
         message_narrative: form.message_narrative,
-        account_manager_interpretation: form.account_manager_interpretation || null,
         status: form.status as any,
       })
       .eq('id', campaign.id)
@@ -59,7 +57,6 @@ export function EditCampaignModal({ campaign, onSave, onClose }: {
           { label: 'Campaign Objective', key: 'objective', type: 'textarea' },
           { label: 'ICP Description', key: 'icp_description', type: 'textarea' },
           { label: 'Current Messaging Strategy', key: 'message_narrative', type: 'textarea' },
-          { label: "Account Manager's Interpretation", key: 'account_manager_interpretation', type: 'textarea' },
         ].map(field => (
           <div key={field.key} style={{ marginBottom: '16px' }}>
             <label style={{ fontSize: '12px', fontWeight: '600', color: '#666', display: 'block', marginBottom: '6px' }}>

@@ -122,7 +122,7 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   const [{ data: weeksRaw, error: weeksError }, { data: campaignsRaw, error: campaignsError }, { data: campaignRowsRaw, error: campaignRowsError }, { data: momentsRaw }] = await Promise.all([
     supabase.from('weekly_data').select('client_id, week_start, week_label, content_metrics, leadgen_metrics, content_submitted_at, leadgen_submitted_at')
       .eq('client_id', client.id).gte('week_start', historyStart).lte('week_start', current.end).order('week_start'),
-    supabase.from('campaigns').select('id, client_id, name, status, objective, icp_description, message_narrative, account_manager_interpretation, started_date')
+    supabase.from('campaigns').select('id, client_id, name, status, objective, icp_description, message_narrative, started_date')
       .eq('client_id', client.id).order('started_date'),
     supabase.from('campaign_weekly_data').select('campaign_id, client_id, week_start, conn_requests_sent, accepted, answered, positive_replies, negative_replies, hot_leads, meetings_booked, existing_conn_sent, existing_conn_replied, notes')
       .eq('client_id', client.id).gte('week_start', current.start).lte('week_start', current.end).order('week_start'),
@@ -322,7 +322,6 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
       campaign.objective ? `Objective: ${String(campaign.objective).replace(/\s+/g, ' ').trim()}` : null,
       campaign.message_narrative ? `Messaging: ${String(campaign.message_narrative).replace(/\s+/g, ' ').trim()}` : null,
       campaign.notes ? `Monthly notes: ${campaign.notes}` : null,
-      campaign.account_manager_interpretation ? `Account manager: ${String(campaign.account_manager_interpretation).replace(/\s+/g, ' ').trim()}` : null,
     ].filter(Boolean).join('\n')
     const summaryLines = limitedLines(narrativeParts, contentWidth - 10, 11, 7)
     const icpLines = limitedLines(campaign.icp_description || 'ICP not specified', 88, 4, 7.5, 'italic')

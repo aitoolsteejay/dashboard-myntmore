@@ -120,7 +120,7 @@ function LeadGenCampaignEntry({
         localCampaignDataRef.current = localCampaignData
     }, [localCampaignData])
     const [showNewCampaignForm, setShowNewCampaignForm] = useState(false)
-    const [newCampaign, setNewCampaign] = useState({ name: '', objective: '', icp_description: '', message_narrative: '', account_manager_interpretation: '', started_date: new Date().toISOString().split('T')[0] })
+    const [newCampaign, setNewCampaign] = useState({ name: '', objective: '', icp_description: '', message_narrative: '', started_date: new Date().toISOString().split('T')[0] })
     const [saveStatus, setSaveStatus] = useState<Record<string, 'saving' | 'saved' | 'error'>>({})
     const [leadGenMode, setLeadGenMode] = useState<'campaigns' | 'legacy'>('campaigns')
     const [calibrateOpen, setCalibrateOpen] = useState(false)
@@ -527,7 +527,6 @@ function LeadGenCampaignEntry({
                     objective: newCampaign.objective || null,
                     icp_description: newCampaign.icp_description,
                     message_narrative: newCampaign.message_narrative,
-                    account_manager_interpretation: newCampaign.account_manager_interpretation || null,
                     started_date: newCampaign.started_date,
                     created_by: user?.id
                 })
@@ -539,7 +538,7 @@ function LeadGenCampaignEntry({
             setCampaigns(sortAlphabetically([...campaigns, data], campaign => campaign.name))
             setLocalCampaignData({ ...localCampaignData, [data.id]: { conn_requests_sent: '', accepted: '', answered: '', positive_replies: '', negative_replies: '', meetings_booked: '', notes: '' } })
             setShowNewCampaignForm(false)
-            setNewCampaign({ name: '', objective: '', icp_description: '', message_narrative: '', account_manager_interpretation: '', started_date: new Date().toISOString().split('T')[0] })
+            setNewCampaign({ name: '', objective: '', icp_description: '', message_narrative: '', started_date: new Date().toISOString().split('T')[0] })
         } catch (error: any) {
             toast.error(error.message)
         }
@@ -911,10 +910,6 @@ function LeadGenCampaignEntry({
                                 <div className="space-y-1.5 md:col-span-2">
                                     <Label className="text-[10px] font-bold uppercase ml-1">Current Messaging Strategy</Label>
                                     <Input value={newCampaign.message_narrative} onChange={(e) => setNewCampaign({ ...newCampaign, message_narrative: e.target.value })} placeholder="Key message strategy..." />
-                                </div>
-                                <div className="space-y-1.5 md:col-span-2">
-                                    <Label className="text-[10px] font-bold uppercase ml-1">Account Manager's Interpretation</Label>
-                                    <Input value={newCampaign.account_manager_interpretation} onChange={(e) => setNewCampaign({ ...newCampaign, account_manager_interpretation: e.target.value })} placeholder="What do the results mean and what happens next?" />
                                 </div>
                             </div>
                             <div className="flex gap-2 pt-2">

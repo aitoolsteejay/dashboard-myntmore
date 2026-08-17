@@ -85,7 +85,6 @@ export function CampaignDetailsDialog({ campaign, open, onOpenChange }: Campaign
               <section><p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Ideal Customer Profile</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{campaign.icp_description || 'ICP details have not been added yet.'}</p></section>
               <section><p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Current Messaging Strategy</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{campaign.message_narrative || 'Messaging strategy has not been added yet.'}</p></section>
             </CardContent></Card>
-            <Card className="border-gold/30 bg-gold/5"><CardContent className="p-5"><p className="text-[10px] font-black uppercase tracking-widest text-gold">Account Manager's Interpretation</p><p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">{campaign.account_manager_interpretation || 'Your account manager has not published an interpretation yet.'}</p></CardContent></Card>
           </div>
 
           <Card>
