@@ -120,7 +120,7 @@ function LeadGenCampaignEntry({
         localCampaignDataRef.current = localCampaignData
     }, [localCampaignData])
     const [showNewCampaignForm, setShowNewCampaignForm] = useState(false)
-    const [newCampaign, setNewCampaign] = useState({ name: '', objective: '', icp_description: '', message_narrative: '', started_date: new Date().toISOString().split('T')[0] })
+    const [newCampaign, setNewCampaign] = useState({ name: '', icp_description: '', message_narrative: '', started_date: new Date().toISOString().split('T')[0] })
     const [saveStatus, setSaveStatus] = useState<Record<string, 'saving' | 'saved' | 'error'>>({})
     const [leadGenMode, setLeadGenMode] = useState<'campaigns' | 'legacy'>('campaigns')
     const [calibrateOpen, setCalibrateOpen] = useState(false)
@@ -524,7 +524,6 @@ function LeadGenCampaignEntry({
                 .insert({
                     client_id: selectedClientId,
                     name: newCampaign.name,
-                    objective: newCampaign.objective || null,
                     icp_description: newCampaign.icp_description,
                     message_narrative: newCampaign.message_narrative,
                     started_date: newCampaign.started_date,
@@ -538,7 +537,7 @@ function LeadGenCampaignEntry({
             setCampaigns(sortAlphabetically([...campaigns, data], campaign => campaign.name))
             setLocalCampaignData({ ...localCampaignData, [data.id]: { conn_requests_sent: '', accepted: '', answered: '', positive_replies: '', negative_replies: '', meetings_booked: '', notes: '' } })
             setShowNewCampaignForm(false)
-            setNewCampaign({ name: '', objective: '', icp_description: '', message_narrative: '', started_date: new Date().toISOString().split('T')[0] })
+            setNewCampaign({ name: '', icp_description: '', message_narrative: '', started_date: new Date().toISOString().split('T')[0] })
         } catch (error: any) {
             toast.error(error.message)
         }
@@ -898,10 +897,6 @@ function LeadGenCampaignEntry({
                                 <div className="space-y-1.5">
                                     <Label className="text-[10px] font-bold uppercase ml-1">Started Date</Label>
                                     <Input type="date" value={newCampaign.started_date} onChange={(e) => setNewCampaign({ ...newCampaign, started_date: e.target.value })} />
-                                </div>
-                                <div className="space-y-1.5 md:col-span-2">
-                                    <Label className="text-[10px] font-bold uppercase ml-1">Campaign Objective</Label>
-                                    <Input value={newCampaign.objective} onChange={(e) => setNewCampaign({ ...newCampaign, objective: e.target.value })} placeholder="What outcome should this campaign achieve?" />
                                 </div>
                                 <div className="space-y-1.5 md:col-span-2">
                                     <Label className="text-[10px] font-bold uppercase ml-1">ICP Description</Label>

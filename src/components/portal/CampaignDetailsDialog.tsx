@@ -81,7 +81,6 @@ export function CampaignDetailsDialog({ campaign, open, onOpenChange }: Campaign
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card><CardContent className="space-y-5 p-5">
-              <section><p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Campaign Objective</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{campaign.objective || 'Objective has not been added yet.'}</p></section>
               <section><p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Ideal Customer Profile</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{campaign.icp_description || 'ICP details have not been added yet.'}</p></section>
               <section><p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Current Messaging Strategy</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{campaign.message_narrative || 'Messaging strategy has not been added yet.'}</p></section>
             </CardContent></Card>
