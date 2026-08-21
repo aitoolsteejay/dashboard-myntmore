@@ -96,7 +96,7 @@ function achBadge(pct: number | null) {
   return { label: 'Critical', cls: 'bg-red-100 text-red-700 border-red-200' }
 }
 
-type DatePreset = '4w' | '8w' | '12w' | 'this_month' | 'last_month' | 'custom'
+type DatePreset = '4w' | '8w' | '12w' | 'this_month' | 'last_month' | 'lifetime' | 'custom'
 type ViewMode = 'table' | 'trends' | 'summary'
 type CategoryFilter = 'all' | 'content' | 'leadgen'
 type PerformancePeriod = 'weekly' | 'monthly'
@@ -107,6 +107,7 @@ const DATE_PRESETS: { id: DatePreset; label: string }[] = [
   { id: '12w', label: 'Last 12W' },
   { id: 'this_month', label: 'This Month' },
   { id: 'last_month', label: 'Last Month' },
+  { id: 'lifetime', label: 'Lifetime' },
   { id: 'custom', label: 'Custom' },
 ]
 
@@ -240,6 +241,19 @@ export function ClientPortalPage() {
   const [customTo, setCustomTo] = useState('')
   const [reportCategory, setReportCategory] = useState<CategoryFilter>('all')
   const [reportView, setReportView] = useState<ViewMode>('table')
+  const [earliestWeekStart, setEarliestWeekStart] = useState<string | null>(null)
+
+  // Earliest week of real data on file for this client — powers the "Lifetime" preset.
+  useEffect(() => {
+    if (!clientRecord) return
+    supabase.from('weekly_data').select('week_start')
+      .eq('client_id', clientRecord.id)
+      .order('week_start', { ascending: true })
+      .limit(1)
+      .then(({ data }: { data: any[] | null }) => {
+        setEarliestWeekStart(assertClientRows(data, clientRecord.id, 'earliest week')[0]?.week_start ?? null)
+      })
+  }, [clientRecord])
 
   const reportDateRange = useMemo(() => {
     if (datePreset === '4w') return getNWeeksBack(4)
@@ -247,8 +261,9 @@ export function ClientPortalPage() {
     if (datePreset === '12w') return getNWeeksBack(12)
     if (datePreset === 'this_month') return getMonthRange(0)
     if (datePreset === 'last_month') return getMonthRange(-1)
+    if (datePreset === 'lifetime') return { from: earliestWeekStart ?? getNWeeksBack(52).from, to: getNWeeksBack(1).to }
     return { from: customFrom, to: customTo }
-  }, [datePreset, customFrom, customTo])
+  }, [datePreset, customFrom, customTo, earliestWeekStart])
 
   const reportWeekList = useMemo(() => getMondaysBetween(reportDateRange.from, reportDateRange.to), [reportDateRange])
 
