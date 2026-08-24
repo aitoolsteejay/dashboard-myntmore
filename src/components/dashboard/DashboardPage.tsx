@@ -857,31 +857,7 @@ export function DashboardPage() {
       prevDate.setDate(prevDate.getDate() - 7)
       const prevWeekStart = prevDate.toISOString().split('T')[0]
 
-      const [
-        { data: clientsData },
-        { data: healthData },
-        { data: alertsData },
-        { data: weeklyDataRes },
-        { data: prevWeeklyDataRes },
-        { data: tjDataRes },
-        { data: tjPrevRes },
-        { data: salesDataRes },
-        { data: salesPrevRes },
-        { data: mmDataRes },
-        { data: prevMmDataRes },
-        { data: profilesData },
-        { data: actionablesData },
-        { data: targetsData },
-        { data: monthlyTargetsData },
-        { data: highScoresData },
-        { data: monthWeeksRes },
-        { data: pData },
-        { data: pUpdates },
-        { data: monthTjRes },
-        { data: monthSalesRes },
-        { data: monthMmRes },
-        { data: clientSettingsRes },
-      ] = await Promise.all([
+      const dashboardResults = await Promise.all([
         supabase.from('clients').select('*, content_manager:profiles!content_manager_id(full_name), leadgen_manager:profiles!leadgen_manager_id(full_name)').eq('status', 'active').order('name'),
         supabase.from('client_health_scores').select('*').order('week_start', { ascending: false }),
         supabase.from('client_alerts').select('*, clients(name, company)').eq('is_resolved', false).order('created_at', { ascending: false }),
@@ -909,6 +885,34 @@ export function DashboardPage() {
         supabase.from('mm_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', weekStart.slice(0, 7) + '-31'),
         supabase.from('client_settings').select('client_id, active_content_metrics, active_leadgen_metrics, content_enabled, leadgen_enabled'),
       ])
+      const dashboardError = dashboardResults.find(result => result.error)?.error
+      if (dashboardError) throw dashboardError
+
+      const [
+        { data: clientsData },
+        { data: healthData },
+        { data: alertsData },
+        { data: weeklyDataRes },
+        { data: prevWeeklyDataRes },
+        { data: tjDataRes },
+        { data: tjPrevRes },
+        { data: salesDataRes },
+        { data: salesPrevRes },
+        { data: mmDataRes },
+        { data: prevMmDataRes },
+        { data: profilesData },
+        { data: actionablesData },
+        { data: targetsData },
+        { data: monthlyTargetsData },
+        { data: highScoresData },
+        { data: monthWeeksRes },
+        { data: pData },
+        { data: pUpdates },
+        { data: monthTjRes },
+        { data: monthSalesRes },
+        { data: monthMmRes },
+        { data: clientSettingsRes },
+      ] = dashboardResults
 
       setClients(sortAlphabetically(clientsData || [], client => client.name))
       setHealthScores(healthData || [])
@@ -945,6 +949,8 @@ export function DashboardPage() {
         // Re-fetch high scores after backfill so UI reflects corrected values
         const { data: refreshed } = await supabase.from('high_scores').select('*')
         if (refreshed) setHighScores(refreshed)
+      }).catch(error => {
+        console.error('High-score refresh failed:', error)
       })
 
       // Check and fetch notifications

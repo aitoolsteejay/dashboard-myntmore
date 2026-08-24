@@ -79,13 +79,13 @@ const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string, 
   }
 
   // A campaign rollup and a teammate's metric edit can hit the same JSON column
-  // simultaneously. Compare the JSON value we read before writing; if it changed,
-  // re-read, merge the campaign totals into the newer value, and retry. This keeps
+  // simultaneously. Compare the section's submission timestamp before writing;
+  // if it changed, re-read, merge the campaign totals into the newer value, and retry. This keeps
   // every non-rollup metric intact instead of restoring a stale whole-object copy.
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const { data: existing, error: readError } = await supabase
       .from('weekly_data')
-      .select('id, leadgen_metrics')
+      .select('id, leadgen_submitted_at, leadgen_metrics')
       .eq('client_id', clientId)
       .eq('week_start', weekStart)
       .maybeSingle()
@@ -117,9 +117,11 @@ const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string, 
       .from('weekly_data')
       .update({ ...metadata, leadgen_metrics: merged })
       .eq('id', existing.id)
-    updateQuery = previousMetrics === null
-      ? updateQuery.is('leadgen_metrics', null)
-      : updateQuery.eq('leadgen_metrics', previousMetrics)
+    // Compare a scalar row version; passing a JSON object to `.eq()` becomes
+    // `eq.[object Object]` and PostgREST rejects the rollup update.
+    updateQuery = existing.leadgen_submitted_at === null
+      ? updateQuery.is('leadgen_submitted_at', null)
+      : updateQuery.eq('leadgen_submitted_at', existing.leadgen_submitted_at)
     const { data: updated, error: updateError } = await updateQuery.select('id').maybeSingle()
     if (updateError) throw updateError
     if (updated) return

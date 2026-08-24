@@ -37,8 +37,8 @@ function getPresetRange(preset: Exclude<RangePreset, 'custom'>) {
   const end = isoDate(today)
   if (preset === 'thisWeek' || preset === 'lastWeek') {
     const selectedWeek = preset === 'lastWeek' ? subWeeks(today, 1) : today
-    const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 0 })
-    const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 0 })
+    const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 })
+    const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 1 })
     return {
       start: isoDate(weekStart),
       end: preset === 'thisWeek' ? end : isoDate(weekEnd),

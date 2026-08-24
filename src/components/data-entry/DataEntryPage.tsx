@@ -1404,18 +1404,19 @@ export function DataEntryPage() {
       ...metadata
     } = payload
     if (!category || !patch || !clientId || !weekStart) return
+    const versionColumn = category === 'content_metrics' ? 'content_submitted_at' : 'leadgen_submitted_at'
 
     // Optimistic compare-and-swap keeps edits to different fields from replacing
     // one another when multiple teammates save the same week concurrently.
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const { data: current, error: readError } = await supabase
         .from('weekly_data')
-        .select(`id, updated_at, ${category}`)
+        .select(`id, ${versionColumn}, ${category}`)
         .eq('client_id', clientId)
         .eq('week_start', weekStart)
         .maybeSingle()
       if (readError) throw readError
-      const currentRow = current as { id: string; updated_at: string | null } & Record<string, any> | null
+      const currentRow = current as { id: string } & Record<string, any> | null
 
       const mergedMetrics = {
         ...(currentRow?.[category] || {}),
@@ -1440,12 +1441,12 @@ export function DataEntryPage() {
         .eq('id', currentRow.id) as any)
       // PostgREST cannot compare a JSON object through `.eq()` — the Supabase
       // client serializes it as `eq.[object Object]`, which makes every update
-      // of an existing week fail. Compare the scalar row version instead. The
-      // database updates `updated_at` on every write, so this still detects a
-      // teammate changing any metric between our read and update.
-      updateQuery = currentRow.updated_at === null
-        ? updateQuery.is('updated_at', null)
-        : updateQuery.eq('updated_at', currentRow.updated_at)
+      // of an existing week fail. Compare a scalar row version instead. This
+      // section's submitted timestamp changes with every autosave, so it
+      // detects a teammate changing the same metric group between read/update.
+      updateQuery = currentRow[versionColumn] == null
+        ? updateQuery.is(versionColumn, null)
+        : updateQuery.eq(versionColumn, currentRow[versionColumn])
       const { data: updated, error: updateError } = await updateQuery
         .select('id')
         .maybeSingle()

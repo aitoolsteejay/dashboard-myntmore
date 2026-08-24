@@ -12,12 +12,11 @@ export function getWeeksInSameMonth(selectedWeekStart: string) {
   cursor.setUTCDate(firstOfMonth.getUTCDate() - daysBack)
 
   while (true) {
-    const weekEnd = new Date(cursor)
-    weekEnd.setUTCDate(cursor.getUTCDate() + 6)
     const startsInMonth = cursor.getUTCMonth() === month && cursor.getUTCFullYear() === year
-    const endsInMonth = weekEnd.getUTCMonth() === month && weekEnd.getUTCFullYear() === year
 
-    if (!startsInMonth && !endsInMonth) {
+    // A week belongs only to the month containing its Monday. Do not include a
+    // July week in August merely because its Sunday falls in August.
+    if (!startsInMonth) {
       if (cursor.getUTCMonth() > month || cursor.getUTCFullYear() > year) break
       cursor.setUTCDate(cursor.getUTCDate() + 7)
       continue

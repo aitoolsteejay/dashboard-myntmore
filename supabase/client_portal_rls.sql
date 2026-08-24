@@ -4,14 +4,14 @@
 -- or internal-only tables, even via direct API calls (not just hidden in the UI).
 
 -- 1. Helper: does the current authenticated user own this client row?
-create or replace function public.is_own_client(target_client_id uuid)
+create or replace function myntmore.is_own_client(target_client_id uuid)
 returns boolean
 language sql
 security definer
 stable
 as $$
   select exists (
-    select 1 from public.clients c
+    select 1 from myntmore.clients c
     where c.id = target_client_id and c.user_id = auth.uid()
   )
 $$;
@@ -24,30 +24,30 @@ declare
 begin
   foreach t in array array['weekly_data','campaigns','campaign_weekly_data','high_scores','targets','actionables']
   loop
-    execute format('alter table public.%I enable row level security', t);
+    execute format('alter table myntmore.%I enable row level security', t);
 
     execute format(
-      'drop policy if exists "admin_full_access" on public.%I', t);
+      'drop policy if exists "admin_full_access" on myntmore.%I', t);
     execute format(
-      'create policy "admin_full_access" on public.%I for all using (public.has_role(auth.uid(), ''admin'')) with check (public.has_role(auth.uid(), ''admin''))', t);
+      'create policy "admin_full_access" on myntmore.%I for all using (myntmore.has_role(auth.uid(), ''admin'')) with check (myntmore.has_role(auth.uid(), ''admin''))', t);
 
     execute format(
-      'drop policy if exists "client_read_own" on public.%I', t);
+      'drop policy if exists "client_read_own" on myntmore.%I', t);
     execute format(
-      'create policy "client_read_own" on public.%I for select using (public.is_own_client(client_id))', t);
+      'create policy "client_read_own" on myntmore.%I for select using (myntmore.is_own_client(client_id))', t);
   end loop;
 end $$;
 
 -- 3. clients table itself: client can read only their own row, admin full access.
-alter table public.clients enable row level security;
+alter table myntmore.clients enable row level security;
 
-drop policy if exists "admin_full_access" on public.clients;
-create policy "admin_full_access" on public.clients
-  for all using (public.has_role(auth.uid(), 'admin'))
-  with check (public.has_role(auth.uid(), 'admin'));
+drop policy if exists "admin_full_access" on myntmore.clients;
+create policy "admin_full_access" on myntmore.clients
+  for all using (myntmore.has_role(auth.uid(), 'admin'))
+  with check (myntmore.has_role(auth.uid(), 'admin'));
 
-drop policy if exists "client_read_own" on public.clients;
-create policy "client_read_own" on public.clients
+drop policy if exists "client_read_own" on myntmore.clients;
+create policy "client_read_own" on myntmore.clients
   for select using (user_id = auth.uid());
 
 -- 4. Internal-only tables: admin access only, RLS enabled with no client policy
@@ -65,14 +65,14 @@ begin
     'tj_channel_assignments','hot_leads','initiatives'
   ]
   loop
-    execute format('alter table public.%I enable row level security', t);
-    execute format('drop policy if exists "admin_full_access" on public.%I', t);
+    execute format('alter table myntmore.%I enable row level security', t);
+    execute format('drop policy if exists "admin_full_access" on myntmore.%I', t);
     execute format(
-      'create policy "admin_full_access" on public.%I for all using (public.has_role(auth.uid(), ''admin'')) with check (public.has_role(auth.uid(), ''admin''))', t);
+      'create policy "admin_full_access" on myntmore.%I for all using (myntmore.has_role(auth.uid(), ''admin'')) with check (myntmore.has_role(auth.uid(), ''admin''))', t);
   end loop;
 end $$;
 
 -- Every user (admin or client) can read their own profile row.
-drop policy if exists "self_read_profile" on public.profiles;
-create policy "self_read_profile" on public.profiles
+drop policy if exists "self_read_profile" on myntmore.profiles;
+create policy "self_read_profile" on myntmore.profiles
   for select using (id = auth.uid());

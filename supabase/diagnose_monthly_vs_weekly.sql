@@ -23,8 +23,8 @@ expanded as (
       (wd.leadgen_metrics -> mi.metric_id ->> 'value')::numeric,
       (wd.leadgen_metrics ->> mi.metric_id)::numeric
     ) as value
-  from public.weekly_data wd
-  join public.clients c on c.id = wd.client_id
+  from myntmore.weekly_data wd
+  join myntmore.clients c on c.id = wd.client_id
   cross join metric_ids mi
 )
 select

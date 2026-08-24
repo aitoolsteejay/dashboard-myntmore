@@ -3,13 +3,13 @@
 -- the submitted_at flag is invisible on the dashboard. Stamp those rows
 -- as submitted now so the data shows immediately.
 
-update public.weekly_data
+update myntmore.weekly_data
 set content_submitted_at = coalesce(content_submitted_at, now())
 where content_metrics is not null
   and content_metrics != '{}'::jsonb
   and content_submitted_at is null;
 
-update public.weekly_data
+update myntmore.weekly_data
 set leadgen_submitted_at = coalesce(leadgen_submitted_at, now())
 where leadgen_metrics is not null
   and leadgen_metrics != '{}'::jsonb

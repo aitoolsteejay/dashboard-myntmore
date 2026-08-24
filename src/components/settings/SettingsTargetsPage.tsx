@@ -49,6 +49,7 @@ function TargetRow({ metric, currentTarget, previousTarget, mtdActual, onChange,
           value={currentTarget ?? ''}
           placeholder="-"
           onChange={(e) => onChange(metric.id, Number(e.target.value))}
+          onWheel={(e) => e.currentTarget.blur()}
           style={{
             width: '90px',
             padding: '6px 10px',
@@ -475,6 +476,7 @@ export function SettingsTargetsPage() {
         <td style={{ padding: '10px 8px', textAlign: 'right' }}>
           <input
             type="number"
+            onWheel={(e) => e.currentTarget.blur()}
             value={target ?? ''}
             placeholder="-"
             onChange={event => setValues(previous => ({ ...previous, [metric.id]: Number(event.target.value) }))}
@@ -652,6 +654,7 @@ export function SettingsTargetsPage() {
                       <td style={{ padding: '10px 8px', textAlign: 'right' }}>
                         <input
                           type="number"
+                          onWheel={(e) => e.currentTarget.blur()}
                           value={target ?? ''}
                           placeholder="-"
                           onChange={e => setSalesTargetValues(prev => ({ ...prev, [m.id]: Number(e.target.value) }))}

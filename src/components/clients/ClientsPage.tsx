@@ -172,26 +172,49 @@ export function ClientsPage() {
         clientId = data.id
 
         // Initialize default settings for new client
-        await supabase.from('client_settings').insert({
+        const { error: settingsError } = await supabase.from('client_settings').insert({
           client_id: clientId,
           active_content_metrics: CONTENT_METRICS.map(m => m.id),
           active_leadgen_metrics: LEADGEN_METRICS.map(m => m.id)
         })
+        if (settingsError) throw settingsError
       }
 
-      // Update assignments
-      await supabase.from('client_assignments').delete().eq('client_id', clientId)
-      
-      const assignments = []
+      // Reconcile manager assignments by role. Updating/inserting the desired
+      // rows before removing obsolete ones prevents a failed insert from wiping
+      // all of a client's existing assignments.
+      const { data: existingAssignments, error: assignmentsReadError } = await supabase
+        .from('client_assignments')
+        .select('id, role, user_id')
+        .eq('client_id', clientId)
+      if (assignmentsReadError) throw assignmentsReadError
+
+      const assignments: { role: string; userId: string }[] = []
       if (contentManagerId) {
-        assignments.push({ client_id: clientId, user_id: contentManagerId, role: 'contentManager' })
+        assignments.push({ role: 'contentManager', userId: contentManagerId })
       }
       if (leadGenManagerId) {
-        assignments.push({ client_id: clientId, user_id: leadGenManagerId, role: 'leadGenManager' })
+        assignments.push({ role: 'leadGenManager', userId: leadGenManagerId })
       }
 
-      if (assignments.length > 0) {
-        await supabase.from('client_assignments').insert(assignments)
+      for (const desired of assignments) {
+        const existing = existingAssignments?.find(row => row.role === desired.role)
+        const result = existing
+          ? await supabase.from('client_assignments').update({ user_id: desired.userId }).eq('id', existing.id)
+          : await supabase.from('client_assignments').insert({ client_id: clientId, user_id: desired.userId, role: desired.role })
+        if (result.error) throw result.error
+      }
+
+      const desiredRoles = new Set(assignments.map(assignment => assignment.role))
+      const obsoleteIds = (existingAssignments || [])
+        .filter(row => !row.role || !desiredRoles.has(row.role))
+        .map(row => row.id)
+      if (obsoleteIds.length > 0) {
+        const { error: deleteAssignmentsError } = await supabase
+          .from('client_assignments')
+          .delete()
+          .in('id', obsoleteIds)
+        if (deleteAssignmentsError) throw deleteAssignmentsError
       }
 
       toast.success(editingClient ? "Client updated" : "Client created")

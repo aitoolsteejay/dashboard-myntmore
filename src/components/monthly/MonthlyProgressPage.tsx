@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/lib/auth'
 import { ALL_METRICS } from '@/data/metrics'
@@ -7,6 +7,7 @@ import { buildWeekMetrics } from '@/utils/metricCalculations'
 import { cn } from '@/lib/utils'
 import { ChevronLeft, ChevronRight, ChevronDown, Target, TrendingUp, AlertTriangle, CheckCircle2, Minus, ExternalLink } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { sortAlphabetically } from '@/utils/sort'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -190,6 +191,8 @@ export function MonthlyProgressPage() {
   const [weeklyRows, setWeeklyRows] = useState<Record<string, Record<string, unknown>>>({})  // weekStart → metrics obj
   const [loading, setLoading] = useState(false)
   const [hasTargets, setHasTargets] = useState<boolean | null>(null)      // null = unknown
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const fetchVersionRef = useRef(0)
 
   const selectedMonth = monthOptions[monthIdx].period
   const weekStarts = useMemo(() => getWeeksInMonth(selectedMonth), [selectedMonth])
@@ -198,7 +201,11 @@ export function MonthlyProgressPage() {
   // Fetch clients once
   useEffect(() => {
     supabase.from('clients').select('id, name').eq('status', 'active').order('name')
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) {
+          toast.error(`Could not load clients: ${error.message}`)
+          return
+        }
         setClients(sortAlphabetically(data ?? [], client => client.name))
         if (data && data.length > 0) setSelectedClientId(data[0].id)
       })
@@ -207,9 +214,11 @@ export function MonthlyProgressPage() {
   // Fetch targets + weekly data when client or month changes
   const fetchData = useCallback(async () => {
     if (!selectedClientId || !selectedMonth) return
+    const requestVersion = ++fetchVersionRef.current
     setLoading(true)
+    setLoadError(null)
     try {
-      const [{ data: targetRows }, { data: dataRows }] = await Promise.all([
+      const [targetResult, dataResult] = await Promise.all([
         supabase
           .from('targets')
           .select('metric_id, target_value')
@@ -222,6 +231,11 @@ export function MonthlyProgressPage() {
           .eq('client_id', selectedClientId)
           .in('week_start', weekStarts),
       ])
+      if (targetResult.error) throw targetResult.error
+      if (dataResult.error) throw dataResult.error
+      const targetRows = targetResult.data
+      const dataRows = dataResult.data
+      if (requestVersion !== fetchVersionRef.current) return
 
       const tMap: Record<string, number> = {}
       targetRows?.forEach(t => { if (t.target_value !== null) tMap[t.metric_id] = t.target_value })
@@ -236,8 +250,16 @@ export function MonthlyProgressPage() {
         }
       })
       setWeeklyRows(wMap)
+    } catch (error) {
+      if (requestVersion !== fetchVersionRef.current) return
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      setTargets({})
+      setWeeklyRows({})
+      setHasTargets(null)
+      setLoadError(message)
+      toast.error(`Could not load monthly targets: ${message}`)
     } finally {
-      setLoading(false)
+      if (requestVersion === fetchVersionRef.current) setLoading(false)
     }
   }, [selectedClientId, selectedMonth, weekStarts])
 
@@ -347,6 +369,12 @@ export function MonthlyProgressPage() {
           </button>
         </div>
       </div>
+
+      {loadError ? (
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
+          <AlertTriangle className="h-4 w-4" /> Monthly data could not be loaded: {loadError}
+        </div>
+      ) : null}
 
       {/* ── Client tabs ──────────────────────────────────────────────── */}
       {clients.length > 0 && (

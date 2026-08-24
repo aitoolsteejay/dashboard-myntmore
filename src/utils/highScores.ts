@@ -13,7 +13,8 @@ export async function backfillHighScores(clientId: string): Promise<void> {
     .select('week_start, content_metrics, leadgen_metrics')
     .eq('client_id', clientId)
 
-  if (error || !rows || rows.length === 0) return
+  if (error) throw error
+  if (!rows || rows.length === 0) return
 
   // Track best single-week value and which week it was achieved
   const best: Record<string, { value: number; week: string; name: string }> = {}
@@ -26,9 +27,6 @@ export async function backfillHighScores(clientId: string): Promise<void> {
   }
 
   for (const row of rows) {
-    // Skip month-aggregate import rows (week_start = 1st of month)
-    if (row.week_start && new Date(row.week_start).getUTCDate() === 1) continue
-
     const cm = row.content_metrics as Record<string, any> ?? {}
     const lm = row.leadgen_metrics as Record<string, any> ?? {}
     const weekStart = row.week_start
@@ -94,10 +92,6 @@ export async function backfillHighScores(clientId: string): Promise<void> {
       bestMonth['L17'] = { value: posRate, month }
   }
 
-  // Always overwrite with truth from weekly_data - this corrects any stale/garbage entries
-  // First delete ALL existing high_scores for this client, then re-insert only what's real
-  await supabase.from('high_scores').delete().eq('client_id', clientId)
-
   if (Object.keys(best).length === 0) return
 
   const upsertRows = Object.entries(best).map(([id, { value, week, name }]) => ({
@@ -108,11 +102,17 @@ export async function backfillHighScores(clientId: string): Promise<void> {
     achieved_week: week,
     lifetime_high_month: bestMonth[id]?.value ?? null,
     achieved_month: bestMonth[id]?.month ?? null,
-    previous_high: null,
     updated_at: new Date().toISOString(),
   }))
 
-  await supabase.from('high_scores').insert(upsertRows)
+  // Never delete the existing records before their replacements are safely
+  // persisted. A failed insert previously left the client's entire high-score
+  // history empty. Upsert updates the calculated truth in one request while
+  // preserving the last known records if the request fails.
+  const { error: upsertError } = await supabase
+    .from('high_scores')
+    .upsert(upsertRows, { onConflict: 'client_id,metric_id' })
+  if (upsertError) throw upsertError
   console.log(`✅ Backfilled ${upsertRows.length} true high score(s) for client ${clientId}`)
 }
 
