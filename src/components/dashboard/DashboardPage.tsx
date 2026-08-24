@@ -1362,39 +1362,60 @@ export function DashboardPage() {
                                   const built = (buildWeekMetrics(currentData) ?? {}) as Record<string, any>
                                   const acceptanceRate = built.L12
                                   const replyRate = built.L14
+                                  const clientScores = highScores.filter(score => score.client_id === client.id)
+                                  const renderSummaryValue = (metricId: string, value: unknown, percentage = false, gold = false) => {
+                                    const numericValue = value !== null && value !== undefined && !isNaN(Number(value)) ? Number(value) : null
+                                    const score = clientScores.find(item => item.metric_id === metricId)
+                                    const isHighScore = numericValue !== null
+                                      && numericValue > 0
+                                      && score?.achieved_week === displayWeek
+                                      && score.lifetime_high !== null
+                                      && Math.abs(numericValue - Number(score.lifetime_high)) < 0.001
+
+                                    return (
+                                      <p className={cn("text-sm font-black", gold && "text-gold", numericValue === null && "text-muted-foreground")}>
+                                        <span className="inline-flex items-center justify-center gap-1">
+                                          {percentage
+                                            ? (numericValue !== null ? formatPct(numericValue) : '-')
+                                            : formatDashboardValue(value as number | null, metricId)}
+                                          {isHighScore && <Star className="h-3 w-3 fill-yellow-400 text-yellow-500" aria-label="High score" />}
+                                        </span>
+                                      </p>
+                                    )
+                                  }
                                   return (
                                     <>
                                       {isServiceEnabled(client.id, 'content') && <div className="text-center w-12 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Posts</p>
-                                        <p className="text-sm font-black">{formatDashboardValue(built?.C09, 'C09')}</p>
+                                        {renderSummaryValue('C09', built?.C09)}
                                       </div>}
                                       {isServiceEnabled(client.id, 'content') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Impr.</p>
-                                        <p className="text-sm font-black">{formatDashboardValue(built?.C10, 'C10')}</p>
+                                        {renderSummaryValue('C10', built?.C10)}
                                       </div>}
                                       {isServiceEnabled(client.id, 'content') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Avg/Post</p>
-                                        <p className="text-sm font-black">{formatDashboardValue(built?.C26, 'C26')}</p>
+                                        {renderSummaryValue('C26', built?.C26)}
                                       </div>}
                                       {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Conn Req</p>
-                                        <p className="text-sm font-black">{formatDashboardValue(built?.L10, 'L10')}</p>
+                                        {renderSummaryValue('L10', built?.L10)}
                                       </div>}
                                       {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Acc Rate</p>
-                                        <p className={cn("text-sm font-black", acceptanceRate !== null && acceptanceRate !== undefined ? "text-foreground" : "text-muted-foreground")}>{acceptanceRate !== null && acceptanceRate !== undefined ? formatPct(acceptanceRate as number) : '-'}</p>
+                                        {renderSummaryValue('L12', acceptanceRate, true)}
                                       </div>}
                                       {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Reply Rate</p>
-                                        <p className={cn("text-sm font-black", replyRate !== null && replyRate !== undefined ? "text-foreground" : "text-muted-foreground")}>{replyRate !== null && replyRate !== undefined ? formatPct(replyRate as number) : '-'}</p>
+                                        {renderSummaryValue('L14', replyRate, true)}
                                       </div>}
                                       {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Hot Leads</p>
-                                        <p className="text-sm font-black">{formatDashboardValue(built?.L22 ?? mv(currentData, 'leadgen_metrics', 'L23'), 'L22')}</p>
+                                        {renderSummaryValue('L22', built?.L22 ?? mv(currentData, 'leadgen_metrics', 'L23'))}
                                       </div>}
                                       {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-12 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Booked</p>
-                                        <p className="text-sm font-black text-gold">{formatDashboardValue(built?.L24, 'L24')}</p>
+                                        {renderSummaryValue('L24', built?.L24, false, true)}
                                       </div>}
                                     </>
                                   )
