@@ -1410,18 +1410,19 @@ export function DataEntryPage() {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const { data: current, error: readError } = await supabase
         .from('weekly_data')
-        .select(`id, ${category}`)
+        .select(`id, updated_at, ${category}`)
         .eq('client_id', clientId)
         .eq('week_start', weekStart)
         .maybeSingle()
       if (readError) throw readError
+      const currentRow = current as { id: string; updated_at: string | null } & Record<string, any> | null
 
       const mergedMetrics = {
-        ...((current as any)?.[category] || {}),
+        ...(currentRow?.[category] || {}),
         ...patch,
       }
 
-      if (!current) {
+      if (!currentRow) {
         const { error: insertError } = await supabase.from('weekly_data').insert({
           client_id: clientId,
           week_start: weekStart,
@@ -1436,12 +1437,15 @@ export function DataEntryPage() {
       let updateQuery = (supabase
         .from('weekly_data')
         .update({ ...metadata, [category]: mergedMetrics } as any)
-        .eq('client_id', clientId)
-        .eq('week_start', weekStart) as any)
-      const previousMetrics = (current as any)[category]
-      updateQuery = previousMetrics === null
-        ? updateQuery.is(category, null)
-        : updateQuery.eq(category, previousMetrics)
+        .eq('id', currentRow.id) as any)
+      // PostgREST cannot compare a JSON object through `.eq()` — the Supabase
+      // client serializes it as `eq.[object Object]`, which makes every update
+      // of an existing week fail. Compare the scalar row version instead. The
+      // database updates `updated_at` on every write, so this still detects a
+      // teammate changing any metric between our read and update.
+      updateQuery = currentRow.updated_at === null
+        ? updateQuery.is('updated_at', null)
+        : updateQuery.eq('updated_at', currentRow.updated_at)
       const { data: updated, error: updateError } = await updateQuery
         .select('id')
         .maybeSingle()
