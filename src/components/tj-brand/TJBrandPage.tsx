@@ -159,15 +159,30 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
 
       const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
 
+      // Save only the channel being edited. Sending every channel here allows a
+      // stale browser tab (or another channel owner) to overwrite newer YouTube,
+      // Instagram, newsletter, or pipeline data with its older local snapshot.
+      const channelPayload = section === 'instagram'
+        ? { instagram: updated.instagram }
+        : section === 'youtube'
+          ? { youtube: updated.youtube }
+          : section === 'newsletter_podcast'
+            ? {
+                email_newsletter: {
+                  TJP08: updated.newsletter_podcast?.TJP08,
+                  TJP09: updated.newsletter_podcast?.TJP09,
+                  TJP10: updated.newsletter_podcast?.TJP10,
+                  TJP11: updated.newsletter_podcast?.TJP11,
+                  TJP12: updated.newsletter_podcast?.TJP12,
+                  TJP13: updated.newsletter_podcast?.TJP13,
+                },
+              }
+            : { video_pipeline: updated.video_pipeline }
+
       triggerSave({
         week_end: weekInfo?.weekEnd || '',
         week_label: weekInfo?.label || '',
-        instagram: updated.instagram,
-        youtube: updated.youtube,
-        linkedin_newsletter: {},
-        email_newsletter: { TJP08: updated.newsletter_podcast?.TJP08, TJP09: updated.newsletter_podcast?.TJP09, TJP10: updated.newsletter_podcast?.TJP10, TJP11: updated.newsletter_podcast?.TJP11, TJP12: updated.newsletter_podcast?.TJP12, TJP13: updated.newsletter_podcast?.TJP13 },
-        podcast: {},
-        video_pipeline: updated.video_pipeline,
+        ...channelPayload,
         submitted_by: user?.id
       })
 
