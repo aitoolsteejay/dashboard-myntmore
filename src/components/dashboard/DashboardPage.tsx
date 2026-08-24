@@ -1361,6 +1361,7 @@ export function DashboardPage() {
                                 {(() => {
                                   const built = (buildWeekMetrics(currentData) ?? {}) as Record<string, any>
                                   const acceptanceRate = built.L12
+                                  const replyRate = built.L14
                                   return (
                                     <>
                                       {isServiceEnabled(client.id, 'content') && <div className="text-center w-12 shrink-0">
@@ -1382,6 +1383,10 @@ export function DashboardPage() {
                                       {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Acc Rate</p>
                                         <p className={cn("text-sm font-black", acceptanceRate !== null && acceptanceRate !== undefined ? "text-foreground" : "text-muted-foreground")}>{acceptanceRate !== null && acceptanceRate !== undefined ? formatPct(acceptanceRate as number) : '-'}</p>
+                                      </div>}
+                                      {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
+                                        <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Reply Rate</p>
+                                        <p className={cn("text-sm font-black", replyRate !== null && replyRate !== undefined ? "text-foreground" : "text-muted-foreground")}>{replyRate !== null && replyRate !== undefined ? formatPct(replyRate as number) : '-'}</p>
                                       </div>}
                                       {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Hot Leads</p>
