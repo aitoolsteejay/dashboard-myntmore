@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { toast } from "sonner"
-import { Check, Save, Loader2, ArrowLeft, ChevronRight, MessageSquare, Pin, ScrollText, History, Target, Trophy } from "lucide-react"
+import { Check, Save, Loader2, ArrowLeft, ChevronRight, MessageSquare, Pin, ScrollText, History, Target, Trophy, Sparkles, X } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { useNavigate } from '@tanstack/react-router'
 import { updateClientHealth } from '@/lib/health'
@@ -35,6 +35,39 @@ import { useWorkspace } from '@/lib/workspace'
 import { parseWaalaxyExport, type WaalaxyImportSummary } from '@/utils/waalaxyImport'
 
 type ClientSummary = { id: string; name: string; company: string | null }
+
+function showHighScorePopup(metricNames: string[]) {
+  toast.custom((toastId) => (
+    <div className="relative w-[min(92vw,430px)] overflow-hidden rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 via-white to-yellow-100 p-5 shadow-2xl shadow-amber-300/40">
+      <div className="absolute -right-7 -top-7 h-24 w-24 rounded-full bg-gold/25 blur-xl" />
+      <button
+        type="button"
+        aria-label="Dismiss high-score notification"
+        onClick={() => toast.dismiss(toastId)}
+        className="absolute right-3 top-3 rounded-full p-1 text-amber-800/60 transition-colors hover:bg-amber-100 hover:text-amber-900"
+      >
+        <X className="h-4 w-4" />
+      </button>
+      <div className="flex items-start gap-4 pr-6">
+        <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gold text-black shadow-lg shadow-amber-300/50 animate-bounce">
+          <Trophy className="h-7 w-7" />
+          <Sparkles className="absolute -right-2 -top-2 h-5 w-5 text-amber-500" />
+        </div>
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-700">New high score!</p>
+          <p className="mt-1 text-lg font-black text-slate-950">
+            {metricNames.length === 1 ? metricNames[0] : `${metricNames.length} records broken`}
+          </p>
+          <p className="mt-1 text-sm font-medium text-slate-600">
+            {metricNames.length === 1
+              ? 'A new all-time best has just been saved.'
+              : metricNames.slice(0, 3).join(' · ')}
+          </p>
+        </div>
+      </div>
+    </div>
+  ), { duration: 8000, position: 'top-center' })
+}
 
 function CampaignWaalaxyImport({
   campaignId,
@@ -1373,6 +1406,7 @@ export function DataEntryPage() {
   const [formData, setFormData] = useState<Record<string, any>>({})
   const formDataRef = React.useRef(formData)
   const metricEditVersionsRef = React.useRef(new Map<string, number>())
+  const celebratedHighScoresRef = React.useRef(new Set<string>())
   const nextMetricEditVersionRef = React.useRef(0)
   useEffect(() => {
     formDataRef.current = formData
@@ -1462,6 +1496,16 @@ export function DataEntryPage() {
     })
   }
 
+  const celebrateNewRecords = React.useCallback((clientId: string, week: string, records: string[]) => {
+    const freshRecords = records.filter(record => {
+      const key = `${clientId}:${week}:${record}`
+      if (celebratedHighScoresRef.current.has(key)) return false
+      celebratedHighScoresRef.current.add(key)
+      return true
+    })
+    if (freshRecords.length > 0) showHighScorePopup(freshRecords)
+  }, [])
+
   const {
     triggerSave: triggerContentSave,
     saveNow: saveContentNow,
@@ -1492,7 +1536,8 @@ export function DataEntryPage() {
           week,
           currentContent as Record<string, unknown>,
           currentLeadgen as Record<string, unknown>
-        ).catch(err => console.error('High score detection failed:', err))
+        ).then(records => celebrateNewRecords(clientId, week, records))
+          .catch(err => console.error('High score detection failed:', err))
       }
     }
   })
@@ -1838,9 +1883,7 @@ export function DataEntryPage() {
       
       detectAndUpdateHighScores(selectedClientId, selectedWeek, currentContent, currentLeadgen)
         .then(newRecords => {
-          if (isSubmit && newRecords.length > 0) {
-            toast.success(`🏆 ${newRecords.length} new record${newRecords.length > 1 ? 's' : ''}! ${newRecords.slice(0, 2).join(', ')}${newRecords.length > 2 ? '...' : ''}`)
-          }
+          if (isSubmit) celebrateNewRecords(selectedClientId, selectedWeek, newRecords)
         })
         .catch(e => console.warn('High score update failed:', e))
 
