@@ -59,54 +59,71 @@ const _syncAllCampaignTotalsInner = async (clientId: string, weekStart: string, 
     meetings  += numberOrZero(row.meetings_booked)
   })
 
-  // Get existing weekly_data to preserve qualitative fields
-  const { data: existing } = await supabase
-    .from('weekly_data')
-    .select('leadgen_metrics')
-    .eq('client_id', clientId)
-    .eq('week_start', weekStart)
-    .maybeSingle()
-
-  const current = (existing?.leadgen_metrics as Record<string, any>) ?? {}
-
-  const merged = mergeCampaignRollupMetrics(current, {
-    connRequestsSent: connReq,
-    accepted,
-    answered,
-    positiveReplies: positive,
-    negativeReplies: negative,
-    meetingsBooked: meetings,
-  })
-  
   const weekOptions = getWeekOptions(52)
   const weekInfo = weekOptions.find((w: any) => w.weekStart === weekStart)
 
-  // Write back to weekly_data. leadgen_submitted_at is only included (and so only
-  // ever updated) when this sync was triggered by a genuine save -- see the
-  // markSubmitted doc comment on syncAllCampaignTotals above.
-  const { error } = await supabase
-    .from('weekly_data')
-    .upsert({
-      client_id: clientId,
-      week_start: weekStart,
-      week_end: weekInfo?.weekEnd ?? (() => {
-        const d = new Date(weekStart)
-        d.setDate(d.getDate() + 6)
-        return d.toISOString().split('T')[0]
-      })(),
-      week_label: weekInfo?.label ?? (() => {
-        const start = new Date(weekStart)
-        const end = new Date(weekStart)
-        end.setDate(end.getDate() + 6)
-        const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-        return `${fmt(start)} – ${fmt(end)} ${end.getFullYear()}`
-      })(),
-      leadgen_metrics: merged,
-      ...(markSubmitted ? { leadgen_submitted_at: new Date().toISOString() } : {}),
-    }, { onConflict: 'client_id,week_start' })
-
-  if (error) {
-    console.error('campaignSync: failed to write weekly_data totals:', error.message)
-    throw error
+  const metadata = {
+    week_end: weekInfo?.weekEnd ?? (() => {
+      const d = new Date(weekStart)
+      d.setDate(d.getDate() + 6)
+      return d.toISOString().split('T')[0]
+    })(),
+    week_label: weekInfo?.label ?? (() => {
+      const start = new Date(weekStart)
+      const end = new Date(weekStart)
+      end.setDate(end.getDate() + 6)
+      const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+      return `${fmt(start)} – ${fmt(end)} ${end.getFullYear()}`
+    })(),
+    ...(markSubmitted ? { leadgen_submitted_at: new Date().toISOString() } : {}),
   }
+
+  // A campaign rollup and a teammate's metric edit can hit the same JSON column
+  // simultaneously. Compare the JSON value we read before writing; if it changed,
+  // re-read, merge the campaign totals into the newer value, and retry. This keeps
+  // every non-rollup metric intact instead of restoring a stale whole-object copy.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const { data: existing, error: readError } = await supabase
+      .from('weekly_data')
+      .select('id, leadgen_metrics')
+      .eq('client_id', clientId)
+      .eq('week_start', weekStart)
+      .maybeSingle()
+    if (readError) throw readError
+
+    const previousMetrics = (existing?.leadgen_metrics as Record<string, any>) ?? null
+    const merged = mergeCampaignRollupMetrics(previousMetrics ?? {}, {
+      connRequestsSent: connReq,
+      accepted,
+      answered,
+      positiveReplies: positive,
+      negativeReplies: negative,
+      meetingsBooked: meetings,
+    })
+
+    if (!existing) {
+      const { error: insertError } = await supabase.from('weekly_data').insert({
+        client_id: clientId,
+        week_start: weekStart,
+        ...metadata,
+        leadgen_metrics: merged,
+      })
+      if (!insertError) return
+      if (insertError.code === '23505') continue
+      throw insertError
+    }
+
+    let updateQuery = supabase
+      .from('weekly_data')
+      .update({ ...metadata, leadgen_metrics: merged })
+      .eq('id', existing.id)
+    updateQuery = previousMetrics === null
+      ? updateQuery.is('leadgen_metrics', null)
+      : updateQuery.eq('leadgen_metrics', previousMetrics)
+    const { data: updated, error: updateError } = await updateQuery.select('id').maybeSingle()
+    if (updateError) throw updateError
+    if (updated) return
+  }
+
+  throw new Error('Campaign totals could not be merged because this week was updated repeatedly. Please retry.')
 }

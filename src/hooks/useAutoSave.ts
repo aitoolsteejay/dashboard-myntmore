@@ -199,6 +199,16 @@ export function useAutoSave(options: AutoSaveOptions) {
   // Full page closes/reloads cannot await React cleanup. Send the pending request
   // with the exact scope captured when the edit was made and the real conflict key.
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && callbacksRef.current.saveFn) {
+        void flushPendingSave()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [flushPendingSave])
+
+  useEffect(() => {
     const handleUnload = () => {
       // Custom save functions may transform internal patch metadata and perform
       // optimistic retries. Sending their raw queued payload directly to PostgREST
