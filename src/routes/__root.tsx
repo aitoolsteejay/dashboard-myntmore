@@ -126,6 +126,7 @@ function AppLayout() {
       : path.startsWith('/actionables') ? 'Actionables'
         : path.startsWith('/monthly-targets') ? 'Monthly targets'
           : path.startsWith('/client-leaderboard') ? 'Client leaderboard'
+            : path.startsWith('/high-scores') ? 'High scores'
           : path.startsWith('/reports') ? 'Reports'
             : path.startsWith('/settings') ? 'Settings'
               : path.startsWith('/processes') ? 'Processes'

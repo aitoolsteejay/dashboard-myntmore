@@ -17,6 +17,7 @@ import { Route as ClientsRouteImport } from './routes/clients'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DataEntryRouteImport } from './routes/data-entry'
 import { Route as FinanceRouteImport } from './routes/finance'
+import { Route as HighScoresRouteImport } from './routes/high-scores'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MmContentRouteImport } from './routes/mm-content'
 import { Route as MonthlyTargetsRouteImport } from './routes/monthly-targets'
@@ -69,6 +70,11 @@ const DataEntryRoute = DataEntryRouteImport.update({
 const FinanceRoute = FinanceRouteImport.update({
   id: '/finance',
   path: '/finance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HighScoresRoute = HighScoresRouteImport.update({
+  id: '/high-scores',
+  path: '/high-scores',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/data-entry': typeof DataEntryRoute
   '/finance': typeof FinanceRoute
+  '/high-scores': typeof HighScoresRoute
   '/login': typeof LoginRoute
   '/mm-content': typeof MmContentRoute
   '/monthly-targets': typeof MonthlyTargetsRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/data-entry': typeof DataEntryRoute
   '/finance': typeof FinanceRoute
+  '/high-scores': typeof HighScoresRoute
   '/login': typeof LoginRoute
   '/mm-content': typeof MmContentRoute
   '/monthly-targets': typeof MonthlyTargetsRoute
@@ -193,6 +201,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/data-entry': typeof DataEntryRoute
   '/finance': typeof FinanceRoute
+  '/high-scores': typeof HighScoresRoute
   '/login': typeof LoginRoute
   '/mm-content': typeof MmContentRoute
   '/monthly-targets': typeof MonthlyTargetsRoute
@@ -218,6 +227,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/data-entry'
     | '/finance'
+    | '/high-scores'
     | '/login'
     | '/mm-content'
     | '/monthly-targets'
@@ -241,6 +251,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/data-entry'
     | '/finance'
+    | '/high-scores'
     | '/login'
     | '/mm-content'
     | '/monthly-targets'
@@ -264,6 +275,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/data-entry'
     | '/finance'
+    | '/high-scores'
     | '/login'
     | '/mm-content'
     | '/monthly-targets'
@@ -288,6 +300,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   DataEntryRoute: typeof DataEntryRoute
   FinanceRoute: typeof FinanceRoute
+  HighScoresRoute: typeof HighScoresRoute
   LoginRoute: typeof LoginRoute
   MmContentRoute: typeof MmContentRoute
   MonthlyTargetsRoute: typeof MonthlyTargetsRoute
@@ -355,6 +368,13 @@ declare module '@tanstack/react-router' {
       path: '/finance'
       fullPath: '/finance'
       preLoaderRoute: typeof FinanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/high-scores': {
+      id: '/high-scores'
+      path: '/high-scores'
+      fullPath: '/high-scores'
+      preLoaderRoute: typeof HighScoresRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -487,6 +507,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   DataEntryRoute: DataEntryRoute,
   FinanceRoute: FinanceRoute,
+  HighScoresRoute: HighScoresRoute,
   LoginRoute: LoginRoute,
   MmContentRoute: MmContentRoute,
   MonthlyTargetsRoute: MonthlyTargetsRoute,

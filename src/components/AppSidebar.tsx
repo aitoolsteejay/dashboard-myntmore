@@ -11,6 +11,7 @@ import {
   CalendarCheck,
   BarChart2,
   Trophy,
+  Medal,
   ArrowLeftRight,
 } from "lucide-react";
 import {
@@ -49,6 +50,7 @@ const groups = [
     items: [
       { to: "/reports", label: "Reports", icon: BarChart2, adminOnly: false },
       { to: "/client-leaderboard", label: "Client Leaderboard", icon: Trophy, adminOnly: false },
+      { to: "/high-scores", label: "High Scores", icon: Medal, adminOnly: false },
     ],
   },
   {
