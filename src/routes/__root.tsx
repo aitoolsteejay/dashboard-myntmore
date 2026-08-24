@@ -125,6 +125,7 @@ function AppLayout() {
     : path.startsWith('/data-entry') ? 'Data entry'
       : path.startsWith('/actionables') ? 'Actionables'
         : path.startsWith('/monthly-targets') ? 'Monthly targets'
+          : path.startsWith('/client-leaderboard') ? 'Client leaderboard'
           : path.startsWith('/reports') ? 'Reports'
             : path.startsWith('/settings') ? 'Settings'
               : path.startsWith('/processes') ? 'Processes'

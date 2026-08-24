@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Bell, CalendarDays, CheckSquare, Home, PenSquare, Plus, Search, Settings, Users } from "lucide-react";
+import { Bell, CalendarDays, CheckSquare, Home, PenSquare, Plus, Search, Settings, Trophy, Users } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ const destinations = [
   { label: "Data Entry", to: "/data-entry", icon: PenSquare },
   { label: "Actionables", to: "/actionables", icon: CheckSquare },
   { label: "Monthly Targets", to: "/monthly-targets", icon: CalendarDays },
+  { label: "Client Leaderboard", to: "/client-leaderboard", icon: Trophy },
   { label: "Settings", to: "/settings", icon: Settings },
 ] as const;
 

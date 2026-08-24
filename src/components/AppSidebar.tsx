@@ -10,6 +10,7 @@ import {
   LogOut,
   CalendarCheck,
   BarChart2,
+  Trophy,
   ArrowLeftRight,
 } from "lucide-react";
 import {
@@ -45,7 +46,10 @@ const groups = [
   },
   {
     label: "Insights",
-    items: [{ to: "/reports", label: "Reports", icon: BarChart2, adminOnly: false }],
+    items: [
+      { to: "/reports", label: "Reports", icon: BarChart2, adminOnly: false },
+      { to: "/client-leaderboard", label: "Client Leaderboard", icon: Trophy, adminOnly: false },
+    ],
   },
   {
     label: "Administration",

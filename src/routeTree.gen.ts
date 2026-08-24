@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as ActionablesRouteImport } from './routes/actionables'
+import { Route as ClientLeaderboardRouteImport } from './routes/client-leaderboard'
 import { Route as ClientsRouteImport } from './routes/clients'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DataEntryRouteImport } from './routes/data-entry'
@@ -43,6 +44,11 @@ const AcceptInviteRoute = AcceptInviteRouteImport.update({
 const ActionablesRoute = ActionablesRouteImport.update({
   id: '/actionables',
   path: '/actionables',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClientLeaderboardRoute = ClientLeaderboardRouteImport.update({
+  id: '/client-leaderboard',
+  path: '/client-leaderboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClientsRoute = ClientsRouteImport.update({
@@ -135,6 +141,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/actionables': typeof ActionablesRoute
+  '/client-leaderboard': typeof ClientLeaderboardRoute
   '/clients': typeof ClientsRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/data-entry': typeof DataEntryRoute
@@ -157,6 +164,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/actionables': typeof ActionablesRoute
+  '/client-leaderboard': typeof ClientLeaderboardRoute
   '/clients': typeof ClientsRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/data-entry': typeof DataEntryRoute
@@ -180,6 +188,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/actionables': typeof ActionablesRoute
+  '/client-leaderboard': typeof ClientLeaderboardRoute
   '/clients': typeof ClientsRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/data-entry': typeof DataEntryRoute
@@ -204,6 +213,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/actionables'
+    | '/client-leaderboard'
     | '/clients'
     | '/dashboard'
     | '/data-entry'
@@ -226,6 +236,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/actionables'
+    | '/client-leaderboard'
     | '/clients'
     | '/dashboard'
     | '/data-entry'
@@ -248,6 +259,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/actionables'
+    | '/client-leaderboard'
     | '/clients'
     | '/dashboard'
     | '/data-entry'
@@ -271,6 +283,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcceptInviteRoute: typeof AcceptInviteRoute
   ActionablesRoute: typeof ActionablesRoute
+  ClientLeaderboardRoute: typeof ClientLeaderboardRoute
   ClientsRoute: typeof ClientsRouteWithChildren
   DashboardRoute: typeof DashboardRoute
   DataEntryRoute: typeof DataEntryRoute
@@ -307,6 +320,13 @@ declare module '@tanstack/react-router' {
       path: '/actionables'
       fullPath: '/actionables'
       preLoaderRoute: typeof ActionablesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/client-leaderboard': {
+      id: '/client-leaderboard'
+      path: '/client-leaderboard'
+      fullPath: '/client-leaderboard'
+      preLoaderRoute: typeof ClientLeaderboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/clients': {
@@ -462,6 +482,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcceptInviteRoute: AcceptInviteRoute,
   ActionablesRoute: ActionablesRoute,
+  ClientLeaderboardRoute: ClientLeaderboardRoute,
   ClientsRoute: ClientsRouteWithChildren,
   DashboardRoute: DashboardRoute,
   DataEntryRoute: DataEntryRoute,
