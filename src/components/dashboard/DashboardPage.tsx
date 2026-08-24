@@ -28,7 +28,7 @@ import { formatWeekDate } from "@/utils/dateUtils"
 import { sortAlphabetically } from "@/utils/sort"
 import { useWorkspace } from "@/lib/workspace"
 import type {
-  WeeklyData, WeeklyDataSummary, Profile, MetricTarget, HealthScore, Actionable,
+  WeeklyData, WeeklyDataSummary, Profile, MetricTarget, Actionable,
   Campaign, MyntmoreProcess, ProcessUpdate, TjWeeklyData, SalesWeeklyData,
   MmWeeklyData, AppNotification, ClientAlertRow, ClientWithManagers, HighScore,
 } from '@/types'
@@ -128,7 +128,6 @@ function DeliverableAlertRow({ item, displayWeek }: { item: DeliverableAlertItem
 export function DashboardPage() {
   const { session, profile, isAdmin } = useAuth()
   const [clients, setClients] = useState<ClientWithManagers[]>([])
-  const [healthScores, setHealthScores] = useState<HealthScore[]>([])
   const [alerts, setAlerts] = useState<ClientAlertRow[]>([])
   const [tjData, setTjData] = useState<TjWeeklyData | null>(null)
   const [tjPrev, setTjPrev] = useState<TjWeeklyData | null>(null)
@@ -872,7 +871,6 @@ export function DashboardPage() {
 
       const dashboardResults = await Promise.all([
         supabase.from('clients').select('*, content_manager:profiles!content_manager_id(full_name), leadgen_manager:profiles!leadgen_manager_id(full_name)').eq('status', 'active').order('name'),
-        supabase.from('client_health_scores').select('*').order('week_start', { ascending: false }),
         supabase.from('client_alerts').select('*, clients(name, company)').eq('is_resolved', false).order('created_at', { ascending: false }),
         supabase.from('weekly_data').select('*').eq('week_start', weekStart),
         supabase.from('weekly_data').select('*').eq('week_start', prevWeekStart),
@@ -903,7 +901,6 @@ export function DashboardPage() {
 
       const [
         { data: clientsData },
-        { data: healthData },
         { data: alertsData },
         { data: weeklyDataRes },
         { data: prevWeeklyDataRes },
@@ -928,7 +925,6 @@ export function DashboardPage() {
       ] = dashboardResults
 
       setClients(sortAlphabetically(clientsData || [], client => client.name))
-      setHealthScores(healthData || [])
       setAlerts(alertsData || [])
       setWeeklyData(weeklyDataRes || [])
       setPrevWeeklyData(prevWeeklyDataRes || [])
@@ -1308,8 +1304,6 @@ export function DashboardPage() {
                     {clients.map(client => {
                       const currentData = weeklyData.find(w => w.client_id === client.id)
                       const prevData = prevWeeklyData.find(w => w.client_id === client.id)
-                      const health = healthScores.find(h => h.client_id === client.id && h.week_start === displayWeek)
-                      const score = health?.health_score ?? '-'
                       const isExpanded = expandedClients.has(client.id)
                       const clientTargets = targets.filter(t => t.client_id === client.id)
                       const clientMonthlyTargets = monthlyTargets.filter(t => t.client_id === client.id)
@@ -1369,13 +1363,6 @@ export function DashboardPage() {
                                   const acceptanceRate = built.L12
                                   return (
                                     <>
-                                      <div className="text-center w-12 shrink-0">
-                                        <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Health</p>
-                                        <Badge className={cn(
-                                            "font-black text-[10px] min-w-[32px] justify-center",
-                                            score === '-' ? "bg-muted text-muted-foreground" : Number(score) >= 75 ? "bg-status-on text-white" : Number(score) >= 50 ? "bg-status-risk text-white" : "bg-status-off text-white"
-                                        )}>{score}</Badge>
-                                      </div>
                                       {isServiceEnabled(client.id, 'content') && <div className="text-center w-12 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Posts</p>
                                         <p className="text-sm font-black">{formatDashboardValue(built?.C09, 'C09')}</p>
@@ -1543,7 +1530,6 @@ export function DashboardPage() {
                                     const inNetworkShare = weekBuilt?.C36 ?? null
                                     const outNetworkShare = weekBuilt?.C37 ?? null
                                     const totalConnReq = weekBuilt?.L10 ?? null
-                                    const onTrack = score === '-' ? null : Number(score) >= 75 ? 'on' : Number(score) >= 50 ? 'risk' : 'off'
                                     return (
                                       <div className="mt-8 flex items-center justify-between gap-4 rounded-lg border bg-muted/20 px-5 py-3">
                                         <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
@@ -1572,15 +1558,6 @@ export function DashboardPage() {
                                             <p className="text-lg font-black">{formatDashboardValue(totalConnReq, 'L10')}</p>
                                           </div>}
                                         </div>
-                                        <Badge className={cn(
-                                          "font-black text-[11px] px-3 py-1",
-                                          onTrack === null ? "bg-muted text-muted-foreground" :
-                                          onTrack === 'on' ? "bg-status-on text-white" :
-                                          onTrack === 'risk' ? "bg-status-risk text-white" :
-                                          "bg-status-off text-white"
-                                        )}>
-                                          {onTrack === null ? 'No Data' : onTrack === 'on' ? '✅ On Track' : onTrack === 'risk' ? '⚠️ At Risk' : '🔴 Off Track'}
-                                        </Badge>
                                       </div>
                                     )
                                   })()}
