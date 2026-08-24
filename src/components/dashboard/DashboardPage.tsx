@@ -1385,6 +1385,10 @@ export function DashboardPage() {
                                   }
                                   return (
                                     <>
+                                      {isServiceEnabled(client.id, 'content') && <div className="text-center w-16 shrink-0">
+                                        <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">LI Drafting</p>
+                                        {renderSummaryValue('C03', built?.C03)}
+                                      </div>}
                                       {isServiceEnabled(client.id, 'content') && <div className="text-center w-12 shrink-0">
                                         <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Posts</p>
                                         {renderSummaryValue('C09', built?.C09)}
