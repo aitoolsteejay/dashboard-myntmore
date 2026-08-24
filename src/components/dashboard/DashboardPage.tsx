@@ -1368,8 +1368,8 @@ export function DashboardPage() {
                                     const score = clientScores.find(item => item.metric_id === metricId)
                                     const isHighScore = numericValue !== null
                                       && numericValue > 0
-                                      && score?.achieved_week === displayWeek
-                                      && score.lifetime_high !== null
+                                      && score?.lifetime_high !== null
+                                      && score?.lifetime_high !== undefined
                                       && Math.abs(numericValue - Number(score.lifetime_high)) < 0.001
 
                                     return (
@@ -1378,7 +1378,7 @@ export function DashboardPage() {
                                           {percentage
                                             ? (numericValue !== null ? formatPct(numericValue) : '-')
                                             : formatDashboardValue(value as number | null, metricId)}
-                                          {isHighScore && <Star className="h-3 w-3 fill-yellow-400 text-yellow-500" aria-label="High score" />}
+                                          {isHighScore && <Star className="h-3.5 w-3.5 shrink-0 fill-yellow-400 text-yellow-500" aria-label="High score" />}
                                         </span>
                                       </p>
                                     )
