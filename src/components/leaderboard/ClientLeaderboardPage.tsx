@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { endOfWeek, format, startOfWeek, subDays, subWeeks } from 'date-fns'
 import { AlertTriangle, CalendarDays, Eye, Loader2, Trophy, UserCheck } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { readLinkedInImpressions, readNum } from '@/utils/readMetric'
@@ -7,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
-type RangePreset = 'month' | '4weeks' | '12weeks' | 'custom'
+type RangePreset = 'thisWeek' | 'lastWeek' | 'month' | '4weeks' | '12weeks' | 'custom'
 
 type ClientRow = {
   id: string
@@ -29,16 +30,24 @@ type LeaderboardEntry = ClientRow & {
   acceptanceRate: number | null
 }
 
-const isoDate = (date: Date) => date.toISOString().slice(0, 10)
+const isoDate = (date: Date) => format(date, 'yyyy-MM-dd')
 
 function getPresetRange(preset: Exclude<RangePreset, 'custom'>) {
   const today = new Date()
   const end = isoDate(today)
+  if (preset === 'thisWeek' || preset === 'lastWeek') {
+    const selectedWeek = preset === 'lastWeek' ? subWeeks(today, 1) : today
+    const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 0 })
+    const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 0 })
+    return {
+      start: isoDate(weekStart),
+      end: preset === 'thisWeek' ? end : isoDate(weekEnd),
+    }
+  }
   if (preset === 'month') {
     return { start: `${end.slice(0, 7)}-01`, end }
   }
-  const start = new Date(today)
-  start.setUTCDate(start.getUTCDate() - (preset === '4weeks' ? 27 : 83))
+  const start = subDays(today, preset === '4weeks' ? 27 : 83)
   return { start: isoDate(start), end }
 }
 
@@ -180,6 +189,8 @@ export function ClientLeaderboardPage() {
             <Select value={preset} onValueChange={value => handlePresetChange(value as RangePreset)}>
               <SelectTrigger id="leaderboard-range" className="min-w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="thisWeek">This week</SelectItem>
+                <SelectItem value="lastWeek">Last week</SelectItem>
                 <SelectItem value="month">This month</SelectItem>
                 <SelectItem value="4weeks">Last 4 weeks</SelectItem>
                 <SelectItem value="12weeks">Last 12 weeks</SelectItem>
@@ -225,7 +236,7 @@ export function ClientLeaderboardPage() {
           <Card>
             <CardHeader className="border-b">
               <CardTitle className="flex items-center gap-2 text-base"><UserCheck className="h-4 w-4 text-green-600" /> Acceptance Rate</CardTitle>
-              <p className="text-xs text-muted-foreground">Total accepted invitations divided by total connection requests.</p>
+              <p className="text-xs text-muted-foreground">Overall weighted average: total accepted invitations divided by total connection requests across the selected weeks.</p>
             </CardHeader>
             <CardContent>
               <RankingList entries={acceptanceRanking} value={entry => `${entry.acceptanceRate?.toFixed(1)}%`} emptyLabel="No connection-request data in this timeframe." />
