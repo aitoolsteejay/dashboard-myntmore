@@ -20,10 +20,13 @@ export async function backfillHighScores(clientId: string): Promise<void> {
   const best: Record<string, { value: number; week: string; name: string }> = {}
   // Track per-month sums of the raw underlying counters, to derive monthly bests
   const monthSums: Record<string, Record<string, number>> = {}
+  const monthCounts: Record<string, Record<string, number>> = {}
 
   const addToMonth = (month: string, id: string, val: number) => {
     if (!monthSums[month]) monthSums[month] = {}
+    if (!monthCounts[month]) monthCounts[month] = {}
     monthSums[month][id] = (monthSums[month][id] ?? 0) + val
+    monthCounts[month][id] = (monthCounts[month][id] ?? 0) + 1
   }
 
   for (const row of rows) {
@@ -48,12 +51,13 @@ export async function backfillHighScores(clientId: string): Promise<void> {
       else if (id === 'C10') val = C10
       else if (id === 'C26') val = C26
       else val = readNum(col, id)
-      if (val !== null && val > 0) {
-        if (!best[id] || val > best[id].value) {
+      if (val !== null) {
+        if (val > 0 && (!best[id] || val > best[id].value)) {
           best[id] = { value: val, week: weekStart, name }
         }
-        // C26 is an average, not summable across weeks - skip it for monthly totals
-        if (id !== 'C26') addToMonth(month, id, val)
+        // Network shares are averaged monthly, so a recorded 0% is meaningful
+        // and must count as a week. C26 is derived separately and not summed.
+        if (id !== 'C26' && (val > 0 || id === 'C36' || id === 'C37')) addToMonth(month, id, val)
       }
     })
 
@@ -77,8 +81,11 @@ export async function backfillHighScores(clientId: string): Promise<void> {
   const bestMonth: Record<string, { value: number; month: string }> = {}
   for (const [month, sums] of Object.entries(monthSums)) {
     for (const [id, value] of Object.entries(sums)) {
-      if (!bestMonth[id] || value > bestMonth[id].value) {
-        bestMonth[id] = { value, month }
+      const monthlyValue = (id === 'C36' || id === 'C37')
+        ? value / (monthCounts[month]?.[id] ?? 1)
+        : value
+      if (!bestMonth[id] || monthlyValue > bestMonth[id].value) {
+        bestMonth[id] = { value: monthlyValue, month }
       }
     }
     const accRate = calcAcceptanceRate(sums['L11'] ?? null, sums['L10'] ?? null)

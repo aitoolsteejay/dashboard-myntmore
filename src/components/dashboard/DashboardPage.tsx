@@ -40,6 +40,8 @@ function asDashboardRecord(value: unknown): Record<string, unknown> {
     : {}
 }
 
+const MONTHLY_AVERAGE_METRICS = new Set(['C36', 'C37'])
+
 // --- DeliverableAlertRow sub-component ---
 interface DeliverableAlertItem {
   clientId: string
@@ -470,11 +472,13 @@ export function DashboardPage() {
   const WeeklyBreakdown = ({ client, weeks }: { client: any, weeks: any[] }) => {
     // Calculate Monthly Totals
     const monthlyTotals: Record<string, number> = {}
+    const monthlyCounts: Record<string, number> = {}
     weeks.forEach(week => {
       ALL_METRICS.forEach(m => {
         const val = readMetric(week, m.category === 'content' ? 'content_metrics' : 'leadgen_metrics', m.id)
         if (val !== null && !isNaN(Number(val))) {
           monthlyTotals[m.id] = (monthlyTotals[m.id] ?? 0) + Number(val)
+          monthlyCounts[m.id] = (monthlyCounts[m.id] ?? 0) + 1
         }
       })
     })
@@ -483,6 +487,9 @@ export function DashboardPage() {
     monthlyTotals['L12'] = calcRateCapped(monthlyTotals['L11'], monthlyTotals['L10']) || 0
     monthlyTotals['L14'] = calcRateCapped(monthlyTotals['L13'], monthlyTotals['L11']) || 0
     monthlyTotals['C26'] = monthlyTotals['C09'] > 0 ? monthlyTotals['C10'] / monthlyTotals['C09'] : 0
+    MONTHLY_AVERAGE_METRICS.forEach(metricId => {
+      if (monthlyCounts[metricId] > 0) monthlyTotals[metricId] /= monthlyCounts[metricId]
+    })
 
     return (
       <div className="mt-6 border-t border-border overflow-x-auto w-full">
@@ -558,6 +565,7 @@ export function DashboardPage() {
 
     const aggregateClientRows = (rows: any[]) => {
       const totals: Record<string, Record<string, number>> = {}
+      const counts: Record<string, Record<string, number>> = {}
 
       rows.forEach(row => {
         const clientId = row.client_id
@@ -566,21 +574,26 @@ export function DashboardPage() {
         const built = buildWeekMetrics(row)
         if (!built) return
         if (!totals[clientId]) totals[clientId] = {}
+        if (!counts[clientId]) counts[clientId] = {}
 
         ALL_METRICS.forEach(metric => {
           if (metric.type === 'textarea' || metric.type === 'boolean' || metric.type === 'auto') return
           const value = built[metric.id]
           if (value !== null && value !== undefined && !isNaN(Number(value))) {
             totals[clientId][metric.id] = (totals[clientId][metric.id] ?? 0) + Number(value)
+            counts[clientId][metric.id] = (counts[clientId][metric.id] ?? 0) + 1
           }
         })
       })
 
-      Object.values(totals).forEach(total => {
+      Object.entries(totals).forEach(([clientId, total]) => {
         total.L12 = calcRateCapped(total.L11, total.L10) || 0
         total.L14 = calcRateCapped(total.L13, total.L11) || 0
         total.L17 = calcRateCapped(total.L15, total.L13) || 0
         total.C26 = total.C09 > 0 ? total.C10 / total.C09 : 0
+        MONTHLY_AVERAGE_METRICS.forEach(metricId => {
+          if (counts[clientId][metricId] > 0) total[metricId] /= counts[clientId][metricId]
+        })
       })
 
       return totals
@@ -1303,6 +1316,7 @@ export function DashboardPage() {
                       // MTD = sum of all weeks in the month up to and including displayWeek
                       const clientMtdRows = monthWeeklyData.filter(w => w.client_id === client.id && w.week_start <= displayWeek)
                       const clientMtdTotals: Record<string, number> = {}
+                      const clientMtdCounts: Record<string, number> = {}
                       for (const row of clientMtdRows) {
                         const cm = (row.content_metrics as Record<string, any>) ?? {}
                         const lm = (row.leadgen_metrics as Record<string, any>) ?? {}
@@ -1312,9 +1326,13 @@ export function DashboardPage() {
                           const v = readNum(col, m.id)
                           if (v !== null) {
                             clientMtdTotals[m.id] = (clientMtdTotals[m.id] ?? 0) + v
+                            clientMtdCounts[m.id] = (clientMtdCounts[m.id] ?? 0) + 1
                           }
                         })
                       }
+                      MONTHLY_AVERAGE_METRICS.forEach(metricId => {
+                        if (clientMtdCounts[metricId] > 0) clientMtdTotals[metricId] /= clientMtdCounts[metricId]
+                      })
 
                       return (
                         <Card key={client.id} className={cn("border shadow-sm overflow-hidden transition-all", isExpanded ? "ring-2 ring-gold/20" : "")}>

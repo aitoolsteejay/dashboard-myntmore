@@ -74,7 +74,7 @@ function aggregateWeeks(rows: any[]): MetricMap {
     .filter(Boolean) as Record<string, any>[]
   const total: MetricMap = {}
   const latest = new Set(['C16', 'C32'])
-  const averages = new Set(['C34', 'C35'])
+  const averages = new Set(['C34', 'C35', 'C36', 'C37'])
   const ids = new Set(builtRows.flatMap(row => Object.keys(row)))
 
   ids.forEach(id => {

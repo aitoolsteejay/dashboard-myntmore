@@ -161,7 +161,7 @@ function aggregatePeriodMetrics(rows: any[]): Record<string, any> | null {
 
   const totals: Record<string, any> = {}
   const latestValueMetrics = new Set(['C16', 'C32'])
-  const averageMetrics = new Set(['C34', 'C35'])
+  const averageMetrics = new Set(['C34', 'C35', 'C36', 'C37'])
 
   for (const metric of ALL_METRICS) {
     if (metric.type === 'auto' || metric.type === 'textarea' || metric.type === 'boolean') continue
@@ -178,19 +178,9 @@ function aggregatePeriodMetrics(rows: any[]): Record<string, any> | null {
   }
 
   const impressions = Number(totals.C10 || 0)
-  const networkWeights = builtRows.reduce((acc, row) => {
-    const rowImpressions = Number(row.C10 || 0)
-    if (rowImpressions <= 0) return acc
-    acc.total += rowImpressions
-    acc.inNetwork += rowImpressions * Number(row.C36 || 0)
-    acc.outNetwork += rowImpressions * Number(row.C37 || 0)
-    return acc
-  }, { total: 0, inNetwork: 0, outNetwork: 0 })
 
   totals.C09 = Number(totals.C06 || 0) + Number(totals.C07 || 0) + Number(totals.C08 || 0)
   totals.C26 = totals.C09 > 0 ? Math.round((impressions / totals.C09) * 100) / 100 : null
-  totals.C36 = networkWeights.total > 0 ? Math.round((networkWeights.inNetwork / networkWeights.total) * 100) / 100 : null
-  totals.C37 = networkWeights.total > 0 ? Math.round((networkWeights.outNetwork / networkWeights.total) * 100) / 100 : null
   totals.L05 = totals.L02 > 0 ? Math.min(100, Math.round((totals.L03 / totals.L02) * 10000) / 100) : null
   totals.L12 = totals.L10 > 0 ? Math.min(100, Math.round((totals.L11 / totals.L10) * 10000) / 100) : null
   totals.L14 = totals.L11 > 0 ? Math.min(100, Math.round((totals.L13 / totals.L11) * 10000) / 100) : null
