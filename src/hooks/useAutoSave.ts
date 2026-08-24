@@ -226,7 +226,6 @@ export function useAutoSave(options: AutoSaveOptions) {
       const payload = JSON.stringify({
         ...pending.cols,
         ...pending.data,
-        updated_at: new Date().toISOString(),
       })
       void fetch(url, {
         method: 'POST',

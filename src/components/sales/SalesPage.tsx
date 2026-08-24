@@ -64,6 +64,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
     cold_email: {},
     meeting_tracker: {}
   })
+  const fetchRequestRef = React.useRef(0)
 
   const handleWeekChange = async (week: string) => {
     const saved = await flushPendingSave()
@@ -99,14 +100,19 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
   }, [selectedWeek])
 
   const fetchWeeklyData = async () => {
+    const requestId = ++fetchRequestRef.current
+    const requestedWeek = selectedWeek
     setLoading(true)
     try {
       const { data, error } = await supabase
         .from('sales_weekly_data')
         .select('*')
-        .eq('week_start', selectedWeek)
+        .eq('week_start', requestedWeek)
         .maybeSingle()
-      
+
+      if (error) throw error
+      if (requestId !== fetchRequestRef.current) return
+
       if (data) {
         const flat: Record<string, any> = { ...((data.tj_outreach as any) ?? {}), ...((data.jahnvi_outreach as any) ?? {}), ...((data.shirin_outreach as any) ?? {}), ...((data.cold_email as any) ?? {}), ...((data.meeting_tracker as any) ?? {}) }
         setFormData({
@@ -126,9 +132,9 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
         })
       }
     } catch (error: any) {
-      toast.error(error.message)
+      if (requestId === fetchRequestRef.current) toast.error(error.message)
     } finally {
-      setLoading(false)
+      if (requestId === fetchRequestRef.current) setLoading(false)
     }
   }
 
@@ -194,12 +200,6 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
     }
   }
 
-  const extractSection = (data: Record<string, any>, keys: string[]) => {
-    const result: Record<string, any> = {}
-    keys.forEach(k => { if (data[k] !== undefined) result[k] = data[k] })
-    return result
-  }
-
   const updateMetric = (section: string, metric: string, value: string) => {
     if (!selectedWeek) {
       toast.error('Please select a week first.')
@@ -212,11 +212,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
       const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
 
       triggerSave({
-        tj_outreach: extractSection({ ...updated.tj_outreach }, ['SO01','SO02','SO03','SO04','SO05','SO06','SO07','SO08','SO09']),
-        jahnvi_outreach: extractSection({ ...updated.jahnvi_outreach }, ['SO10','SO11','SO12','SO13','SO14','SO15','SO16','SO17']),
-        shirin_outreach: extractSection({ ...updated.shirin_outreach }, ['SO18','SO19','SO20','SO21','SO22','SO23','SO24','SO25','SO26','SO27','SO28']),
-        cold_email: extractSection({ ...updated.cold_email }, ['SO29','SO30','SO31','SO32','SO33','SO34','SO35','SO50','SO51','SO53','SO55']),
-        meeting_tracker: extractSection({ ...updated.meeting_tracker }, ['SO36','SO37','SO38','SO39','SO40','SO41','SO42','SO43','SO44','SO45','SO46','SO47','SO48','SO49']),
+        [section]: updatedSection,
         week_end: weekInfo?.weekEnd || '',
         week_label: weekInfo?.label || '',
         submitted_by: user?.id

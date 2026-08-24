@@ -56,6 +56,7 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
     reddit: {},
     ads: {}
   })
+  const fetchRequestRef = React.useRef(0)
 
   const handleWeekChange = async (week: string) => {
     const saved = await flushPendingSave()
@@ -71,14 +72,19 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
   }, [selectedWeek])
 
   const fetchWeeklyData = async () => {
+    const requestId = ++fetchRequestRef.current
+    const requestedWeek = selectedWeek
     setLoading(true)
     try {
       const { data, error } = await supabase
         .from('mm_weekly_data')
         .select('*')
-        .eq('week_start', selectedWeek)
+        .eq('week_start', requestedWeek)
         .maybeSingle()
-      
+
+      if (error) throw error
+      if (requestId !== fetchRequestRef.current) return
+
       if (data) {
         const row = data as any
         setFormData({
@@ -100,9 +106,9 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
         })
       }
     } catch (error: any) {
-      toast.error(error.message)
+      if (requestId === fetchRequestRef.current) toast.error(error.message)
     } finally {
-      setLoading(false)
+      if (requestId === fetchRequestRef.current) setLoading(false)
     }
   }
 
@@ -128,12 +134,7 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
       triggerSave({
         week_end: weekInfo?.weekEnd || '',
         week_label: weekInfo?.label || '',
-        linkedin: updated.linkedin,
-        instagram: updated.instagram,
-        website: updated.website,
-        quora: updated.quora,
-        reddit: updated.reddit,
-        ads: updated.ads,
+        [section]: updatedSection,
         submitted_by: user?.id
       })
 
