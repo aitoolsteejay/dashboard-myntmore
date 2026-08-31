@@ -632,6 +632,7 @@ export function DashboardPage() {
           const pTotals = prevMonthTotals[client.id] || {}
           const isExpanded = expandedClients.has(client.id)
           const clientScores = highScores.filter(score => score.client_id === client.id)
+          const clientMonthlyTargets = monthlyTargets.filter(t => t.client_id === client.id)
           const clientWeeksThisMonth = monthWeeklyData.filter(w => w.client_id === client.id)
           const contentSubmitted = clientWeeksThisMonth.some(w => !!w.content_submitted_at)
           const leadgenSubmitted = clientWeeksThisMonth.some(w => !!w.leadgen_submitted_at)
@@ -645,15 +646,31 @@ export function DashboardPage() {
               && score?.lifetime_high_month !== undefined
               && Math.abs(numericValue - Number(score.lifetime_high_month)) < 0.001
 
+            const targetRaw = clientMonthlyTargets.find(t => t.metric_id === metricId)?.target_value ?? null
+            const targetNum = targetRaw !== null && !isNaN(Number(targetRaw)) ? Number(targetRaw) : null
+            const achPct = targetNum && numericValue !== null ? Math.round((numericValue / targetNum) * 100) : null
+            const achColor = achPct === null ? ''
+              : achPct >= 100 ? 'text-green-600'
+              : achPct >= 75 ? 'text-yellow-600'
+              : achPct >= 50 ? 'text-orange-500'
+              : 'text-red-600'
+
             return (
-              <p className={cn("text-sm font-black", gold && "text-gold", numericValue === null && "text-muted-foreground")}>
-                <span className="inline-flex items-center justify-center gap-1">
-                  {percentage
-                    ? (numericValue !== null ? formatPct(numericValue) : '-')
-                    : formatDashboardValue(value as number | null, metricId)}
-                  {isHighScore && <Star className="h-3.5 w-3.5 shrink-0 fill-yellow-400 text-yellow-500" aria-label="Best month ever" />}
-                </span>
-              </p>
+              <>
+                <p className={cn("text-sm font-black", numericValue === null && "text-muted-foreground")}>
+                  <span className={cn("inline-flex items-center justify-center gap-1", targetNum !== null ? achColor : (gold && "text-gold"))}>
+                    {percentage
+                      ? (numericValue !== null ? formatPct(numericValue) : '-')
+                      : formatDashboardValue(value as number | null, metricId)}
+                    {isHighScore && <Star className="h-3.5 w-3.5 shrink-0 fill-yellow-400 text-yellow-500" aria-label="Best month ever" />}
+                  </span>
+                </p>
+                {targetNum !== null && (
+                  <p className="text-[9px] font-semibold text-muted-foreground leading-tight -mt-0.5">
+                    /{formatDashboardValue(targetNum, metricId)}
+                  </p>
+                )}
+              </>
             )
           }
 
@@ -1494,15 +1511,31 @@ export function DashboardPage() {
                                       && score?.lifetime_high !== undefined
                                       && Math.abs(numericValue - Number(score.lifetime_high)) < 0.001
 
+                                    const targetRaw = clientTargets.find(t => t.metric_id === metricId)?.target_value ?? null
+                                    const targetNum = targetRaw !== null && !isNaN(Number(targetRaw)) ? Number(targetRaw) : null
+                                    const achPct = targetNum && numericValue !== null ? Math.round((numericValue / targetNum) * 100) : null
+                                    const achColor = achPct === null ? ''
+                                      : achPct >= 100 ? 'text-green-600'
+                                      : achPct >= 75 ? 'text-yellow-600'
+                                      : achPct >= 50 ? 'text-orange-500'
+                                      : 'text-red-600'
+
                                     return (
-                                      <p className={cn("text-sm font-black", gold && "text-gold", numericValue === null && "text-muted-foreground")}>
-                                        <span className="inline-flex items-center justify-center gap-1">
-                                          {percentage
-                                            ? (numericValue !== null ? formatPct(numericValue) : '-')
-                                            : formatDashboardValue(value as number | null, metricId)}
-                                          {isHighScore && <Star className="h-3.5 w-3.5 shrink-0 fill-yellow-400 text-yellow-500" aria-label="High score" />}
-                                        </span>
-                                      </p>
+                                      <>
+                                        <p className={cn("text-sm font-black", numericValue === null && "text-muted-foreground")}>
+                                          <span className={cn("inline-flex items-center justify-center gap-1", targetNum !== null ? achColor : (gold && "text-gold"))}>
+                                            {percentage
+                                              ? (numericValue !== null ? formatPct(numericValue) : '-')
+                                              : formatDashboardValue(value as number | null, metricId)}
+                                            {isHighScore && <Star className="h-3.5 w-3.5 shrink-0 fill-yellow-400 text-yellow-500" aria-label="High score" />}
+                                          </span>
+                                        </p>
+                                        {targetNum !== null && (
+                                          <p className="text-[9px] font-semibold text-muted-foreground leading-tight -mt-0.5">
+                                            /{formatDashboardValue(targetNum, metricId)}
+                                          </p>
+                                        )}
+                                      </>
                                     )
                                   }
                                   return (
