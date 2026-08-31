@@ -1,6 +1,21 @@
 import { supabase } from '@/integrations/supabase/client'
 import { calcAcceptanceRate, calcResponseRate, calcPositiveRate } from './metricCalculations'
 import { readNum, readLinkedInImpressions } from './readMetric'
+import { customMetricToMetric } from '@/hooks/useEffectiveMetrics'
+
+// Custom metrics are always number/percentage/textarea (never 'auto'), so unlike
+// TRACKED_METRICS they need none of the special live-calc branches below — just
+// a plain readNum(col, id) the same way most standard metrics already work.
+async function fetchNumericCustomMetrics(clientId: string) {
+  const { data, error } = await supabase
+    .from('custom_metrics')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('archived', false)
+    .neq('type', 'textarea')
+  if (error) throw error
+  return (data ?? []).map(customMetricToMetric)
+}
 
 /**
  * Scans ALL historical weekly_data rows for a client and upserts true all-time highs.
@@ -15,6 +30,8 @@ export async function backfillHighScores(clientId: string): Promise<void> {
 
   if (error) throw error
   if (!rows || rows.length === 0) return
+
+  const customMetrics = await fetchNumericCustomMetrics(clientId)
 
   // Track best single-week value and which week it was achieved
   const best: Record<string, { value: number; week: string; name: string }> = {}
@@ -58,6 +75,17 @@ export async function backfillHighScores(clientId: string): Promise<void> {
         // Network shares are averaged monthly, so a recorded 0% is meaningful
         // and must count as a week. C26 is derived separately and not summed.
         if (id !== 'C26' && (val > 0 || id === 'C36' || id === 'C37')) addToMonth(month, id, val)
+      }
+    })
+
+    customMetrics.forEach(m => {
+      const col = m.category === 'content' ? cm : lm
+      const val = readNum(col, m.id)
+      if (val !== null) {
+        if (val > 0 && (!best[m.id] || val > best[m.id].value)) {
+          best[m.id] = { value: val, week: weekStart, name: m.name }
+        }
+        if (val > 0) addToMonth(month, m.id, val)
       }
     })
 
@@ -193,6 +221,13 @@ export async function detectAndUpdateHighScores(
   if (accRate && accRate > 0) values['L12'] = { value: accRate, name: 'Acceptance Rate' }
   if (respRate && respRate > 0) values['L14'] = { value: respRate, name: 'Response Rate' }
   if (posRate && posRate > 0) values['L17'] = { value: posRate, name: 'Positive Response Rate' }
+
+  const customMetrics = await fetchNumericCustomMetrics(clientId)
+  customMetrics.forEach(m => {
+    const col = m.category === 'content' ? contentMetrics : leadgenMetrics
+    const val = readNum(col, m.id)
+    if (val !== null && val > 0) values[m.id] = { value: val, name: m.name }
+  })
 
   if (Object.keys(values).length === 0) return []
 

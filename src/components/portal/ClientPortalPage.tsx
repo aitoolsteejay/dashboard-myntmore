@@ -3,7 +3,8 @@ import { useNavigate } from '@tanstack/react-router'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/lib/auth'
 import { buildWeekMetrics, formatPct } from '@/utils/metricCalculations'
-import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS } from '@/data/metrics'
+import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from '@/data/metrics'
+import { fetchEffectiveMetrics } from '@/hooks/useEffectiveMetrics'
 import { formatDashboardValue } from '@/utils/dataUtils'
 import { getWeekOptions, getPreviousWeekStart, getWeeksInSameMonth } from '@/utils/weekUtils'
 import { CampaignMonthTable } from '@/components/monday/CampaignMonthTable'
@@ -150,12 +151,12 @@ function Delta({ curr, prev }: { curr: any; prev: any }) {
     : <span className="text-red-500 font-bold flex items-center gap-0.5"><ArrowDownRight className="w-3 h-3" />{formatVal(diff)} <span className="text-xs font-normal opacity-70">({pct}%)</span></span>
 }
 
-function aggregatePeriodMetrics(rows: any[]): Record<string, any> | null {
+function aggregatePeriodMetrics(rows: any[], extraMetrics: Metric[] = []): Record<string, any> | null {
   if (!rows.length) return null
   const builtRows = rows
     .slice()
     .sort((a, b) => (a.week_start ?? '').localeCompare(b.week_start ?? ''))
-    .map(row => buildWeekMetrics(row))
+    .map(row => buildWeekMetrics(row, extraMetrics))
     .filter(Boolean) as Record<string, any>[]
   if (!builtRows.length) return null
 
@@ -163,7 +164,7 @@ function aggregatePeriodMetrics(rows: any[]): Record<string, any> | null {
   const latestValueMetrics = new Set(['C16', 'C32'])
   const averageMetrics = new Set(['C34', 'C35', 'C36', 'C37'])
 
-  for (const metric of ALL_METRICS) {
+  for (const metric of [...ALL_METRICS, ...extraMetrics]) {
     if (metric.type === 'auto' || metric.type === 'textarea' || metric.type === 'boolean') continue
     const values = builtRows.map(row => Number(row[metric.id])).filter(Number.isFinite)
     if (!values.length) {
@@ -232,6 +233,7 @@ export function ClientPortalPage() {
   const [reportCategory, setReportCategory] = useState<CategoryFilter>('all')
   const [reportView, setReportView] = useState<ViewMode>('table')
   const [earliestWeekStart, setEarliestWeekStart] = useState<string | null>(null)
+  const [customMetrics, setCustomMetrics] = useState<Metric[]>([])
 
   // Earliest week of real data on file for this client — powers the "Lifetime" preset.
   useEffect(() => {
@@ -243,6 +245,14 @@ export function ClientPortalPage() {
       .then(({ data }: { data: any[] | null }) => {
         setEarliestWeekStart(assertClientRows(data, clientRecord.id, 'earliest week')[0]?.week_start ?? null)
       })
+  }, [clientRecord])
+
+  // This client's own custom metrics, defined in Settings > Metric Fields.
+  useEffect(() => {
+    if (!clientRecord) return
+    fetchEffectiveMetrics(clientRecord.id).then(effective => {
+      setCustomMetrics(effective.all.filter(m => !ALL_METRICS.some(std => std.id === m.id)))
+    })
   }, [clientRecord])
 
   const reportDateRange = useMemo(() => {
@@ -282,16 +292,16 @@ export function ClientPortalPage() {
   }, [clientRecord, activeTab, reportWeekList.join(',')])
 
   const reportAvailableMetrics = useMemo(() => {
-    const base = ALL_METRICS.filter(m => m.type !== 'textarea' && m.type !== 'boolean' && m.type !== 'slider')
+    const base = [...ALL_METRICS, ...customMetrics].filter(m => m.type !== 'textarea' && m.type !== 'boolean' && m.type !== 'slider')
     return reportCategory === 'content' ? base.filter(m => m.category === 'content')
       : reportCategory === 'leadgen' ? base.filter(m => m.category === 'leadgen')
       : base
-  }, [reportCategory])
+  }, [reportCategory, customMetrics])
 
   const getReportCellValue = (weekStart: string, metricId: string): number | null => {
     const row = reportWeeklyData.find(r => r.week_start === weekStart)
     if (!row) return null
-    const built = buildWeekMetrics(row)
+    const built = buildWeekMetrics(row, customMetrics)
     const val = built?.[metricId as keyof typeof built]
     if (val === null || val === undefined) return null
     const n = Number(val)
@@ -477,15 +487,15 @@ export function ClientPortalPage() {
     )
   }
 
-  const currentBuilt = performancePeriod === 'monthly' ? aggregatePeriodMetrics(mtdData) : buildWeekMetrics(currentData)
-  const prevBuilt = performancePeriod === 'monthly' ? aggregatePeriodMetrics(previousMonthData) : buildWeekMetrics(prevData)
+  const currentBuilt = performancePeriod === 'monthly' ? aggregatePeriodMetrics(mtdData, customMetrics) : buildWeekMetrics(currentData, customMetrics)
+  const prevBuilt = performancePeriod === 'monthly' ? aggregatePeriodMetrics(previousMonthData, customMetrics) : buildWeekMetrics(prevData, customMetrics)
 
   const currentPeriodLabel = performancePeriod === 'monthly' ? 'This Month' : 'This Week'
   const previousPeriodLabel = performancePeriod === 'monthly' ? 'Prev Month' : 'Prev Week'
 
   // Chart data
   const chartData = historyData.map(row => {
-    const built = buildWeekMetrics(row)
+    const built = buildWeekMetrics(row, customMetrics)
     const label = row.week_label?.split(' – ')[0] || row.week_start?.slice(5) || ''
     const entry: Record<string, any> = { week: label }
     TREND_METRICS.forEach(m => {
@@ -494,31 +504,35 @@ export function ClientPortalPage() {
     return entry
   })
 
-  const contentMetrics = CONTENT_METRICS.filter(m => m.group !== 'Qualitative' && m.type !== 'boolean' && m.type !== 'textarea')
-  const leadgenMetrics = LEADGEN_METRICS.filter(m => m.group !== 'Qualitative' && m.type !== 'boolean' && m.type !== 'textarea')
+  const customContentMetrics = customMetrics.filter(m => m.category === 'content' && m.type !== 'textarea')
+  const customLeadgenMetrics = customMetrics.filter(m => m.category === 'leadgen' && m.type !== 'textarea')
+  const contentMetrics = [...CONTENT_METRICS.filter(m => m.group !== 'Qualitative' && m.type !== 'boolean' && m.type !== 'textarea'), ...customContentMetrics]
+  const leadgenMetrics = [...LEADGEN_METRICS.filter(m => m.group !== 'Qualitative' && m.type !== 'boolean' && m.type !== 'textarea'), ...customLeadgenMetrics]
   const contentMetricGroups = [
     { name: 'Performance', label: 'Audience Performance', description: 'How your published content performed with your audience.' },
     { name: 'Post Output', label: 'Content Published', description: 'The content delivered and published during this period.' },
     { name: 'Production Pipeline', label: 'Content Pipeline', description: 'Work currently moving through ideation, drafting and approval.' },
     { name: 'Newsletter', label: 'Newsletter Performance', description: 'Newsletter output, audience and engagement.' },
+    { name: 'Custom', label: 'Custom Metrics', description: 'Metrics tracked specifically for your account.' },
   ].map(group => ({
     ...group,
     metrics: contentMetrics.filter(metric => metric.group === group.name),
   })).filter(group => group.metrics.length > 0)
 
-  const formatContentMetric = (metric: typeof CONTENT_METRICS[number], value: unknown) =>
+  const formatContentMetric = (metric: Metric, value: unknown) =>
     metric.unit === '%' ? formatPct(value as number) : formatVal(value)
   const leadgenMetricGroups = [
     { name: 'Connection Request Outreach', label: 'Campaign Outreach', description: 'Prospects contacted and how they responded to the campaign.' },
     { name: 'InMail Outreach', label: 'InMail Outreach', description: 'Performance of direct LinkedIn InMail activity.' },
     { name: 'Existing Connections', label: 'Existing Network', description: 'Conversations and opportunities generated from existing connections.' },
     { name: 'Pipeline & Conversion', label: 'Leads & Meetings', description: 'Qualified outcomes created from outreach activity.' },
+    { name: 'Custom', label: 'Custom Metrics', description: 'Metrics tracked specifically for your account.' },
   ].map(group => ({
     ...group,
     metrics: leadgenMetrics.filter(metric => metric.group === group.name),
   })).filter(group => group.metrics.length > 0)
 
-  const formatLeadgenMetric = (metric: typeof LEADGEN_METRICS[number], value: unknown) =>
+  const formatLeadgenMetric = (metric: Metric, value: unknown) =>
     metric.unit === '%' ? formatPct(value as number) : formatVal(value)
 
   const tabs = [

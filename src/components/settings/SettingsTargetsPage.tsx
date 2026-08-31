@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from "@/integrations/supabase/client"
 import { useAuth } from "@/lib/auth"
 import { ALL_METRICS, Metric } from "@/data/metrics"
+import { fetchEffectiveMetrics } from "@/hooks/useEffectiveMetrics"
 import { getPreviousWeekStart, getWeekOptions, getWeekEnd, getWeekLabel } from "@/utils/weekUtils"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
@@ -135,6 +136,7 @@ export function SettingsTargetsPage() {
   const [tjActuals, setTjActuals] = useState<Record<string, number>>({})
   const [tjSaving, setTjSaving] = useState(false)
   const [clients, setClients] = useState<any[]>([])
+  const [customMetrics, setCustomMetrics] = useState<Metric[]>([])
 
   const period = targetType === 'weekly' ? selectedWeekStart : selectedMonth
   const monthOptions = useMemo(() => getMonthOptions(6), [])
@@ -245,7 +247,7 @@ export function SettingsTargetsPage() {
 
     const actuals: Record<string, number> = {}
     weeklyRows?.forEach(row => {
-      ALL_METRICS.filter(m => m.hasTarget).forEach(metric => {
+      [...ALL_METRICS, ...customMetrics].filter(m => m.hasTarget).forEach(metric => {
         const col = metric.category === 'content' ? 'content_metrics' : 'leadgen_metrics'
         const val = (row[col] as any)?.[metric.id]?.value
         if (val !== null && val !== undefined && !isNaN(Number(val))) {
@@ -258,13 +260,20 @@ export function SettingsTargetsPage() {
   }
 
   useEffect(() => {
+    if (!selectedClientId) { setCustomMetrics([]); return }
+    fetchEffectiveMetrics(selectedClientId).then(effective => {
+      setCustomMetrics(effective.all.filter(m => !ALL_METRICS.some(std => std.id === m.id)))
+    })
+  }, [selectedClientId])
+
+  useEffect(() => {
     if (!selectedClientId || !period) return
     Promise.all([
       loadTargets(selectedClientId, targetType, period),
       loadPreviousPeriodTargets(selectedClientId, targetType, period),
       loadMTDActuals(selectedClientId, period, targetType)
     ])
-  }, [selectedClientId, targetType, period])
+  }, [selectedClientId, targetType, period, customMetrics])
 
   const handleTargetChange = (metricId: string, value: number) => {
     setTargetValues(prev => ({ ...prev, [metricId]: value }))
@@ -496,7 +505,7 @@ export function SettingsTargetsPage() {
     )
   }
 
-  const targetableMetrics = ALL_METRICS.filter(m => m.hasTarget)
+  const targetableMetrics = [...ALL_METRICS, ...customMetrics].filter(m => m.hasTarget)
   const targetableContent = targetableMetrics.filter(m => m.category === 'content')
   const targetableLeadGen = targetableMetrics.filter(m => m.category === 'leadgen')
 

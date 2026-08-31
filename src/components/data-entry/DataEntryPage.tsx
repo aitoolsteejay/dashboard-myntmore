@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from "@/integrations/supabase/client"
 import { useAuth } from "@/lib/auth"
 import { ALL_METRICS, CONTENT_METRICS, LEADGEN_METRICS, Metric } from "@/data/metrics"
+import { EffectiveMetrics, customMetricToMetric } from "@/hooks/useEffectiveMetrics"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -139,6 +140,7 @@ interface LeadGenCampaignEntryProps {
   setShowInactive: (v: boolean) => void
   setEditingCampaign: (c: Campaign | null) => void
   registerCampaignSave: (handler: (() => Promise<void>) | null) => void
+  customLeadgenMetrics: Metric[]
 }
 
 function LeadGenCampaignEntry({
@@ -146,6 +148,7 @@ function LeadGenCampaignEntry({
   campaigns, setCampaigns, campaignWeeklyData, formData, handleMetricChange,
   user, contentSaveStatus, fetchData, toggleCampaignStatus, deleteCampaign,
   showInactive, setShowInactive, setEditingCampaign, registerCampaignSave,
+  customLeadgenMetrics,
 }: LeadGenCampaignEntryProps) {
     const [localCampaignData, setLocalCampaignData] = useState<Record<string, any>>({})
     const localCampaignDataRef = React.useRef(localCampaignData)
@@ -740,6 +743,29 @@ function LeadGenCampaignEntry({
 
     return (
         <div className="space-y-6">
+            {/* CUSTOM METRICS — client-specific fields defined in Settings > Metric Fields */}
+            {customLeadgenMetrics.length > 0 && (
+              <div className="bg-white border rounded-xl shadow-sm overflow-hidden mb-8">
+                <div className="px-6 py-4 border-b bg-muted/10">
+                  <h3 className="font-bold text-lg uppercase tracking-tight">Custom Metrics</h3>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Specific to this client</p>
+                </div>
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {customLeadgenMetrics.map(m => (
+                    <MetricCard
+                      key={m.id}
+                      metric={m}
+                      value={formData[m.id]?.value}
+                      onChange={(v) => handleMetricChange(m.id, 'value', v)}
+                      onNoteChange={(n) => handleMetricChange(m.id, 'note', n)}
+                      note={formData[m.id]?.note}
+                      allValues={Object.entries(formData).reduce((acc, [k, v]: [string, any]) => ({ ...acc, [k]: v.value }), {})}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* EXISTING CONNECTIONS */}
             <div className="bg-white border rounded-xl shadow-sm overflow-hidden mb-8">
                 <div className="px-6 py-4 border-b bg-muted/10 flex justify-between items-center">
@@ -1401,6 +1427,12 @@ export function DataEntryPage() {
   
   const [weeklyTargets, setWeeklyTargets] = useState<Record<string, number>>({})
   const [monthlyTargets, setMonthlyTargets] = useState<Record<string, number>>({})
+
+  // Global catalog plus this client's own custom metrics, merged. Refetched
+  // per client in fetchData() below.
+  const [effectiveMetrics, setEffectiveMetrics] = useState<EffectiveMetrics>({
+    all: ALL_METRICS, content: CONTENT_METRICS, leadgen: LEADGEN_METRICS,
+  })
   
   const [showInactive, setShowInactive] = useState(false)
   const [formData, setFormData] = useState<Record<string, any>>({})
@@ -1569,7 +1601,7 @@ export function DataEntryPage() {
   ) => {
     if (!selectedClientId || !selectedWeek) return
 
-    const metricIds = (tab === 'content' ? CONTENT_METRICS : LEADGEN_METRICS)
+    const metricIds = (tab === 'content' ? effectiveMetrics.content : effectiveMetrics.leadgen)
       .map(metric => metric.id)
       .filter(metricId => metricEditVersionsRef.current.has(metricId))
     if (metricIds.length === 0) return
@@ -1625,7 +1657,8 @@ export function DataEntryPage() {
         { data: notesData },
         { data: targetsData },
         { data: campaignsData },
-        { data: campaignWeeklyDataRes }
+        { data: campaignWeeklyDataRes },
+        { data: customMetricsData },
       ] = await Promise.all([
         supabase.from('client_settings').select('*').eq('client_id', selectedClientId).maybeSingle(),
         supabase.from('weekly_data').select('*').eq('client_id', selectedClientId).eq('week_start', selectedWeek).maybeSingle(),
@@ -1634,8 +1667,17 @@ export function DataEntryPage() {
         supabase.from('client_context_notes').select(`*, author:profiles!created_by(full_name)`).eq('client_id', selectedClientId).order('is_pinned', { ascending: false }).order('created_at', { ascending: false }),
         supabase.from('targets').select('*').eq('client_id', selectedClientId),
         supabase.from('campaigns').select('*').eq('client_id', selectedClientId).order('created_at'),
-        supabase.from('campaign_weekly_data').select('*').eq('client_id', selectedClientId).eq('week_start', selectedWeek)
+        supabase.from('campaign_weekly_data').select('*').eq('client_id', selectedClientId).eq('week_start', selectedWeek),
+        supabase.from('custom_metrics').select('*').eq('client_id', selectedClientId).eq('archived', false).order('sort_order', { ascending: true }),
       ])
+
+      const customMetrics = (customMetricsData ?? []).map(customMetricToMetric)
+      const effective: EffectiveMetrics = {
+        content: [...CONTENT_METRICS, ...customMetrics.filter(m => m.category === 'content')],
+        leadgen: [...LEADGEN_METRICS, ...customMetrics.filter(m => m.category === 'leadgen')],
+        all: [] as Metric[],
+      }
+      effective.all = [...effective.content, ...effective.leadgen]
       
       // Load weekly/monthly targets separately
       const month = selectedWeek.slice(0, 7)
@@ -1672,10 +1714,11 @@ export function DataEntryPage() {
       setTargets(targetsData || [])
       setCampaigns(sortAlphabetically(campaignsData || [], campaign => campaign.name))
       setCampaignWeeklyData(campaignWeeklyDataRes || [])
+      setEffectiveMetrics(effective)
 
       // Pre-fill form
       const initialForm: Record<string, any> = {}
-      ALL_METRICS.forEach(m => {
+      effective.all.forEach(m => {
         const metrics = (m.category === 'content' ? currentData?.content_metrics : currentData?.leadgen_metrics) as Record<string, any> | null | undefined
         const val = metrics?.[m.id]
         const emptyValue = m.id === 'C36' || m.id === 'C37'
@@ -1844,8 +1887,8 @@ export function DataEntryPage() {
       const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
       
       const currentFormData = formDataRef.current
-      const contentMetrics = buildMetricsPayload(CONTENT_METRICS, currentFormData)
-      const leadGenMetrics = buildMetricsPayload(LEADGEN_METRICS, currentFormData)
+      const contentMetrics = buildMetricsPayload(effectiveMetrics.content, currentFormData)
+      const leadGenMetrics = buildMetricsPayload(effectiveMetrics.leadgen, currentFormData)
 
       const payload: any = {
         client_id: selectedClientId,
@@ -2246,7 +2289,7 @@ export function DataEntryPage() {
         ) : (
           <>
             <TabsContent value="content" forceMount>
-              {renderMetrics(CONTENT_METRICS.filter(m => m.group !== 'Qualitative'))}
+              {renderMetrics(effectiveMetrics.content.filter(m => m.group !== 'Qualitative'))}
               {renderContentQualitative()}
             </TabsContent>
             <TabsContent value="leadgen" forceMount>
@@ -2270,6 +2313,7 @@ export function DataEntryPage() {
                 setShowInactive={setShowInactive}
                 setEditingCampaign={setEditingCampaign}
                 registerCampaignSave={registerCampaignSave}
+                customLeadgenMetrics={effectiveMetrics.leadgen.filter(m => !LEADGEN_METRICS.some(std => std.id === m.id))}
               />
               {renderLeadgenQualitative()}
             </TabsContent>

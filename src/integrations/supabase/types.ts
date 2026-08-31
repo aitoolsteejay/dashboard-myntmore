@@ -716,6 +716,75 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_metrics: {
+        Row: {
+          archived: boolean
+          category: string
+          client_id: string
+          created_at: string | null
+          created_by: string | null
+          group: string
+          has_note: boolean
+          has_target: boolean
+          id: string
+          metric_key: string
+          name: string
+          sort_order: number
+          type: string
+          unit: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          archived?: boolean
+          category: string
+          client_id: string
+          created_at?: string | null
+          created_by?: string | null
+          group?: string
+          has_note?: boolean
+          has_target?: boolean
+          id?: string
+          metric_key?: string
+          name: string
+          sort_order?: number
+          type: string
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          archived?: boolean
+          category?: string
+          client_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          group?: string
+          has_note?: boolean
+          has_target?: boolean
+          id?: string
+          metric_key?: string
+          name?: string
+          sort_order?: number
+          type?: string
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_metrics_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_metrics_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       high_scores: {
         Row: {
           achieved_week: string | null

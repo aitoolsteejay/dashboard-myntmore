@@ -2,6 +2,8 @@ import { jsPDF } from 'jspdf'
 import { supabase } from '@/integrations/supabase/client'
 import { buildWeekMetrics } from '@/utils/metricCalculations'
 import { assertClientRows } from '@/utils/clientScope'
+import { Metric } from '@/data/metrics'
+import { customMetricToMetric } from '@/hooks/useEffectiveMetrics'
 
 type EomClient = { id: string; name: string; company: string | null }
 
@@ -66,11 +68,11 @@ function cleanNote(value: unknown): string | null {
   return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`
 }
 
-function aggregateWeeks(rows: any[]): MetricMap {
+function aggregateWeeks(rows: any[], extraMetrics: Metric[] = []): MetricMap {
   const builtRows = rows
     .slice()
     .sort((a, b) => String(a.week_start).localeCompare(String(b.week_start)))
-    .map(buildWeekMetrics)
+    .map(row => buildWeekMetrics(row, extraMetrics))
     .filter(Boolean) as Record<string, any>[]
   const total: MetricMap = {}
   const latest = new Set(['C16', 'C32'])
@@ -119,7 +121,7 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   const current = monthBounds(month)
   const previousMonths = [shiftMonth(month, -2), shiftMonth(month, -1), month]
   const historyStart = monthBounds(previousMonths[0]).start
-  const [{ data: weeksRaw, error: weeksError }, { data: campaignsRaw, error: campaignsError }, { data: campaignRowsRaw, error: campaignRowsError }, { data: momentsRaw }] = await Promise.all([
+  const [{ data: weeksRaw, error: weeksError }, { data: campaignsRaw, error: campaignsError }, { data: campaignRowsRaw, error: campaignRowsError }, { data: momentsRaw }, { data: customMetricsRaw }] = await Promise.all([
     supabase.from('weekly_data').select('client_id, week_start, week_label, content_metrics, leadgen_metrics, content_submitted_at, leadgen_submitted_at')
       .eq('client_id', client.id).gte('week_start', historyStart).lte('week_start', current.end).order('week_start'),
     supabase.from('campaigns').select('id, client_id, name, status, icp_description, message_narrative, started_date')
@@ -128,6 +130,7 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
       .eq('client_id', client.id).gte('week_start', current.start).lte('week_start', current.end).order('week_start'),
     (supabase as any).from('aha_moments').select('client_id, title, description, created_at').eq('client_id', client.id)
       .gte('created_at', `${current.start}T00:00:00Z`).lte('created_at', `${current.end}T23:59:59Z`).order('created_at'),
+    supabase.from('custom_metrics').select('*').eq('client_id', client.id).eq('archived', false).order('sort_order', { ascending: true }),
   ])
   if (weeksError) throw weeksError
   if (campaignsError) throw campaignsError
@@ -137,12 +140,13 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   const campaigns = assertClientRows(campaignsRaw, client.id, 'EOM campaigns')
   const campaignRows = assertClientRows(campaignRowsRaw, client.id, 'EOM campaign data')
   const moments = assertClientRows(momentsRaw, client.id, 'EOM highlights')
+  const customMetrics = assertClientRows(customMetricsRaw, client.id, 'EOM custom metrics').map(customMetricToMetric)
   const monthRows = weeks.filter(row => String(row.week_start).slice(0, 7) === month)
   if (!monthRows.length) throw new Error(`No submitted dashboard data is available for ${monthLabel(month)}.`)
 
   const monthly = Object.fromEntries(previousMonths.map(period => [
     period,
-    aggregateWeeks(weeks.filter(row => String(row.week_start).slice(0, 7) === period)),
+    aggregateWeeks(weeks.filter(row => String(row.week_start).slice(0, 7) === period), customMetrics),
   ])) as Record<string, MetricMap>
   const currentMetrics = monthly[month]
   const campaignSummaries = campaigns.map(campaign => {
@@ -307,6 +311,22 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   insightBox(230, 'Warm outreach', `${fmt(currentMetrics.L19)} messages were sent to existing connections, generating ${fmt(currentMetrics.L20)} replies (${fmt(currentMetrics.L21, true)}) and ${fmt(currentMetrics.L22)} hot leads.`, 34)
   finish()
 
+  // Page 3b - Custom metrics (only when this client has any numeric ones defined)
+  const numericCustomMetrics = customMetrics.filter(m => m.type !== 'textarea')
+  if (numericCustomMetrics.length > 0) {
+    header('Custom metrics', 'Specific to this client')
+    sectionTitle('This month', 49, 'Metrics tracked specifically for this client, not part of the standard package.')
+    numericCustomMetrics.slice(0, 12).forEach((metric, index) => {
+      const x = margin + (index % 2) * 92, y = 62 + Math.floor(index / 2) * 20
+      rounded(x, y, 87, 15, '#ffffff', '#dfe3ec')
+      text(metric.name, x + 4, y + 9.5, 8.5, MUTED, 'bold')
+      const value = currentMetrics[metric.id]
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(NAVY)
+      doc.text(fmt(value, metric.type === 'percentage'), x + 82, y + 9.5, { align: 'right' })
+    })
+    finish()
+  }
+
   // Page 4+ - Campaigns
   header('Campaign performance', 'ICP-level analysis')
   sectionTitle('Campaign breakdown', 49, 'Results for campaigns with activity recorded during this month.')
@@ -360,7 +380,7 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   // Final page - next steps
   header('Strategy going ahead', 'Recommendations')
   sectionTitle('What the data suggests', 49)
-  const latestBuilt = buildWeekMetrics(monthRows.slice().sort((a, b) => String(b.week_start).localeCompare(String(a.week_start)))[0]) || {}
+  const latestBuilt = buildWeekMetrics(monthRows.slice().sort((a, b) => String(b.week_start).localeCompare(String(a.week_start)))[0], customMetrics) || {}
   const contentWorking = cleanNote(latestBuilt.C24) || `Continue the formats that produced the strongest reach and engagement during ${monthLabel(month)}.`
   const contentBlocker = cleanNote(latestBuilt.C25) || 'Review lower-performing formats and sharpen the opening hook, relevance and distribution rhythm.'
   const leadWorking = cleanNote(latestBuilt.L28) || 'Prioritise ICPs and campaign narratives that produced positive replies and qualified conversations.'

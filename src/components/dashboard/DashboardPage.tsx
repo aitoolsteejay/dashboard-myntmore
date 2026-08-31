@@ -14,7 +14,8 @@ import { toast } from "sonner"
 import { getPreviousWeekStart, getWeekLabel, getWeeksInSameMonth, isLastWeekOfMonth } from "@/utils/weekUtils"
 import { CampaignMonthTable } from "../monday/CampaignMonthTable"
 import { EditCampaignModal } from "../monday/EditCampaignModal"
-import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS } from "@/data/metrics"
+import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from "@/data/metrics"
+import { customMetricToMetric } from "@/hooks/useEffectiveMetrics"
 import { mv, mt, fmt, delta, deltaColor, tjVal, salesVal, sv, readMetric, formatMetricValue, formatDashboardValue } from "@/utils/dataUtils"
 
 import { fmt as gFmt, fmtDelta, Delta, fmtPct, fmtPctDelta } from "@/utils/format"
@@ -184,6 +185,8 @@ export function DashboardPage() {
     content_enabled: boolean
     leadgen_enabled: boolean
   }>>({})
+  // Every client's own custom metrics, bulk-fetched once (not N+1 per client).
+  const [customMetricsByClient, setCustomMetricsByClient] = useState<Record<string, Metric[]>>({})
 
   const isServiceEnabled = (clientId: string, category: 'content' | 'leadgen') => {
     const settings = clientSettings[clientId]
@@ -192,8 +195,11 @@ export function DashboardPage() {
       : settings?.leadgen_enabled ?? true
   }
 
+  const customMetricsFor = (clientId: string, category: 'content' | 'leadgen') =>
+    (customMetricsByClient[clientId] ?? []).filter(m => m.category === category)
+
   const activeMetricsFor = (clientId: string, category: 'content' | 'leadgen') => {
-    const metrics = category === 'content' ? CONTENT_METRICS : LEADGEN_METRICS
+    const metrics = [...(category === 'content' ? CONTENT_METRICS : LEADGEN_METRICS), ...customMetricsFor(clientId, category)]
     const ids = category === 'content'
       ? clientSettings[clientId]?.active_content_metrics
       : clientSettings[clientId]?.active_leadgen_metrics
@@ -342,8 +348,13 @@ export function DashboardPage() {
     clientMtdTotals: Record<string, number>,
     clientHighScores: HighScore[]
   }) => {
-    const currentBuilt = buildWeekMetrics(currentData)
-    const prevBuilt = buildWeekMetrics(prevData)
+    // `metrics` may already include this client's custom metrics merged in by
+    // the caller; buildWeekMetrics needs those passed explicitly too so it
+    // actually resolves their raw values instead of only iterating the shared
+    // ALL_METRICS catalog.
+    const extraMetrics = metrics.filter(m => !ALL_METRICS.some(std => std.id === m.id))
+    const currentBuilt = buildWeekMetrics(currentData, extraMetrics)
+    const prevBuilt = buildWeekMetrics(prevData, extraMetrics)
     const [expandedTextareas, setExpandedTextareas] = React.useState<Set<string>>(new Set())
     const [stickyHeader, setStickyHeader] = React.useState(false)
     return (
@@ -487,11 +498,13 @@ export function DashboardPage() {
   }
 
   const WeeklyBreakdown = ({ client, weeks }: { client: any, weeks: any[] }) => {
+    const customMetrics = customMetricsByClient[client.id] ?? []
+    const clientMetrics = [...ALL_METRICS, ...customMetrics]
     // Calculate Monthly Totals
     const monthlyTotals: Record<string, number> = {}
     const monthlyCounts: Record<string, number> = {}
     weeks.forEach(week => {
-      ALL_METRICS.forEach(m => {
+      clientMetrics.forEach(m => {
         const val = readMetric(week, m.category === 'content' ? 'content_metrics' : 'leadgen_metrics', m.id)
         if (val !== null && !isNaN(Number(val))) {
           monthlyTotals[m.id] = (monthlyTotals[m.id] ?? 0) + Number(val)
@@ -523,7 +536,7 @@ export function DashboardPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {ALL_METRICS.filter(m => m.type !== 'textarea').map(m => {
+            {clientMetrics.filter(m => m.type !== 'textarea').map(m => {
               // Delivery & Reporting metrics (EOM Report Sent, etc.) are only collected once,
               // on the last week of the month — the form hides them for every other week, so
               // they'd otherwise show as a false "❌" for weeks they were never meant to cover.
@@ -533,11 +546,11 @@ export function DashboardPage() {
                 <TableRow key={m.id} className="h-8 hover:bg-muted/5">
                   <TableCell className="py-1 text-[11px] font-medium border-r">{m.name}</TableCell>
                   {weeks.map((week, idx) => {
-                    const built = buildWeekMetrics(week)
+                    const built = buildWeekMetrics(week, customMetrics)
                     const rawVal = built?.[m.id as keyof typeof built] ?? null
                     const val = isMonthlyOnly && !isLastWeekOfMonth(week.week_start) ? null : rawVal
 
-                    const prevBuilt = idx > 0 ? buildWeekMetrics(weeks[idx-1]) : null
+                    const prevBuilt = idx > 0 ? buildWeekMetrics(weeks[idx-1], customMetrics) : null
                     const prevVal = prevBuilt?.[m.id as keyof typeof prevBuilt] ?? null
 
                     let color = 'inherit'
@@ -587,18 +600,20 @@ export function DashboardPage() {
       rows.forEach(row => {
         const clientId = row.client_id
         if (!clientId) return
+        const customMetrics = customMetricsByClient[clientId] ?? []
 
-        const built = buildWeekMetrics(row)
+        const built = buildWeekMetrics(row, customMetrics)
         if (!built) return
         if (!totals[clientId]) totals[clientId] = {}
         if (!counts[clientId]) counts[clientId] = {}
 
-        ALL_METRICS.forEach(metric => {
+        ;[...ALL_METRICS, ...customMetrics].forEach(metric => {
           if (metric.type === 'textarea' || metric.type === 'boolean') return
           // Rate/percentage auto-metrics (L12, L14, L17, C26, ...) are recomputed from
           // summed numerators/denominators below, not summed directly. C09 is the one
           // auto metric that's a plain weekly cumulative total, so it's safe (and needed,
-          // since C26's recompute below divides by it) to sum week-over-week.
+          // since C26's recompute below divides by it) to sum week-over-week. Custom
+          // metrics are never 'auto', so they always fall through to a plain sum.
           if (metric.type === 'auto' && metric.id !== 'C09') return
           const value = metric.id === 'L22'
             ? (built.L22 ?? mv(row, 'leadgen_metrics', 'L23'))
@@ -775,7 +790,7 @@ export function DashboardPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {ALL_METRICS.filter(m => m.type !== 'textarea' && m.type !== 'boolean').map(m => (
+                      {[...ALL_METRICS, ...(customMetricsByClient[client.id] ?? [])].filter(m => m.type !== 'textarea' && m.type !== 'boolean').map(m => (
                         <TableRow key={m.id} className="h-8">
                           <TableCell className="py-1 text-[11px] font-medium">{m.name}</TableCell>
                           <TableCell className="py-1 text-center text-[11px] text-muted-foreground">
@@ -1034,6 +1049,7 @@ export function DashboardPage() {
         supabase.from('sales_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', weekStart.slice(0, 7) + '-31'),
         supabase.from('mm_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', weekStart.slice(0, 7) + '-31'),
         supabase.from('client_settings').select('client_id, active_content_metrics, active_leadgen_metrics, content_enabled, leadgen_enabled'),
+        supabase.from('custom_metrics').select('*').eq('archived', false).order('sort_order', { ascending: true }),
       ])
       const dashboardError = dashboardResults.find(result => result.error)?.error
       if (dashboardError) throw dashboardError
@@ -1061,6 +1077,7 @@ export function DashboardPage() {
         { data: monthSalesRes },
         { data: monthMmRes },
         { data: clientSettingsRes },
+        { data: customMetricsRes },
       ] = dashboardResults
 
       setClients(sortAlphabetically(clientsData || [], client => client.name))
@@ -1089,6 +1106,12 @@ export function DashboardPage() {
           .filter(row => row.client_id)
           .map(row => [row.client_id as string, row])
       ))
+      const customMetricsMap: Record<string, Metric[]> = {}
+      ;(customMetricsRes || []).forEach((row: any) => {
+        if (!customMetricsMap[row.client_id]) customMetricsMap[row.client_id] = []
+        customMetricsMap[row.client_id].push(customMetricToMetric(row))
+      })
+      setCustomMetricsByClient(customMetricsMap)
 
       // Backfill high scores for all clients - scans full history and self-heals stale/missing records
       Promise.all(
@@ -1151,8 +1174,9 @@ export function DashboardPage() {
     for (const client of clients) {
       const clientTargets = targetMap[client.id]
       if (!clientTargets || Object.keys(clientTargets).length === 0) continue
+      const clientAllMetrics = [...ALL_METRICS, ...(customMetricsByClient[client.id] ?? [])]
       const relevantTargetIds = Object.keys(clientTargets).filter(metricId => {
-        const metric = ALL_METRICS.find(candidate => candidate.id === metricId)
+        const metric = clientAllMetrics.find(candidate => candidate.id === metricId)
         return metric && activeMetricsFor(client.id, metric.category).some(active => active.id === metricId)
       })
       if (relevantTargetIds.length === 0) continue
@@ -1164,12 +1188,12 @@ export function DashboardPage() {
         continue
       }
 
-      const built = (buildWeekMetrics(weekRow) ?? {}) as Record<string, number | null>
+      const built = (buildWeekMetrics(weekRow, customMetricsByClient[client.id] ?? []) ?? {}) as Record<string, number | null>
       const lacking: typeof results[0]['lacking'] = []
 
       for (const metricId of relevantTargetIds) {
         const targetValue = clientTargets[metricId]
-        const metric = ALL_METRICS.find(m => m.id === metricId)
+        const metric = clientAllMetrics.find(m => m.id === metricId)
         if (!metric) continue
         if (!activeMetricsFor(client.id, metric.category).some(active => active.id === metricId)) continue
         if (metric.type === 'textarea' || metric.type === 'boolean' || metric.type === 'slider') continue
@@ -1198,7 +1222,7 @@ export function DashboardPage() {
       if (a.notSubmitted !== b.notSubmitted) return a.notSubmitted ? -1 : 1
       return (a.worstPct ?? -1) - (b.worstPct ?? -1)
     })
-  }, [clients, weeklyData, targets, displayWeek, clientSettings])
+  }, [clients, weeklyData, targets, displayWeek, clientSettings, customMetricsByClient])
 
   const handleResolveAlert = async (alertId: string) => {
     try {
@@ -1457,7 +1481,7 @@ export function DashboardPage() {
                       for (const row of clientMtdRows) {
                         const cm = (row.content_metrics as Record<string, any>) ?? {}
                         const lm = (row.leadgen_metrics as Record<string, any>) ?? {}
-                        ALL_METRICS.forEach(m => {
+                        ;[...ALL_METRICS, ...(customMetricsByClient[client.id] ?? [])].forEach(m => {
                           if (m.type === 'textarea' || m.type === 'boolean' || m.type === 'slider' || m.type === 'auto') return
                           const col = m.category === 'content' ? cm : lm
                           const v = readNum(col, m.id)

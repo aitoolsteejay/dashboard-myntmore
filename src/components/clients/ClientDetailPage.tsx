@@ -7,7 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { CONTENT_METRICS, LEADGEN_METRICS } from "@/data/metrics"
+import { CONTENT_METRICS, LEADGEN_METRICS, Metric } from "@/data/metrics"
+import { fetchEffectiveMetrics } from "@/hooks/useEffectiveMetrics"
 import { toast } from "sonner"
 import { Trophy, History, LayoutDashboard, Settings as SettingsIcon, MessageSquare, AlertCircle, Pin, Trash2 } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
@@ -33,6 +34,7 @@ export function ClientDetailPage() {
   const [newNote, setNewNote] = useState('')
   const [isNotePinned, setIsNotePinned] = useState(false)
   const [savingNote, setSavingNote] = useState(false)
+  const [customMetrics, setCustomMetrics] = useState<Metric[]>([])
 
   const fetchData = async () => {
     setLoading(true)
@@ -43,14 +45,16 @@ export function ClientDetailPage() {
         { data: highScoresData },
         { data: settingsData },
         { data: notesData },
-        { data: alertsData }
+        { data: alertsData },
+        effectiveMetrics,
       ] = await Promise.all([
         supabase.from('clients').select('*').eq('id', id).single(),
         supabase.from('weekly_data').select('*').eq('client_id', id).order('week_start', { ascending: false }),
         supabase.from('high_scores').select('*').eq('client_id', id).order('lifetime_high', { ascending: false }),
         supabase.from('client_settings').select('*').eq('client_id', id).single(),
         supabase.from('client_context_notes').select(`*, author:profiles!created_by(full_name)`).eq('client_id', id).order('created_at', { ascending: false }),
-        supabase.from('client_alerts').select(`*, resolver:profiles!resolved_by(full_name)`).eq('client_id', id).order('created_at', { ascending: false })
+        supabase.from('client_alerts').select(`*, resolver:profiles!resolved_by(full_name)`).eq('client_id', id).order('created_at', { ascending: false }),
+        fetchEffectiveMetrics(id),
       ])
 
       setClient(clientData)
@@ -59,6 +63,7 @@ export function ClientDetailPage() {
       setSettings(settingsData)
       setNotes(notesData || [])
       setAlerts(alertsData || [])
+      setCustomMetrics(effectiveMetrics.all.filter(m => !CONTENT_METRICS.some(std => std.id === m.id) && !LEADGEN_METRICS.some(std => std.id === m.id)))
     } catch (error: any) {
       toast.error(error.message)
     } finally {
@@ -405,7 +410,7 @@ export function ClientDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {CONTENT_METRICS.map(m => (
+                {[...CONTENT_METRICS, ...customMetrics.filter(m => m.category === 'content')].map(m => (
                   <div key={m.id} className="flex items-center justify-between py-2 border-b last:border-0 border-border/50">
                     <div className="space-y-0.5">
                       <Label className="text-sm font-bold">{m.name}</Label>
@@ -427,7 +432,7 @@ export function ClientDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {LEADGEN_METRICS.map(m => (
+                {[...LEADGEN_METRICS, ...customMetrics.filter(m => m.category === 'leadgen')].map(m => (
                   <div key={m.id} className="flex items-center justify-between py-2 border-b last:border-0 border-border/50">
                     <div className="space-y-0.5">
                       <Label className="text-sm font-bold">{m.name}</Label>

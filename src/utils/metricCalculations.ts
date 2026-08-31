@@ -1,4 +1,4 @@
-import { ALL_METRICS } from '../data/metrics'
+import { ALL_METRICS, Metric } from '../data/metrics'
 
 import { readNum, readBool, readText, readLinkedInImpressions, calcRateCapped, calcRateUncapped } from './readMetric'
 
@@ -90,7 +90,7 @@ export const calcPositiveRate = (positive: number | null, answered: number | nul
 export const calcExistingConnRate = (replied: number | null, sent: number | null) => calcRateCapped(replied, sent) // wait, existing connections replied/sent should also be capped. We will cap it.
 
 // Build complete metrics object for a week row including live-calculated rates
-export function buildWeekMetrics(weekRow: any) {
+export function buildWeekMetrics(weekRow: any, extraMetrics: Metric[] = []) {
   if (!weekRow) return null
 
   const cm = weekRow.content_metrics ?? {}
@@ -98,7 +98,10 @@ export function buildWeekMetrics(weekRow: any) {
 
   const result: Record<string, any> = {}
 
-  ALL_METRICS.forEach(m => {
+  // extraMetrics carries a client's custom metrics (always number/percentage/
+  // textarea, never 'auto') — they flow through the same generic read below as
+  // any standard metric of those types, no special-casing needed.
+  ;[...ALL_METRICS, ...extraMetrics].forEach(m => {
     const rawMetrics = m.category === 'content' ? cm : lm
 
     // Check if submitted for client weekly_data
