@@ -1429,6 +1429,26 @@ export function DashboardPage() {
                       MONTHLY_AVERAGE_METRICS.forEach(metricId => {
                         if (clientMtdCounts[metricId] > 0) clientMtdTotals[metricId] /= clientMtdCounts[metricId]
                       })
+                      // Auto-computed metrics were skipped above (they aren't raw JSON fields),
+                      // so their monthly totals — needed for the Monthly Target Status column —
+                      // are recomputed here from the raw fields that were summed. Guarded on the
+                      // presence of at least one contributing week so a client with no data this
+                      // month still falls back to '-' instead of a misleading 0.
+                      if (clientMtdCounts['C06'] || clientMtdCounts['C07'] || clientMtdCounts['C08']) {
+                        clientMtdTotals['C09'] = (clientMtdTotals['C06'] ?? 0) + (clientMtdTotals['C07'] ?? 0) + (clientMtdTotals['C08'] ?? 0)
+                      }
+                      if (clientMtdTotals['C09'] > 0 && clientMtdCounts['C10']) {
+                        clientMtdTotals['C26'] = clientMtdTotals['C10'] / clientMtdTotals['C09']
+                      }
+                      if (clientMtdCounts['L10'] || clientMtdCounts['L11']) {
+                        clientMtdTotals['L12'] = calcRateCapped(clientMtdTotals['L11'], clientMtdTotals['L10']) || 0
+                      }
+                      if (clientMtdCounts['L11'] || clientMtdCounts['L13']) {
+                        clientMtdTotals['L14'] = calcRateCapped(clientMtdTotals['L13'], clientMtdTotals['L11']) || 0
+                      }
+                      if (clientMtdCounts['L19'] || clientMtdCounts['L20']) {
+                        clientMtdTotals['L21'] = calcRateCapped(clientMtdTotals['L20'], clientMtdTotals['L19']) || 0
+                      }
 
                       return (
                         <Card key={client.id} className={cn("border shadow-sm overflow-hidden transition-all", isExpanded ? "ring-2 ring-gold/20" : "")}>
