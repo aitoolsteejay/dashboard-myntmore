@@ -200,13 +200,62 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
     }
   }
 
+  // Calc helpers
+  const getRate = (num: any, den: any) => {
+    const n = parseFloat(num) || 0
+    const d = parseFloat(den) || 0
+    return d > 0 ? Math.round((n / d) * 1000) / 10 : 0
+  }
+
+  const getSum = (...args: any[]) => {
+    return args.reduce((acc, val) => acc + (parseFloat(val) || 0), 0)
+  }
+
+  // Every section has a few fields that are only ever *displayed* as a computed
+  // read-only div (rate/sum of sibling inputs) — they were never wired to an
+  // <Input onChange>, so updateMetric never included them in the saved payload.
+  // The dashboard, CSV export, and this page's own MTD totals all read these
+  // same keys back out of the raw JSON and saw them as permanently blank.
+  // Recompute and persist them alongside whichever raw field just changed.
+  const DERIVED_FIELDS: Record<string, (d: Record<string, any>) => Record<string, number>> = {
+    tj_outreach: d => ({
+      SO04: getRate(d.SO03, d.SO02),
+      SO06: getRate(d.SO05, d.SO03),
+    }),
+    jahnvi_outreach: d => ({
+      SO13: getRate(d.SO12, d.SO11),
+      SO15: getRate(d.SO14, d.SO12),
+    }),
+    shirin_outreach: d => ({
+      SO21: getRate(d.SO20, d.SO19),
+      SO24: getRate(d.SO23, d.SO22),
+      SO26: getRate(d.SO25, d.SO23),
+    }),
+    cold_email: d => ({
+      SO31: getRate(d.SO30, d.SO29),
+      SO35: getRate(d.SO32, d.SO29),
+      SO52: getRate(d.SO51, d.SO50),
+      SO54: getRate(d.SO53, d.SO51),
+    }),
+    meeting_tracker: d => {
+      const totalBooked = getSum(d.SO36, d.SO37, d.SO38, d.SO39)
+      return {
+        SO40: totalBooked,
+        SO43: getRate(d.SO41, totalBooked),
+        SO47: getRate(d.SO46, totalBooked),
+        SO49: (parseFloat(d.SO46) || 0) * (parseFloat(d.SO48) || 0),
+      }
+    },
+  }
+
   const updateMetric = (section: string, metric: string, value: string) => {
     if (!selectedWeek) {
       toast.error('Please select a week first.')
       return
     }
     setFormData((prev: any) => {
-      const updatedSection = { ...(prev[section] || {}), [metric]: value }
+      const rawSection = { ...(prev[section] || {}), [metric]: value }
+      const updatedSection = { ...rawSection, ...(DERIVED_FIELDS[section]?.(rawSection) ?? {}) }
       const updated = { ...prev, [section]: updatedSection }
 
       const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
@@ -220,17 +269,6 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
 
       return updated
     })
-  }
-
-  // Calc helpers
-  const getRate = (num: any, den: any) => {
-    const n = parseFloat(num) || 0
-    const d = parseFloat(den) || 0
-    return d > 0 ? Math.round((n / d) * 1000) / 10 : 0
-  }
-
-  const getSum = (...args: any[]) => {
-    return args.reduce((acc, val) => acc + (parseFloat(val) || 0), 0)
   }
 
   const getStatusColor = (status: string) => {
