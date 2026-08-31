@@ -42,6 +42,24 @@ function asDashboardRecord(value: unknown): Record<string, unknown> {
 
 const MONTHLY_AVERAGE_METRICS = new Set(['C36', 'C37'])
 
+// Targets are stored one row per (client, metric, period) — teams don't re-enter a target
+// every single week/month, so most periods have no exact row. Prefer an exact match for the
+// period being viewed, else fall back to the most recently set target for that metric.
+function findTarget(rows: any[], metricId: string, period?: string): number | null {
+  let t = period
+    ? rows.find(r => r.metric_id === metricId && r.period === period)
+    : null
+  if (!t) {
+    const all = rows
+      .filter(r => r.metric_id === metricId && r.target_value !== null && r.target_value !== undefined)
+      .sort((a, b) => (b.period ?? '').localeCompare(a.period ?? ''))
+    t = all[0] ?? null
+  }
+  if (!t || t.target_value === null || t.target_value === undefined) return null
+  const n = Number(t.target_value)
+  return isNaN(n) ? null : n
+}
+
 // --- DeliverableAlertRow sub-component ---
 interface DeliverableAlertItem {
   clientId: string
@@ -361,8 +379,8 @@ export function DashboardPage() {
           {metrics.map(m => {
             const current = currentBuilt?.[m.id as keyof typeof currentBuilt] ?? null
             const prev = prevBuilt?.[m.id as keyof typeof prevBuilt] ?? null
-            const target = clientTargets.find(t => t.metric_id === m.id)?.target_value ?? null
-            const monthlyTarget = clientMonthlyTargets.find(t => t.metric_id === m.id)?.target_value ?? null
+            const target = findTarget(clientTargets, m.id, displayWeek)
+            const monthlyTarget = findTarget(clientMonthlyTargets, m.id, displayWeek.slice(0, 7))
             const hs = clientHighScores.find(h => h.metric_id === m.id)
             const bestEver = hs?.lifetime_high ?? null
             const bestEverMonth = hs?.lifetime_high_month ?? null
@@ -646,9 +664,8 @@ export function DashboardPage() {
               && score?.lifetime_high_month !== undefined
               && Math.abs(numericValue - Number(score.lifetime_high_month)) < 0.001
 
-            const targetRaw = clientMonthlyTargets.find(t => t.metric_id === metricId)?.target_value ?? null
-            const targetNum = targetRaw !== null && !isNaN(Number(targetRaw)) ? Number(targetRaw) : null
-            const achPct = targetNum && numericValue !== null ? Math.round((numericValue / targetNum) * 100) : null
+            const targetNum = findTarget(clientMonthlyTargets, metricId, displayWeek.slice(0, 7))
+            const achPct = targetNum !== null && numericValue !== null ? Math.round((numericValue / targetNum) * 100) : null
             const achColor = achPct === null ? ''
               : achPct >= 100 ? 'text-green-600'
               : achPct >= 75 ? 'text-yellow-600'
@@ -1001,8 +1018,11 @@ export function DashboardPage() {
         supabase.from('mm_weekly_data').select('*').eq('week_start', prevWeekStart).maybeSingle(),
         supabase.from('profiles').select('*'),
         supabase.from('actionables').select('*').in('status', ['todo', 'open', 'in_progress', 'carried_forward']),
-        supabase.from('targets').select('*').eq('period', weekStart).eq('target_type', 'weekly'),
-        supabase.from('targets').select('*').eq('period', weekStart.slice(0, 7)).eq('target_type', 'monthly'),
+        // Fetch every past-and-current period, not just an exact match on the displayed
+        // week/month — targets aren't re-entered every period, so callers fall back to the
+        // most recently set target for a metric via findTarget() when the current one is missing.
+        supabase.from('targets').select('*').lte('period', weekStart).eq('target_type', 'weekly'),
+        supabase.from('targets').select('*').lte('period', weekStart.slice(0, 7)).eq('target_type', 'monthly'),
         supabase.from('high_scores').select('*'),
         supabase.from('weekly_data').select('week_start, week_label, content_metrics, leadgen_metrics, client_id, content_submitted_at, leadgen_submitted_at')
           .gte('week_start', weekStart.slice(0, 7) + '-01')
@@ -1109,8 +1129,12 @@ export function DashboardPage() {
   const deliverableAlerts = useMemo(() => {
     if (!clients.length || !displayWeek) return []
 
+    // `targets` now holds every period up to and including the one being viewed (not just an
+    // exact match — most periods have no row of their own). Sort ascending by period so that,
+    // for each client/metric, the last write is the most recent target at or before this week.
     const targetMap: Record<string, Record<string, number>> = {}
-    for (const t of targets) {
+    const sortedTargets = [...targets].sort((a, b) => (a.period ?? '').localeCompare(b.period ?? ''))
+    for (const t of sortedTargets) {
       if (!t.client_id || t.target_value === null) continue
       if (!targetMap[t.client_id]) targetMap[t.client_id] = {}
       targetMap[t.client_id][t.metric_id] = t.target_value
@@ -1511,9 +1535,8 @@ export function DashboardPage() {
                                       && score?.lifetime_high !== undefined
                                       && Math.abs(numericValue - Number(score.lifetime_high)) < 0.001
 
-                                    const targetRaw = clientTargets.find(t => t.metric_id === metricId)?.target_value ?? null
-                                    const targetNum = targetRaw !== null && !isNaN(Number(targetRaw)) ? Number(targetRaw) : null
-                                    const achPct = targetNum && numericValue !== null ? Math.round((numericValue / targetNum) * 100) : null
+                                    const targetNum = findTarget(clientTargets, metricId, displayWeek)
+                                    const achPct = targetNum !== null && numericValue !== null ? Math.round((numericValue / targetNum) * 100) : null
                                     const achColor = achPct === null ? ''
                                       : achPct >= 100 ? 'text-green-600'
                                       : achPct >= 75 ? 'text-yellow-600'
