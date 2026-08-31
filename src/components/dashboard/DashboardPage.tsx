@@ -576,8 +576,15 @@ export function DashboardPage() {
         if (!counts[clientId]) counts[clientId] = {}
 
         ALL_METRICS.forEach(metric => {
-          if (metric.type === 'textarea' || metric.type === 'boolean' || metric.type === 'auto') return
-          const value = built[metric.id]
+          if (metric.type === 'textarea' || metric.type === 'boolean') return
+          // Rate/percentage auto-metrics (L12, L14, L17, C26, ...) are recomputed from
+          // summed numerators/denominators below, not summed directly. C09 is the one
+          // auto metric that's a plain weekly cumulative total, so it's safe (and needed,
+          // since C26's recompute below divides by it) to sum week-over-week.
+          if (metric.type === 'auto' && metric.id !== 'C09') return
+          const value = metric.id === 'L22'
+            ? (built.L22 ?? mv(row, 'leadgen_metrics', 'L23'))
+            : built[metric.id]
           if (value !== null && value !== undefined && !isNaN(Number(value))) {
             totals[clientId][metric.id] = (totals[clientId][metric.id] ?? 0) + Number(value)
             counts[clientId][metric.id] = (counts[clientId][metric.id] ?? 0) + 1
@@ -619,50 +626,145 @@ export function DashboardPage() {
     const currentMonthTotals = aggregateClientRows(monthWeeklyData)
 
     return (
-      <div className="space-y-6 w-full box-border">
+      <div className="space-y-4 w-full box-border">
         {clients.map(client => {
           const cTotals = currentMonthTotals[client.id] || {}
           const pTotals = prevMonthTotals[client.id] || {}
+          const isExpanded = expandedClients.has(client.id)
+          const clientScores = highScores.filter(score => score.client_id === client.id)
+          const clientWeeksThisMonth = monthWeeklyData.filter(w => w.client_id === client.id)
+          const contentSubmitted = clientWeeksThisMonth.some(w => !!w.content_submitted_at)
+          const leadgenSubmitted = clientWeeksThisMonth.some(w => !!w.leadgen_submitted_at)
+
+          const renderMonthlySummaryValue = (metricId: string, value: unknown, percentage = false, gold = false) => {
+            const numericValue = value !== null && value !== undefined && !isNaN(Number(value)) ? Number(value) : null
+            const score = clientScores.find(item => item.metric_id === metricId)
+            const isHighScore = numericValue !== null
+              && numericValue > 0
+              && score?.lifetime_high_month !== null
+              && score?.lifetime_high_month !== undefined
+              && Math.abs(numericValue - Number(score.lifetime_high_month)) < 0.001
+
+            return (
+              <p className={cn("text-sm font-black", gold && "text-gold", numericValue === null && "text-muted-foreground")}>
+                <span className="inline-flex items-center justify-center gap-1">
+                  {percentage
+                    ? (numericValue !== null ? formatPct(numericValue) : '-')
+                    : formatDashboardValue(value as number | null, metricId)}
+                  {isHighScore && <Star className="h-3.5 w-3.5 shrink-0 fill-yellow-400 text-yellow-500" aria-label="Best month ever" />}
+                </span>
+              </p>
+            )
+          }
 
           return (
-            <Card key={client.id} className="border shadow-sm overflow-hidden">
-              <CardHeader className="bg-muted/10 py-3 border-b">
-                <CardTitle className="text-sm font-black uppercase tracking-widest">{client.name} - Monthly Comparison</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-[10px] font-black uppercase">Metric</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase text-center">Previous Month</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase text-center bg-gold/5">Current Month</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase text-center">Change</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ALL_METRICS.filter(m => m.type !== 'textarea' && m.type !== 'boolean').map(m => (
-                      <TableRow key={m.id} className="h-8">
-                        <TableCell className="py-1 text-[11px] font-medium">{m.name}</TableCell>
-                        <TableCell className="py-1 text-center text-[11px] text-muted-foreground">
-                          {['L12', 'L14', 'L17'].includes(m.id) ? formatPct(pTotals[m.id]) : gFmt(pTotals[m.id])}
-                        </TableCell>
-                        <TableCell className="py-1 text-center text-[11px] font-black bg-gold/5">
-                          {['L12', 'L14', 'L17'].includes(m.id) ? formatPct(cTotals[m.id]) : gFmt(cTotals[m.id])}
-                        </TableCell>
-                        <TableCell className="py-1 text-center text-[11px] font-bold">
-                          {['L12', 'L14', 'L17'].includes(m.id) ? (
-                            <span style={{ color: fmtPctDelta(cTotals[m.id], 100, pTotals[m.id], 100).color }}>
-                              {fmtPctDelta(cTotals[m.id], 100, pTotals[m.id], 100).text}
-                            </span>
-                          ) : (
-                            <Delta current={cTotals[m.id]} previous={pTotals[m.id]} />
-                          )}
-                        </TableCell>
+            <Card key={client.id} className={cn("border shadow-sm overflow-hidden transition-all", isExpanded ? "ring-2 ring-gold/20" : "")}>
+              {/* Collapsed Row */}
+              <div
+                className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors flex-nowrap min-w-0 gap-4"
+                onClick={() => toggleClient(client.id)}
+              >
+                <div className="flex items-center gap-4 flex-1 min-w-0 overflow-hidden">
+                  <div className="w-10 h-10 shrink-0 rounded bg-gold/10 flex items-center justify-center font-black text-gold">
+                    {client.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    <h3 className="font-black text-base truncate">{client.name}</h3>
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">{client.company}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-6 shrink-0">
+                  {isServiceEnabled(client.id, 'content') && <div className="text-center w-16 shrink-0">
+                    <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">LI Drafting</p>
+                    {renderMonthlySummaryValue('C03', cTotals.C03)}
+                  </div>}
+                  {isServiceEnabled(client.id, 'content') && <div className="text-center w-12 shrink-0">
+                    <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Posts</p>
+                    {renderMonthlySummaryValue('C09', cTotals.C09)}
+                  </div>}
+                  {isServiceEnabled(client.id, 'content') && <div className="text-center w-14 shrink-0">
+                    <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Impr.</p>
+                    {renderMonthlySummaryValue('C10', cTotals.C10)}
+                  </div>}
+                  {isServiceEnabled(client.id, 'content') && <div className="text-center w-14 shrink-0">
+                    <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Avg/Post</p>
+                    {renderMonthlySummaryValue('C26', cTotals.C26)}
+                  </div>}
+                  {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
+                    <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Conn Req</p>
+                    {renderMonthlySummaryValue('L10', cTotals.L10)}
+                  </div>}
+                  {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
+                    <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Acc Rate</p>
+                    {renderMonthlySummaryValue('L12', cTotals.L12, true)}
+                  </div>}
+                  {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
+                    <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Reply Rate</p>
+                    {renderMonthlySummaryValue('L14', cTotals.L14, true)}
+                  </div>}
+                  {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-14 shrink-0">
+                    <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Hot Leads</p>
+                    {renderMonthlySummaryValue('L22', cTotals.L22)}
+                  </div>}
+                  {isServiceEnabled(client.id, 'leadgen') && <div className="text-center w-12 shrink-0">
+                    <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Booked</p>
+                    {renderMonthlySummaryValue('L24', cTotals.L24, false, true)}
+                  </div>}
+                  <div className="text-center w-14 shrink-0">
+                    <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Status</p>
+                    <div className="flex justify-center gap-1 mt-1">
+                      {isServiceEnabled(client.id, 'content') && <div className={cn("w-2 h-2 rounded-full", contentSubmitted ? "bg-status-on" : "bg-muted")} title="Content Data This Month" />}
+                      {isServiceEnabled(client.id, 'leadgen') && <div className={cn("w-2 h-2 rounded-full", leadgenSubmitted ? "bg-status-on" : "bg-muted")} title="Lead Gen Data This Month" />}
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </div>
+                </div>
+              </div>
+
+              {/* Expanded: full metric-by-metric Previous vs Current month comparison */}
+              {isExpanded && (
+                <div className="border-t bg-muted/10">
+                  <div className="px-4 pt-3 pb-1">
+                    <h4 className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-gold" /> Full Monthly Comparison
+                    </h4>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px] font-black uppercase">Metric</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase text-center">Previous Month</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase text-center bg-gold/5">Current Month</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase text-center">Change</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
+                    </TableHeader>
+                    <TableBody>
+                      {ALL_METRICS.filter(m => m.type !== 'textarea' && m.type !== 'boolean').map(m => (
+                        <TableRow key={m.id} className="h-8">
+                          <TableCell className="py-1 text-[11px] font-medium">{m.name}</TableCell>
+                          <TableCell className="py-1 text-center text-[11px] text-muted-foreground">
+                            {['L12', 'L14', 'L17'].includes(m.id) ? formatPct(pTotals[m.id]) : gFmt(pTotals[m.id])}
+                          </TableCell>
+                          <TableCell className="py-1 text-center text-[11px] font-black bg-gold/5">
+                            {['L12', 'L14', 'L17'].includes(m.id) ? formatPct(cTotals[m.id]) : gFmt(cTotals[m.id])}
+                          </TableCell>
+                          <TableCell className="py-1 text-center text-[11px] font-bold">
+                            {['L12', 'L14', 'L17'].includes(m.id) ? (
+                              <span style={{ color: fmtPctDelta(cTotals[m.id], 100, pTotals[m.id], 100).color }}>
+                                {fmtPctDelta(cTotals[m.id], 100, pTotals[m.id], 100).text}
+                              </span>
+                            ) : (
+                              <Delta current={cTotals[m.id]} previous={pTotals[m.id]} />
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </Card>
           )
         })}
