@@ -94,6 +94,7 @@ function buildClientSheet(
       const L12 = built.L12
       const L14 = built.L14
       const L17 = built.L17
+      const L18 = built.L18
       const L21 = built.L21
       const L26 = built.L26
       const C09  = built.C09 ?? (readNum(cm, 'C06') ?? 0) + (readNum(cm, 'C07') ?? 0) + (readNum(cm, 'C08') ?? 0)
@@ -134,6 +135,7 @@ function buildClientSheet(
       base['[L] Acceptance Rate %']   = L12 != null ? L12.toFixed(1) + '%' : ''
       base['[L] Response Rate %']     = L14 != null ? L14.toFixed(1) + '%' : ''
       base['[L] Positive Rate %']     = L17 != null ? L17.toFixed(1) + '%' : ''
+      base['[L] Negative Rate %']     = L18 != null ? L18.toFixed(1) + '%' : ''
       base['[L] Existing Conn Rate %']= L21 != null ? L21.toFixed(1) + '%' : ''
       base['[L] Show-Up Rate %']      = L26 != null ? L26.toFixed(1) + '%' : ''
 
@@ -206,41 +208,76 @@ function buildMmSheet(rows: any[]) {
 }
 
 function buildSalesSheet(rows: any[]) {
+  // Rebuilt against the actual field layout in SalesPage.tsx — the previous
+  // version assumed every section followed the same "+10 offset" pattern as
+  // TJ→Jahnvi, but Shirin adds an InMail sub-block first and Cold Email/
+  // Meeting Tracker interleave raw counts and derived rates differently, so
+  // most IDs here were silently attached to the wrong label (several
+  // percentage fields were mislabeled as currency/counts, and some real
+  // fields were never exported at all). Every ID below is matched 1:1
+  // against SalesPage.tsx's <Label> text for its section.
   const SALES_FIELDS: Record<string, string> = {
-    SO01: 'TJ: ICPs Identified',
-    SO02: 'TJ: Conn Req Sent',
-    SO03: 'TJ: Accepted',
-    SO04: 'TJ: Messages Sent',
-    SO05: 'TJ: Replied',
-    SO06: 'TJ: Meetings Booked',
+    // TJ Outreach
+    SO01: 'TJ: ICP Targeted This Week',
+    SO02: 'TJ: Conn Requests Sent',
+    SO03: 'TJ: Accepted Invitations',
+    SO04: 'TJ: Acceptance Rate %',
+    SO05: 'TJ: Answered Messages',
+    SO06: 'TJ: Response Rate %',
     SO07: 'TJ: Hot Leads',
-    SO10: 'Jahnvi: ICPs Identified',
-    SO11: 'Jahnvi: Conn Req Sent',
-    SO12: 'Jahnvi: Accepted',
-    SO13: 'Jahnvi: Messages Sent',
-    SO14: 'Jahnvi: Replied',
-    SO15: 'Jahnvi: Meetings Booked',
+    SO08: 'TJ: Negative Replies',
+    SO09: 'TJ: Meetings Booked',
+    // Jahnvi (JJ) Outreach
+    SO10: 'Jahnvi: ICP Targeted This Week',
+    SO11: 'Jahnvi: Conn Requests Sent',
+    SO12: 'Jahnvi: Accepted Invitations',
+    SO13: 'Jahnvi: Acceptance Rate %',
+    SO14: 'Jahnvi: Answered Messages',
+    SO15: 'Jahnvi: Response Rate %',
     SO16: 'Jahnvi: Hot Leads',
-    SO20: 'Shirin: ICPs Identified',
-    SO21: 'Shirin: Conn Req Sent',
-    SO22: 'Shirin: Accepted',
-    SO23: 'Shirin: Messages Sent',
-    SO24: 'Shirin: Replied',
-    SO25: 'Shirin: Meetings Booked',
-    SO26: 'Shirin: Hot Leads',
-    SO30: 'Cold Email: Sent',
-    SO31: 'Cold Email: Opened',
-    SO32: 'Cold Email: Replied',
-    SO33: 'Cold Email: Hot Leads',
-    SO40: 'Meetings: Booked',
-    SO41: 'Meetings: Attended',
-    SO42: 'Meetings: Proposals',
-    SO43: 'Meetings: Proposals Sent',
-    SO44: 'Meetings: Follow-ups',
-    SO46: 'Meetings: Conversions',
-    SO47: 'Revenue Per Deal (₹)',
-    SO48: 'Avg Deal Value (₹)',
-    SO49: 'Total Revenue (₹)',
+    SO17: 'Jahnvi: Negative Replies',
+    // Shirin Outreach (InMail + LinkedIn)
+    SO18: 'Shirin: InMail ICP Targeted',
+    SO19: 'Shirin: InMails Sent',
+    SO20: 'Shirin: InMails Accepted',
+    SO21: 'Shirin: InMail Acceptance Rate %',
+    SO22: 'Shirin: LinkedIn Conn Requests Sent',
+    SO23: 'Shirin: LinkedIn Accepted',
+    SO24: 'Shirin: LinkedIn Acceptance Rate %',
+    SO25: 'Shirin: Answered Messages',
+    SO26: 'Shirin: Response Rate %',
+    SO27: 'Shirin: Hot Leads',
+    SO28: 'Shirin: Negative Replies',
+    // Cold Email - Waalaxy
+    SO29: 'Cold Email: Emails Sent',
+    SO30: 'Cold Email: Emails Opened',
+    SO31: 'Cold Email: Open Rate %',
+    SO32: 'Cold Email: Replies Received',
+    SO33: 'Cold Email: Positive Replies (Hot Leads)',
+    SO34: 'Cold Email: Negative Replies',
+    SO35: 'Cold Email: Response Rate %',
+    // Cold Emailing
+    SO50: 'Cold Emailing: Emails Sent (Week)',
+    SO51: 'Cold Emailing: Replies',
+    SO52: 'Cold Emailing: Reply Rate %',
+    SO53: 'Cold Emailing: Positive Replies',
+    SO54: 'Cold Emailing: Positive Reply Rate %',
+    SO55: 'Cold Emailing: Replied with OOO',
+    // Meeting Tracker
+    SO36: 'Meetings: Via LinkedIn',
+    SO37: 'Meetings: Via Cold Email',
+    SO38: 'Meetings: Via Referral',
+    SO39: 'Meetings: Via Other',
+    SO40: 'Meetings: Total Booked',
+    SO41: 'Meetings: Completed',
+    SO42: 'Meetings: No-Show / Rescheduled',
+    SO43: 'Meetings: Completion Rate %',
+    SO44: 'Meetings: Proposals Sent',
+    SO45: 'Meetings: Follow-ups Sent',
+    SO46: 'Meetings: Conversions (New Clients)',
+    SO47: 'Meetings: Conversion Rate %',
+    SO48: 'Meetings: Avg Deal Size (₹)',
+    SO49: 'Meetings: Revenue Closed (₹)',
   }
 
   return rows

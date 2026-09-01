@@ -16,6 +16,7 @@ import { CampaignMonthTable } from "../monday/CampaignMonthTable"
 import { EditCampaignModal } from "../monday/EditCampaignModal"
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from "@/data/metrics"
 import { customMetricToMetric } from "@/hooks/useEffectiveMetrics"
+import { findTarget } from "@/utils/targets"
 import { mv, mt, fmt, delta, deltaColor, tjVal, salesVal, sv, readMetric, formatMetricValue, formatDashboardValue } from "@/utils/dataUtils"
 
 import { fmt as gFmt, fmtDelta, Delta, fmtPct, fmtPctDelta } from "@/utils/format"
@@ -46,21 +47,6 @@ const MONTHLY_AVERAGE_METRICS = new Set(['C36', 'C37'])
 // Targets are stored one row per (client, metric, period) — teams don't re-enter a target
 // every single week/month, so most periods have no exact row. Prefer an exact match for the
 // period being viewed, else fall back to the most recently set target for that metric.
-function findTarget(rows: any[], metricId: string, period?: string): number | null {
-  let t = period
-    ? rows.find(r => r.metric_id === metricId && r.period === period)
-    : null
-  if (!t) {
-    const all = rows
-      .filter(r => r.metric_id === metricId && r.target_value !== null && r.target_value !== undefined)
-      .sort((a, b) => (b.period ?? '').localeCompare(a.period ?? ''))
-    t = all[0] ?? null
-  }
-  if (!t || t.target_value === null || t.target_value === undefined) return null
-  const n = Number(t.target_value)
-  return isNaN(n) ? null : n
-}
-
 // --- DeliverableAlertRow sub-component ---
 interface DeliverableAlertItem {
   clientId: string
@@ -554,7 +540,7 @@ export function DashboardPage() {
                     const prevVal = prevBuilt?.[m.id as keyof typeof prevBuilt] ?? null
 
                     let color = 'inherit'
-                    if (['L12', 'L14', 'L17'].includes(m.id) && val !== null && prevVal !== null) {
+                    if (['L12', 'L14', 'L17', 'L18'].includes(m.id) && val !== null && prevVal !== null) {
                       color = Number(val) > Number(prevVal) ? '#22C55E' : Number(val) < Number(prevVal) ? '#EF4444' : 'inherit'
                     }
 
@@ -572,7 +558,7 @@ export function DashboardPage() {
                     )
                   })}
                   <TableCell className="py-1 text-center text-[11px] font-black bg-gold/5">
-                    {isMonthlyOnly || ['L12', 'L14', 'L17'].includes(m.id) ? '-' : formatDashboardValue(monthlyTotals[m.id], m.id)}
+                    {isMonthlyOnly || ['L12', 'L14', 'L17', 'L18'].includes(m.id) ? '-' : formatDashboardValue(monthlyTotals[m.id], m.id)}
                   </TableCell>
                 </TableRow>
               )
@@ -629,6 +615,7 @@ export function DashboardPage() {
         total.L12 = calcRateCapped(total.L11, total.L10) || 0
         total.L14 = calcRateCapped(total.L13, total.L11) || 0
         total.L17 = calcRateCapped(total.L15, total.L13) || 0
+        total.L18 = calcRateCapped(total.L16, total.L13) || 0
         total.C26 = total.C09 > 0 ? total.C10 / total.C09 : 0
         MONTHLY_AVERAGE_METRICS.forEach(metricId => {
           if (counts[clientId][metricId] > 0) total[metricId] /= counts[clientId][metricId]

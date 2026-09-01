@@ -62,8 +62,17 @@ function getMonthRange(offset: number): { from: string; to: string } {
   d.setUTCDate(1)
   d.setUTCMonth(d.getUTCMonth() + offset)
   const year = d.getUTCFullYear(), month = d.getUTCMonth()
+  // A week belongs to the month containing its Monday (matching
+  // MonthlyProgressPage.tsx's getWeeksInMonth) — start from the first Monday
+  // ON OR AFTER the 1st, not the raw 1st itself. getMondaysBetween below
+  // snaps `from` BACKWARD to the nearest Monday if it isn't one already, so
+  // passing the bare 1st here (e.g. Tue Sep 1) pulled in a trailing week
+  // (Mon Aug 31) that's mostly the *previous* month's data.
+  const first = new Date(Date.UTC(year, month, 1))
+  const dow = first.getUTCDay()
+  first.setUTCDate(first.getUTCDate() + (dow === 0 ? 1 : (8 - dow) % 7))
   return {
-    from: new Date(Date.UTC(year, month, 1)).toISOString().split('T')[0],
+    from: first.toISOString().split('T')[0],
     to: new Date(Date.UTC(year, month + 1, 0)).toISOString().split('T')[0],
   }
 }

@@ -45,7 +45,11 @@ export function useAutoSave(options: AutoSaveOptions) {
   const failedSaveRef = useRef<ScopedSave | null>(null)
   const isSavingRef = useRef(false)
   const activeSaveRef = useRef<ScopedSave | null>(null)
-  const queuedSaveRef = useRef<QueuedSave | null>(null)
+  // FIFO — a single slot here would let a third enqueueSave (while one save is
+  // already in flight and another already queued) silently overwrite the
+  // second request's data/cols while keeping its waiters, so a scope's edit
+  // could be discarded yet resolve as "saved". See performSave's finally.
+  const queuedSavesRef = useRef<QueuedSave[]>([])
   const latestSavePromiseRef = useRef<{ key: string; promise: Promise<boolean> } | null>(null)
   const mountedRef = useRef(true)
   const matchColumnsRef = useRef(matchColumns)
@@ -107,9 +111,8 @@ export function useAutoSave(options: AutoSaveOptions) {
       isSavingRef.current = false
       activeSaveRef.current = null
 
-      const queued = queuedSaveRef.current
-      queuedSaveRef.current = null
-      if (queued) void performSave(queued)
+      const next = queuedSavesRef.current.shift()
+      if (next) void performSave(next)
     }
   }, [isCurrentScope, table])
 
@@ -121,14 +124,11 @@ export function useAutoSave(options: AutoSaveOptions) {
     }
     const promise = new Promise<boolean>(resolve => {
       if (isSavingRef.current) {
-        if (queuedSaveRef.current) {
-          queuedSaveRef.current = {
-            ...request,
-            waiters: [...queuedSaveRef.current.waiters, resolve],
-          }
-        } else {
-          queuedSaveRef.current = { ...request, waiters: [resolve] }
-        }
+        // Each request keeps its own slot (and only its own waiters) — never
+        // merged into an already-queued request, so a rapid third/fourth save
+        // (e.g. from a fast client/week switch) can't discard an earlier
+        // scope's data while still resolving its waiters as successful.
+        queuedSavesRef.current.push({ ...request, waiters: [resolve] })
         return
       }
 
@@ -147,7 +147,7 @@ export function useAutoSave(options: AutoSaveOptions) {
     pendingRef.current = null
     if (!pending) {
       const latest = latestSavePromiseRef.current
-      if (latest?.key === currentScopeKeyRef.current && (isSavingRef.current || queuedSaveRef.current)) {
+      if (latest?.key === currentScopeKeyRef.current && (isSavingRef.current || queuedSavesRef.current.length > 0)) {
         return latest.promise
       }
       return true
@@ -214,10 +214,11 @@ export function useAutoSave(options: AutoSaveOptions) {
       // optimistic retries. Sending their raw queued payload directly to PostgREST
       // would treat internal keys as database columns.
       if (callbacksRef.current.saveFn) return
+      // On a real page close there's no time to flush a whole queue — send the
+      // oldest still-unsaved request, since it's been waiting longest.
+      const oldestQueued = queuedSavesRef.current[0]
       const pending = pendingRef.current
-        ?? (queuedSaveRef.current
-          ? { data: queuedSaveRef.current.data, cols: queuedSaveRef.current.cols }
-          : null)
+        ?? (oldestQueued ? { data: oldestQueued.data, cols: oldestQueued.cols } : null)
         ?? activeSaveRef.current
         ?? failedSaveRef.current
       if (!pending || !cachedAccessToken) return

@@ -110,6 +110,15 @@ export function MetricFieldsTab() {
 
   const handleAddCustomMetric = async () => {
     if (!selectedClient || !newMetric.name.trim()) return
+    if (RESERVED_GROUPS.has(newMetric.group.trim())) {
+      // Data Entry's rendering has special-cased behavior for these two group
+      // names specifically (Delivery & Reporting is hidden outside the last
+      // week of the month; Qualitative is rendered by a separate section that
+      // only iterates the standard catalog) — a custom metric placed in
+      // either would be silently unreachable/uneditable, not just mis-styled.
+      toast.error(`"${newMetric.group.trim()}" is a reserved group name — pick a different one.`)
+      return
+    }
     setSavingNewMetric(true)
     try {
       const insert: CustomMetricInsert = {
@@ -431,8 +440,8 @@ export function MetricFieldsTab() {
                             placeholder="Custom"
                           />
                           {RESERVED_GROUPS.has(newMetric.group.trim()) && (
-                            <p className="text-[11px] text-amber-600">
-                              "{newMetric.group.trim()}" has special behavior elsewhere (timing/visibility rules) — a different group name is safer.
+                            <p className="text-[11px] text-destructive">
+                              "{newMetric.group.trim()}" is reserved (special timing/visibility rules elsewhere) — pick a different group name.
                             </p>
                           )}
                         </div>
@@ -455,7 +464,7 @@ export function MetricFieldsTab() {
                       </label>
                     </div>
                     <DialogFooter>
-                      <Button onClick={handleAddCustomMetric} disabled={savingNewMetric || !newMetric.name.trim()}>
+                      <Button onClick={handleAddCustomMetric} disabled={savingNewMetric || !newMetric.name.trim() || RESERVED_GROUPS.has(newMetric.group.trim())}>
                         {savingNewMetric ? 'Adding…' : 'Add Metric'}
                       </Button>
                     </DialogFooter>

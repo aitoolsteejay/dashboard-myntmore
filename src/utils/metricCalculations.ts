@@ -87,6 +87,7 @@ export const calcMeetingShowUpRate = (showedUp: number | null, booked: number | 
 
 // Uncapped rates
 export const calcPositiveRate = (positive: number | null, answered: number | null) => calcRateCapped(positive, answered)
+export const calcNegativeRate = (negative: number | null, answered: number | null) => calcRateCapped(negative, answered)
 export const calcExistingConnRate = (replied: number | null, sent: number | null) => calcRateCapped(replied, sent) // wait, existing connections replied/sent should also be capped. We will cap it.
 
 // Build complete metrics object for a week row including live-calculated rates
@@ -153,6 +154,7 @@ export function buildWeekMetrics(weekRow: any, extraMetrics: Metric[] = []) {
   const L11 = result.L11
   const L13 = result.L13
   const L15 = result.L15
+  const L16 = result.L16
   const L19 = result.L19
   const L20 = result.L20
   const L24 = result.L24
@@ -172,6 +174,7 @@ export function buildWeekMetrics(weekRow: any, extraMetrics: Metric[] = []) {
   result.L12 = calcAcceptanceRate(L11, L10)
   result.L14 = calcResponseRate(L13, L11)
   result.L17 = calcPositiveRate(L15, L13)
+  result.L18 = calcNegativeRate(L16, L13)
   result.L21 = calcExistingConnRate(L20, L19)
   result.L26 = calcMeetingShowUpRate(L25, L24)
 

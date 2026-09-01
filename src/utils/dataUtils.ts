@@ -53,7 +53,7 @@ export function mv(
   column: string,
   metricId: string
 ): number | null {
-  const calculatedMetrics = ['L05', 'L12', 'L14', 'L17', 'L21', 'L26', 'C09', 'C10', 'C26']
+  const calculatedMetrics = ['L05', 'L12', 'L14', 'L17', 'L18', 'L21', 'L26', 'C09', 'C10', 'C26']
   if (calculatedMetrics.includes(metricId)) {
     const built = buildWeekMetrics(weekRow)
     return built?.[metricId as keyof typeof built] as number | null ?? null
@@ -90,7 +90,7 @@ export function readMetric(
   category: 'content_metrics' | 'leadgen_metrics', 
   metricId: string
 ) {
-  const calculatedMetrics = ['L05', 'L12', 'L14', 'L17', 'L21', 'L26', 'C09', 'C10', 'C26']
+  const calculatedMetrics = ['L05', 'L12', 'L14', 'L17', 'L18', 'L21', 'L26', 'C09', 'C10', 'C26']
   if (calculatedMetrics.includes(metricId)) {
     const built = buildWeekMetrics(weekRow)
     return built?.[metricId as keyof typeof built] ?? null

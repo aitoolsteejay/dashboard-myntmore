@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client"
 import { readLinkedInImpressions } from "@/utils/readMetric"
+import { findTarget } from "@/utils/targets"
 
 export function calculateHealthScore(
   contentMetrics: Record<string, any>,
@@ -75,17 +76,24 @@ export async function updateClientHealth(
   leadgenMetrics: Record<string, any>
 ) {
   try {
-    // 1. Fetch weekly targets for this client and week
-    // Targets are stored with period = weekStart (YYYY-MM-DD), NOT week-number format
+    // 1. Fetch weekly targets for this client, up to and including this week.
+    // Targets are stored with period = weekStart (YYYY-MM-DD), NOT week-number
+    // format, and most weeks have no row of their own — an exact-match-only
+    // fetch here silently treated "target not re-entered this week" as "target
+    // is 0", which drove every achievement% to 0 and cratered the stored
+    // health score. Fetch the range and fall back to the most recent target.
     const { data: targetsData } = await supabase
       .from('targets')
-      .select('metric_id, target_value')
+      .select('metric_id, target_value, period')
       .eq('client_id', clientId)
       .eq('target_type', 'weekly')
-      .eq('period', weekStart)
+      .lte('period', weekStart)
 
     const targets: Record<string, number> = {}
-    targetsData?.forEach(t => targets[t.metric_id] = t.target_value ?? 0)
+    ;['L15', 'L24', 'C09', 'C10'].forEach(metricId => {
+      const value = findTarget(targetsData ?? [], metricId, weekStart)
+      if (value !== null) targets[metricId] = value
+    })
 
     // 2. Calculate score
     const { data: settings } = await supabase
@@ -179,7 +187,7 @@ export async function calculateStreaks(clientId: string, weekStart: string) {
 
     const { data: weeklyTargets } = await supabase
         .from('targets')
-        .select('period, target_value')
+        .select('metric_id, period, target_value')
         .eq('client_id', clientId)
         .eq('metric_id', 'C09')
         .eq('target_type', 'weekly')
@@ -187,8 +195,9 @@ export async function calculateStreaks(clientId: string, weekStart: string) {
     let postsStreak = 0
     for (const week of weeklyData ?? []) {
         const postsActual = (week.content_metrics as any)?.C09?.value ?? 0
-        // Targets are stored with period = week_start (YYYY-MM-DD)
-        const target = weeklyTargets?.find(t => t.period === week.week_start)?.target_value ?? 0
+        // Targets are stored with period = week_start (YYYY-MM-DD); most weeks
+        // have no row of their own, so fall back to the most recently set one.
+        const target = findTarget(weeklyTargets ?? [], 'C09', week.week_start) ?? 0
         if (target > 0 && postsActual >= target) postsStreak++
         else break
     }

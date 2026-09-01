@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client"
 import { useAuth } from "@/lib/auth"
 import { ALL_METRICS, CONTENT_METRICS, LEADGEN_METRICS, Metric } from "@/data/metrics"
 import { EffectiveMetrics, customMetricToMetric } from "@/hooks/useEffectiveMetrics"
+import { findTarget } from "@/utils/targets"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -1679,29 +1680,36 @@ export function DataEntryPage() {
       }
       effective.all = [...effective.content, ...effective.leadgen]
       
-      // Load weekly/monthly targets separately
+      // Load weekly/monthly targets separately — fetch every period up to and
+      // including this one, not just an exact match, since most periods have
+      // no row of their own (see findTarget) and this is a read-only context
+      // display here (targets are actually set in Settings > Targets).
       const month = selectedWeek.slice(0, 7)
       const { data: wTargets } = await supabase
         .from('targets')
-        .select('metric_id, target_value')
+        .select('metric_id, target_value, period')
         .eq('client_id', selectedClientId)
         .eq('target_type', 'weekly')
-        .eq('period', selectedWeek)
+        .lte('period', selectedWeek)
       const { data: mTargets } = await supabase
         .from('targets')
-        .select('metric_id, target_value')
+        .select('metric_id, target_value, period')
         .eq('client_id', selectedClientId)
         .eq('target_type', 'monthly')
-        .eq('period', month)
-        
+        .lte('period', month)
+
       // Bail out if the user switched client/week while these requests were in
       // flight — an older, slower response must never overwrite a newer selection.
       if (isStale()) return
 
       const wMap: Record<string, number> = {}
-      wTargets?.forEach(t => { if (t.target_value !== null) wMap[t.metric_id] = t.target_value })
       const mMap: Record<string, number> = {}
-      mTargets?.forEach(t => { if (t.target_value !== null) mMap[t.metric_id] = t.target_value })
+      effective.all.forEach(m => {
+        const w = findTarget(wTargets ?? [], m.id, selectedWeek)
+        if (w !== null) wMap[m.id] = w
+        const mo = findTarget(mTargets ?? [], m.id, month)
+        if (mo !== null) mMap[m.id] = mo
+      })
 
       setWeeklyTargets(wMap)
       setMonthlyTargets(mMap)
@@ -2037,7 +2045,7 @@ export function DataEntryPage() {
     <div className="mt-8 border-t pt-8">
       <h2 className="text-xl font-black tracking-tight uppercase mb-4">Qualitative</h2>
       <div className="grid grid-cols-1 gap-4">
-        {CONTENT_METRICS.filter(m => m.group === 'Qualitative').map(m => {
+        {effectiveMetrics.content.filter(m => m.group === 'Qualitative').map(m => {
           const data = formData[m.id] || {}
           const score = highScores.find(s => s.metric_id === m.id)
           const prev = (previousWeeklyData?.content_metrics as Record<string, Record<string, unknown>>)?.[m.id]
@@ -2067,7 +2075,7 @@ export function DataEntryPage() {
     <div className="mt-8 border-t pt-8">
       <h2 className="text-xl font-black tracking-tight uppercase mb-4">Qualitative</h2>
       <div className="grid grid-cols-1 gap-4">
-        {LEADGEN_METRICS.filter(m => m.group === 'Qualitative').map(m => {
+        {effectiveMetrics.leadgen.filter(m => m.group === 'Qualitative').map(m => {
           const data = formData[m.id] || {}
           const score = highScores.find(s => s.metric_id === m.id)
           const prev = (previousWeeklyData?.leadgen_metrics as Record<string, Record<string, unknown>>)?.[m.id]

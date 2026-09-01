@@ -151,10 +151,23 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
       return
     }
     setFormData((prev: any) => {
-      const updatedSection = {
+      let updatedSection = {
         ...prev[section],
         [id]: { ...(prev[section][id] || {}), value }
       }
+
+      // TJI04 ("Total Posts") is rendered as a read-only sum of TJI01-03
+      // (see renderMetricCard's 'auto-calc' branch below) but was never
+      // actually written to formData/saved — every other reader (the
+      // dashboard, CSV export) read it back as permanently blank. Persist it
+      // alongside whichever of its inputs just changed.
+      if (section === 'instagram') {
+        const total = (parseFloat(updatedSection.TJI01?.value) || 0)
+          + (parseFloat(updatedSection.TJI02?.value) || 0)
+          + (parseFloat(updatedSection.TJI03?.value) || 0)
+        updatedSection = { ...updatedSection, TJI04: { ...(updatedSection.TJI04 || {}), value: total } }
+      }
+
       const updated = { ...prev, [section]: updatedSection }
 
       const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)

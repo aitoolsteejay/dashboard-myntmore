@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth'
 import { ALL_METRICS } from '@/data/metrics'
 import { readNum } from '@/utils/readMetric'
 import { buildWeekMetrics } from '@/utils/metricCalculations'
+import { findTarget } from '@/utils/targets'
 import { cn } from '@/lib/utils'
 import { ChevronLeft, ChevronRight, ChevronDown, Target, TrendingUp, AlertTriangle, CheckCircle2, Minus, ExternalLink } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
@@ -140,7 +141,7 @@ function MetricRow({ metricId, metricName, target, actual, weeklyActuals, weekSt
 
         {/* % */}
         <div className="w-12 text-right shrink-0 tabular-nums text-sm font-bold text-gray-600">
-          {actual !== null ? `${Math.round((actual / target) * 100)}%` : '-'}
+          {actual !== null && target > 0 ? `${Math.round((actual / target) * 100)}%` : '-'}
         </div>
 
         {/* Status badge */}
@@ -221,10 +222,10 @@ export function MonthlyProgressPage() {
       const [targetResult, dataResult] = await Promise.all([
         supabase
           .from('targets')
-          .select('metric_id, target_value')
+          .select('metric_id, target_value, period')
           .eq('client_id', selectedClientId)
           .eq('target_type', 'monthly')
-          .eq('period', selectedMonth),
+          .lte('period', selectedMonth),
         supabase
           .from('weekly_data')
           .select('week_start, content_metrics, leadgen_metrics')
@@ -237,8 +238,15 @@ export function MonthlyProgressPage() {
       const dataRows = dataResult.data
       if (requestVersion !== fetchVersionRef.current) return
 
+      // Most months have no target row of their own — fall back to the most
+      // recently set target for each metric rather than treating "not
+      // re-entered this month" as "no target."
       const tMap: Record<string, number> = {}
-      targetRows?.forEach(t => { if (t.target_value !== null) tMap[t.metric_id] = t.target_value })
+      const seenMetricIds = new Set((targetRows ?? []).map(t => t.metric_id))
+      seenMetricIds.forEach(metricId => {
+        const value = findTarget(targetRows ?? [], metricId, selectedMonth)
+        if (value !== null) tMap[metricId] = value
+      })
       setTargets(tMap)
       setHasTargets(Object.keys(tMap).length > 0)
 
@@ -309,6 +317,29 @@ export function MonthlyProgressPage() {
 
       metricActuals[metric.id] = total !== null && isRate ? total / count : total
     }
+
+    // A simple mean of each week's already-computed rate overweights
+    // low-volume weeks (two weeks at 50%-of-10 and 10%-of-100 average to
+    // 30%, when the true volume-weighted rate is 15/110 = 13.6%). Recompute
+    // the monthly rate metrics that can actually have a target from summed
+    // raw numerator/denominator fields instead, matching how the dashboard's
+    // monthly totals already do this.
+    const RATE_DEPENDENCIES: Record<string, [string, string]> = {
+      L12: ['L11', 'L10'], L14: ['L13', 'L11'], L21: ['L20', 'L19'],
+    }
+    Object.entries(RATE_DEPENDENCIES).forEach(([rateId, [numId, denId]]) => {
+      if (targets[rateId] === undefined) return
+      let numSum = 0, denSum = 0, any = false
+      for (const ws of weekStarts) {
+        const rowData = weeklyRows[ws]
+        if (!rowData) continue
+        const lm = rowData.leadgen_metrics as Record<string, unknown>
+        const n = readNum(lm, numId), d = readNum(lm, denId)
+        if (n !== null) { numSum += n; any = true }
+        if (d !== null) { denSum += d; any = true }
+      }
+      metricActuals[rateId] = !any ? null : denSum > 0 ? Math.round((numSum / denSum) * 1000) / 10 : 0
+    })
 
     return { metricActuals, weeklyActuals }
   }, [targets, weeklyRows, weekStarts, selectedClientId])

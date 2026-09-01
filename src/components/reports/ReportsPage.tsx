@@ -62,8 +62,17 @@ function getMonthRange(offset: number): { from: string; to: string } {
   d.setUTCDate(1)
   d.setUTCMonth(d.getUTCMonth() + offset)
   const year = d.getUTCFullYear(), month = d.getUTCMonth()
+  // A week belongs to the month containing its Monday (matching
+  // MonthlyProgressPage.tsx's getWeeksInMonth) — start from the first Monday
+  // ON OR AFTER the 1st, not the raw 1st itself. getMondaysBetween below
+  // snaps `from` BACKWARD to the nearest Monday if it isn't one already, so
+  // passing the bare 1st here (e.g. Tue Sep 1) pulled in a trailing week
+  // (Mon Aug 31) that's mostly the *previous* month's data.
+  const first = new Date(Date.UTC(year, month, 1))
+  const dow = first.getUTCDay()
+  first.setUTCDate(first.getUTCDate() + (dow === 0 ? 1 : (8 - dow) % 7))
   return {
-    from: new Date(Date.UTC(year, month, 1)).toISOString().split('T')[0],
+    from: first.toISOString().split('T')[0],
     to: new Date(Date.UTC(year, month + 1, 0)).toISOString().split('T')[0],
   }
 }
@@ -318,7 +327,8 @@ export function ReportsPage() {
                           )
                         })}
                         <TableCell className="py-1 text-center text-xs font-black bg-amber-50/60 tabular-nums">
-                          {total !== null ? formatDashboardValue(total, m.id) : '-'}
+                          {/* Summing a %-type metric across weeks (e.g. "312%") is meaningless — only Avg/wk applies to rates. */}
+                          {m.unit === '%' ? '—' : total !== null ? formatDashboardValue(total, m.id) : '-'}
                         </TableCell>
                         <TableCell className="py-1 text-center text-xs font-bold bg-amber-50/60 tabular-nums">
                           {avg !== null ? formatDashboardValue(Math.round(avg * 10) / 10, m.id) : '-'}
@@ -452,18 +462,19 @@ export function ReportsPage() {
                     <CardContent className="p-3">
                       <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground truncate mb-1">{m.name}</div>
 
-                      {/* Total (big number) */}
+                      {/* Headline number — a %-metric summed across weeks (e.g. "312%")
+                          is meaningless, so its headline is the average instead. */}
                       <div className={cn("text-2xl font-black tabular-nums leading-none", achTextColor(avgAch))}>
-                        {formatDashboardValue(total, m.id)}
+                        {formatDashboardValue(m.unit === '%' ? Math.round(avg * 10) / 10 : total, m.id)}
                       </div>
-                      <div className="text-[9px] text-muted-foreground mt-0.5">total · {numVals.length}w</div>
+                      <div className="text-[9px] text-muted-foreground mt-0.5">{m.unit === '%' ? 'avg' : 'total'} · {numVals.length}w</div>
 
                       {/* Stats grid */}
                       <div className="mt-2.5 space-y-1">
-                        <div className="flex items-center justify-between text-[10px]">
+                        {m.unit !== '%' && <div className="flex items-center justify-between text-[10px]">
                           <span className="text-muted-foreground">Avg/wk</span>
                           <span className="font-bold tabular-nums">{formatDashboardValue(Math.round(avg * 10) / 10, m.id)}</span>
-                        </div>
+                        </div>}
                         <div className="flex items-center justify-between text-[10px]">
                           <span className="text-muted-foreground">Best wk</span>
                           <span className="font-bold tabular-nums">{formatDashboardValue(best, m.id)}</span>
