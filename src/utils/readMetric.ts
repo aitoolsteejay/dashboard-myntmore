@@ -70,7 +70,9 @@ export function readText(
   if (field === null || field === undefined) return null
   if (typeof field === 'object' && 'value' in field) {
     const v = field.value
-    return (v === null || v === undefined || v === '') ? null : String(v)
+    if (v === null || v === undefined || v === '') return null
+    const trimmed = String(v).trim()
+    return trimmed || null
   }
   if (typeof field === 'string') return field.trim() || null
   return null

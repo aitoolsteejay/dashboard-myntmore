@@ -180,16 +180,12 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
         : section === 'youtube'
           ? { youtube: updated.youtube }
           : section === 'newsletter_podcast'
-            ? {
-                email_newsletter: {
-                  TJP08: updated.newsletter_podcast?.TJP08,
-                  TJP09: updated.newsletter_podcast?.TJP09,
-                  TJP10: updated.newsletter_podcast?.TJP10,
-                  TJP11: updated.newsletter_podcast?.TJP11,
-                  TJP12: updated.newsletter_podcast?.TJP12,
-                  TJP13: updated.newsletter_podcast?.TJP13,
-                },
-              }
+            // Spread whatever keys are actually in formData instead of hand-listing
+            // each TJP## id — the previous hardcoded list silently dropped any
+            // newsletter/podcast metric added to company_metrics.ts after this was
+            // written from ever being saved (it would render, if unfiltered below,
+            // but always read back blank).
+            ? { email_newsletter: { ...updated.newsletter_podcast } }
             : { video_pipeline: updated.video_pipeline }
 
       triggerSave({
@@ -344,7 +340,10 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 border-b pb-1">Email Newsletter</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {TJ_PODCAST_METRICS.filter(m => ['TJP08','TJP09','TJP10','TJP11','TJP12','TJP13'].includes(m.id)).map(m => renderMetricCard('newsletter_podcast', m))}
+                    {/* Renders every metric in the array (not a hardcoded id allowlist,
+                        which used to silently exclude any newsletter metric added later)
+                        so a future TJ_PODCAST_METRICS entry shows up automatically. */}
+                    {TJ_PODCAST_METRICS.map(m => renderMetricCard('newsletter_podcast', m))}
                   </div>
                 </div>
             </TabsContent>

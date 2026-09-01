@@ -44,7 +44,10 @@ export function AppTopbar({ pageLabel }: { pageLabel: string }) {
     Promise.all([
       supabase.from("client_alerts").select("id", { count: "exact", head: true }).eq("is_resolved", false),
       supabase.from("actionables").select("id", { count: "exact", head: true }).neq("status", "done").lt("due_date", new Date().toISOString().slice(0, 10)),
-      supabase.from("client_notifications").select("id", { count: "exact", head: true }).eq("is_dismissed", false),
+      // Bounded to today-forward so a stale, never-dismissed row from a past
+      // window (e.g. a birthday nobody dismissed last year) doesn't keep
+      // inflating this count indefinitely.
+      supabase.from("client_notifications").select("id", { count: "exact", head: true }).eq("is_dismissed", false).gte("trigger_date", new Date().toISOString().slice(0, 10)),
     ]).then(([alerts, tasks, milestones]) => {
       if (active) setAttention({ alerts: alerts.count || 0, tasks: tasks.count || 0, milestones: milestones.count || 0 });
     });

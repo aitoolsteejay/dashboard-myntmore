@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link } from "@tanstack/react-router"
 import { useAuth } from "@/lib/auth"
+import { syncClientNotifications, dismissClientNotification } from "@/lib/notifications"
 import { supabase } from "@/integrations/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -195,49 +196,58 @@ export function DashboardPage() {
     return metrics.filter(metric => ids.includes(metric.id) || (impressionsEnabled && impressionIds.has(metric.id)))
   }
 
-  const handleDismissNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id))
+  const handleDismissNotification = async (notification: any) => {
+    setNotifications(prev => prev.filter(n => n.id !== notification.id))
     toast.success("Notification dismissed")
+    // Persist the dismissal so it doesn't reappear on the next data refresh
+    // (switching displayWeek, reloading, or another teammate opening the
+    // dashboard) — it used to live only in this component's local state.
+    await dismissClientNotification(notification.clientId, notification.type, notification.triggerDate)
   }
-  
-  // Helper: days until next annual occurrence of a date
-  const getDaysUntilNextOccurrence = (dateStr: string, today: Date): number => {
+
+  // Helper: the actual next occurrence (with correct rollover year) of an
+  // annual date, plus how many days away it is. Both the birthday/anniversary
+  // trigger date (used for persistence + display) and the "years" count for
+  // anniversaries are derived from this SAME computation so they can't drift
+  // out of sync with each other the way they used to.
+  const getNextOccurrence = (dateStr: string, today: Date): { date: Date; daysUntil: number } => {
     const d = new Date(dateStr)
     const thisYear = today.getFullYear()
-  
+
     let next = new Date(thisYear, d.getMonth(), d.getDate())
     next.setHours(0, 0, 0, 0)
-  
+
     if (next < today) {
       next = new Date(thisYear + 1, d.getMonth(), d.getDate())
     }
-  
-    return Math.round((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+    const daysUntil = Math.round((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    return { date: next, daysUntil }
   }
-  
+
   const checkNotifications = async () => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const upcoming: any[] = []
-  
+
     const { data: clients } = await supabase
       .from('clients')
       .select('id, name, birthday, myntmore_start_date')
       .eq('status', 'active')
-  
+
     clients?.forEach(client => {
       // Birthday check - 21 days ahead
       if (client.birthday) {
-        const daysUntil = getDaysUntilNextOccurrence(client.birthday, today)
+        const { date: bdayNext, daysUntil } = getNextOccurrence(client.birthday, today)
         if (daysUntil >= 0 && daysUntil <= 21) {
-          const bdayDate = new Date(client.birthday)
-          const bdayThisYear = new Date(today.getFullYear(), bdayDate.getMonth(), bdayDate.getDate())
-          const bdayLabel = bdayThisYear.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+          const bdayLabel = bdayNext.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+          const triggerDate = bdayNext.toISOString().split('T')[0]
           upcoming.push({
             id: client.id + '_bday',
             clientId: client.id,
             clientName: client.name,
             type: 'birthday',
+            triggerDate,
             daysUntil,
             severity: daysUntil <= 3 ? 'high' : daysUntil <= 7 ? 'medium' : 'low',
             message: daysUntil === 0
@@ -246,23 +256,22 @@ export function DashboardPage() {
           })
         }
       }
-  
+
       // Work anniversary check - 21 days ahead
       if (client.myntmore_start_date) {
         const start = new Date(client.myntmore_start_date)
-        const daysUntil = getDaysUntilNextOccurrence(client.myntmore_start_date, today)
-        const years = today.getFullYear() - start.getFullYear()
-          - (getDaysUntilNextOccurrence(client.myntmore_start_date, today) > 0
-            && new Date(today.getFullYear(), start.getMonth(), start.getDate()) > today ? 1 : 0)
-  
+        const { date: annivNext, daysUntil } = getNextOccurrence(client.myntmore_start_date, today)
+        const years = annivNext.getFullYear() - start.getFullYear()
+
         if (daysUntil >= 0 && daysUntil <= 21 && years > 0) {
-          const annexThisYear = new Date(today.getFullYear(), start.getMonth(), start.getDate())
-          const annexLabel = annexThisYear.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+          const annexLabel = annivNext.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+          const triggerDate = annivNext.toISOString().split('T')[0]
           upcoming.push({
             id: client.id + '_anniv',
             clientId: client.id,
             clientName: client.name,
             type: 'work_anniversary',
+            triggerDate,
             daysUntil,
             severity: daysUntil <= 3 ? 'high' : daysUntil <= 7 ? 'medium' : 'low',
             message: daysUntil === 0
@@ -272,9 +281,18 @@ export function DashboardPage() {
         }
       }
     })
-  
-    upcoming.sort((a, b) => a.daysUntil - b.daysUntil)
-    setNotifications(upcoming)
+
+    // Persist the current window so the topbar's badge count (and any other
+    // reader of client_notifications) reflects reality instead of a table
+    // nothing wrote to, and filter out anything already dismissed so it
+    // doesn't reappear just because this ran again.
+    const dismissedKeys = await syncClientNotifications(upcoming.map(n => ({
+      clientId: n.clientId, notificationType: n.type, triggerDate: n.triggerDate, message: n.message,
+    })))
+    const stillActive = upcoming.filter(n => !dismissedKeys.has(`${n.clientId}:${n.type}:${n.triggerDate}`))
+
+    stillActive.sort((a, b) => a.daysUntil - b.daysUntil)
+    setNotifications(stillActive)
   }
 
   const toggleClient = (id: string) => {
@@ -491,6 +509,11 @@ export function DashboardPage() {
     const monthlyCounts: Record<string, number> = {}
     weeks.forEach(week => {
       clientMetrics.forEach(m => {
+        // readMetric() doesn't null out boolean-typed fields, and Number(true)/
+        // Number(false) pass the isNaN guard below — without this exclusion a
+        // checkbox metric gets silently summed into "Monthly Total" as if it
+        // were a count (matches the guard aggregateClientRows already uses).
+        if (m.type === 'boolean' || m.type === 'textarea') return
         const val = readMetric(week, m.category === 'content' ? 'content_metrics' : 'leadgen_metrics', m.id)
         if (val !== null && !isNaN(Number(val))) {
           monthlyTotals[m.id] = (monthlyTotals[m.id] ?? 0) + Number(val)
@@ -1330,7 +1353,7 @@ export function DashboardPage() {
                                 variant="ghost" 
                                 size="icon" 
                                 className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={() => handleDismissNotification(notif.id)}
+                                onClick={() => handleDismissNotification(notif)}
                               >
                                 <Check className="w-3 h-3" />
                               </Button>

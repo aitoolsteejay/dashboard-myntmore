@@ -1,58 +1,69 @@
 import { supabase } from "@/integrations/supabase/client"
 
-export async function checkClientNotifications() {
-  const { data: clients } = await supabase
-    .from('clients')
-    .select('id, name, birthday, myntmore_start_date')
-    .eq('status', 'active')
-  
-  if (!clients) return
-
-  const today = new Date()
-  const todayStr = today.toISOString().split('T')[0]
-  const next30Days = new Date(today)
-  next30Days.setDate(today.getDate() + 30)
-
-  for (const client of clients) {
-    // Check Birthday
-    if (client.birthday) {
-      const bday = new Date(client.birthday)
-      const thisYearBday = new Date(today.getFullYear(), bday.getMonth(), bday.getDate())
-      
-      if (thisYearBday >= today && thisYearBday <= next30Days) {
-        await supabase.from('client_notifications').upsert({
-          client_id: client.id,
-          notification_type: 'birthday',
-          message: `${client.name}'s Birthday is on ${thisYearBday.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}!`,
-          trigger_date: thisYearBday.toISOString().split('T')[0],
-          is_dismissed: false
-        }, { onConflict: 'client_id,notification_type,trigger_date' })
-      }
-    }
-
-    // Check Work Anniversary
-    if (client.myntmore_start_date) {
-      const start = new Date(client.myntmore_start_date)
-      const thisYearAnniversary = new Date(today.getFullYear(), start.getMonth(), start.getDate())
-      const years = today.getFullYear() - start.getFullYear()
-      
-      if (years > 0 && thisYearAnniversary >= today && thisYearAnniversary <= next30Days) {
-        await supabase.from('client_notifications').upsert({
-          client_id: client.id,
-          notification_type: 'anniversary',
-          message: `${client.name}'s ${years} Year Work Anniversary is on ${thisYearAnniversary.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}!`,
-          trigger_date: thisYearAnniversary.toISOString().split('T')[0],
-          is_dismissed: false
-        }, { onConflict: 'client_id,notification_type,trigger_date' })
-      }
-    }
-  }
+export type UpcomingNotification = {
+  clientId: string
+  notificationType: 'birthday' | 'work_anniversary'
+  triggerDate: string // YYYY-MM-DD
+  message: string
 }
 
-export async function dismissNotification(notificationId: string) {
-    const { error } = await supabase
-        .from('client_notifications')
-        .update({ is_dismissed: true })
-        .eq('id', notificationId)
-    return !error
+/**
+ * Persists the currently-relevant notifications (computed elsewhere, see
+ * DashboardPage.tsx's checkNotifications) into client_notifications, and
+ * returns the set of (clientId, type, triggerDate) keys already dismissed —
+ * so a dismissal survives a page refresh or another teammate's session
+ * instead of only living in local component state.
+ *
+ * No unique(client_id, notification_type, trigger_date) constraint exists on
+ * this table, so this can't use a plain upsert-with-onConflict (the old,
+ * never-actually-runnable version of this file assumed one existed) — it
+ * reads existing rows for these clients/types first and only inserts what's
+ * missing.
+ */
+export async function syncClientNotifications(upcoming: UpcomingNotification[]): Promise<Set<string>> {
+  const key = (clientId: string, type: string, date: string) => `${clientId}:${type}:${date}`
+  const dismissed = new Set<string>()
+  if (upcoming.length === 0) return dismissed
+
+  const clientIds = [...new Set(upcoming.map(n => n.clientId))]
+  const { data: existing, error } = await supabase
+    .from('client_notifications')
+    .select('client_id, notification_type, trigger_date, is_dismissed')
+    .in('client_id', clientIds)
+  if (error) {
+    console.error('Failed to load client_notifications:', error)
+    return dismissed
+  }
+
+  const existingKeys = new Set((existing ?? []).map(row => key(row.client_id ?? '', row.notification_type, row.trigger_date)))
+  ;(existing ?? []).forEach(row => {
+    if (row.is_dismissed) dismissed.add(key(row.client_id ?? '', row.notification_type, row.trigger_date))
+  })
+
+  const missing = upcoming.filter(n => !existingKeys.has(key(n.clientId, n.notificationType, n.triggerDate)))
+  if (missing.length > 0) {
+    const { error: insertError } = await supabase.from('client_notifications').insert(
+      missing.map(n => ({
+        client_id: n.clientId,
+        notification_type: n.notificationType,
+        trigger_date: n.triggerDate,
+        message: n.message,
+        is_dismissed: false,
+      }))
+    )
+    if (insertError) console.error('Failed to persist client_notifications:', insertError)
+  }
+
+  return dismissed
+}
+
+export async function dismissClientNotification(clientId: string, notificationType: string, triggerDate: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('client_notifications')
+    .update({ is_dismissed: true })
+    .eq('client_id', clientId)
+    .eq('notification_type', notificationType)
+    .eq('trigger_date', triggerDate)
+  if (error) console.error('Failed to dismiss notification:', error)
+  return !error
 }

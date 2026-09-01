@@ -14,22 +14,7 @@ import { toast } from "sonner"
 import { Link } from "@tanstack/react-router"
 import { cn } from "@/lib/utils"
 import { sortAlphabetically } from "@/utils/sort"
-
-function getWeekOptions(count = 12) {
-  return Array.from({ length: count }, (_, i) => {
-    const now = new Date()
-    const day = now.getDay()
-    const monday = new Date(now)
-    monday.setDate(now.getDate() - ((day + 6) % 7) - i * 7)
-    const sunday = new Date(monday)
-    sunday.setDate(monday.getDate() + 6)
-    const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-    return {
-      weekStart: monday.toISOString().split('T')[0],
-      label: `${fmt(monday)} – ${fmt(sunday)} ${sunday.getFullYear()}`,
-    }
-  })
-}
+import { getWeekOptions } from "@/utils/weekUtils"
 
 // ISO date of the very first Monday on or before a given date
 function toMonday(dateStr: string): string {

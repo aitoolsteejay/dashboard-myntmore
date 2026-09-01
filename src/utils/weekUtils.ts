@@ -2,6 +2,11 @@ export function getWeeksInSameMonth(selectedWeekStart: string) {
   const selected = new Date(selectedWeekStart + 'T00:00:00Z')
   const year = selected.getUTCFullYear()
   const month = selected.getUTCMonth()
+  // Absolute month ordinal — comparing year/month as two separate fields broke
+  // for January, since a cursor sitting in December of the PRIOR year has a
+  // raw month index (11) greater than January's (0) even though it's earlier;
+  // this silently returned zero weeks for almost every January.
+  const targetOrdinal = year * 12 + month
 
   const weeks: { weekStart: string; shortLabel: string; isSelected: boolean }[] = []
 
@@ -12,12 +17,13 @@ export function getWeeksInSameMonth(selectedWeekStart: string) {
   cursor.setUTCDate(firstOfMonth.getUTCDate() - daysBack)
 
   while (true) {
-    const startsInMonth = cursor.getUTCMonth() === month && cursor.getUTCFullYear() === year
+    const cursorOrdinal = cursor.getUTCFullYear() * 12 + cursor.getUTCMonth()
+    const startsInMonth = cursorOrdinal === targetOrdinal
 
     // A week belongs only to the month containing its Monday. Do not include a
     // July week in August merely because its Sunday falls in August.
     if (!startsInMonth) {
-      if (cursor.getUTCMonth() > month || cursor.getUTCFullYear() > year) break
+      if (cursorOrdinal > targetOrdinal) break
       cursor.setUTCDate(cursor.getUTCDate() + 7)
       continue
     }
@@ -30,7 +36,7 @@ export function getWeeksInSameMonth(selectedWeekStart: string) {
     })
 
     cursor.setUTCDate(cursor.getUTCDate() + 7)
-    if (cursor.getUTCMonth() > month && cursor.getUTCFullYear() >= year) break
+    if (cursor.getUTCFullYear() * 12 + cursor.getUTCMonth() > targetOrdinal) break
   }
 
   return weeks
