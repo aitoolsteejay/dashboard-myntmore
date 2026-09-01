@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
+import { useAuth } from '@/lib/auth'
 import { sortAlphabetically } from '@/utils/sort'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,6 +27,7 @@ type InternalProfile = {
 }
 
 export function ClientSettingsPage() {
+  const { isAdmin } = useAuth()
   const [clients, setClients] = useState<ClientPortalRow[]>([])
   const [internalProfiles, setInternalProfiles] = useState<InternalProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -119,6 +121,14 @@ export function ClientSettingsPage() {
   }
 
   const handleLinkTeamMember = async () => {
+    // Linking/unlinking portal access is admin-only by intent, but the RLS
+    // policy underneath (is_internal_user()) currently grants this write to
+    // any internal team member — this client-side gate is a stopgap until
+    // that policy is narrowed. Defense-in-depth, not the real boundary.
+    if (!isAdmin) {
+      toast.error('Only admins can manage portal account linking.')
+      return
+    }
     if (!linkClientId || !linkUserId) {
       toast.error('Select a client and an internal team member.')
       return
@@ -185,6 +195,10 @@ export function ClientSettingsPage() {
   }
 
   const handleUnlinkPortalUser = async (clientId: string) => {
+    if (!isAdmin) {
+      toast.error('Only admins can manage portal account linking.')
+      return
+    }
     if (!window.confirm('Remove portal access for this client?')) return
     const { error } = await (supabase as any)
       .from('clients')

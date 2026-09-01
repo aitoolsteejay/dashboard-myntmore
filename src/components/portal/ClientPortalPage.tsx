@@ -247,12 +247,17 @@ export function ClientPortalPage() {
   // Earliest week of real data on file for this client — powers the "Lifetime" preset.
   useEffect(() => {
     if (!clientRecord) return
-    supabase.from('weekly_data').select('week_start')
+    supabase.from('weekly_data').select('client_id, week_start')
       .eq('client_id', clientRecord.id)
       .order('week_start', { ascending: true })
       .limit(1)
-      .then(({ data }: { data: any[] | null }) => {
-        setEarliestWeekStart(assertClientRows(data, clientRecord.id, 'earliest week')[0]?.week_start ?? null)
+      .then(({ data, error }: { data: any[] | null; error: any }) => {
+        if (error) { console.error('Failed to load earliest week:', error); return }
+        try {
+          setEarliestWeekStart(assertClientRows(data, clientRecord.id, 'earliest week')[0]?.week_start ?? null)
+        } catch (assertError) {
+          console.error('Failed to load earliest week:', assertError)
+        }
       })
   }, [clientRecord])
 

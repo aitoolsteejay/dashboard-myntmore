@@ -262,9 +262,13 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
             </TabsContent>
             <TabsContent value="other" className="mt-0 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {renderMetricCard('quora', MM_OTHER_METRICS[0])}
-                    {renderMetricCard('reddit', MM_OTHER_METRICS[1])}
-                    {renderMetricCard('quora', MM_OTHER_METRICS[2])}
+                    {/* Looked up by id, not array position — MM_OTHER_METRICS reordering
+                        or growing used to silently reassign a metric to the wrong
+                        channel's formData bucket (e.g. Medium's data landing in
+                        `formData.reddit`) since these used to be indexed [0]/[1]/[2]. */}
+                    {renderMetricCard('quora', MM_OTHER_METRICS.find(m => m.id === 'MMO01')!)}
+                    {renderMetricCard('reddit', MM_OTHER_METRICS.find(m => m.id === 'MMO05')!)}
+                    {renderMetricCard('quora', MM_OTHER_METRICS.find(m => m.id === 'MMO06')!)}
                 </div>
             </TabsContent>
             <TabsContent value="ads" className="mt-0 space-y-6">

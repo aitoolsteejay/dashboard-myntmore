@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { CONTENT_METRICS, LEADGEN_METRICS, Metric } from '@/data/metrics'
+import { assertClientRows } from '@/utils/clientScope'
 
 export interface EffectiveMetrics {
   all: Metric[]
@@ -45,7 +46,10 @@ export async function fetchEffectiveMetrics(clientId: string | null | undefined)
     .order('sort_order', { ascending: true })
   if (error) throw error
 
-  const custom = (data ?? []).map(customMetricToMetric)
+  // Defense-in-depth, matching every other client-portal-facing fetch (see
+  // src/utils/clientScope.ts) — RLS already scopes this, but a second check
+  // client-side catches a scoping regression before it ever renders.
+  const custom = assertClientRows(data, clientId, 'custom metrics').map(customMetricToMetric)
   const content = [...CONTENT_METRICS, ...custom.filter(m => m.category === 'content')]
   const leadgen = [...LEADGEN_METRICS, ...custom.filter(m => m.category === 'leadgen')]
   return { all: [...content, ...leadgen], content, leadgen }

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CalendarDays, Loader2, Medal, Search, Trophy, Users } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
-import { ALL_METRICS } from '@/data/metrics'
+import { ALL_METRICS, Metric } from '@/data/metrics'
+import { customMetricToMetric } from '@/hooks/useEffectiveMetrics'
 import { formatMetricDisplay } from '@/utils/metricCalculations'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -53,6 +54,11 @@ function formatMonth(value: string | null) {
 export function HighScoresPage() {
   const [clients, setClients] = useState<ClientRow[]>([])
   const [scores, setScores] = useState<HighScoreRow[]>([])
+  // Custom metric IDs (X01, X02, ...) are only unique PER CLIENT (see
+  // custom_metrics' unique(client_id, metric_key) constraint) — the same "X01"
+  // means a different metric for different clients, so this can't be a flat
+  // id->Metric map like the standard-catalog metricMap above.
+  const [customMetricsByClient, setCustomMetricsByClient] = useState<Record<string, Map<string, Metric>>>({})
   const [clientFilter, setClientFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
   const [search, setSearch] = useState('')
@@ -64,15 +70,22 @@ export function HighScoresPage() {
     Promise.all([
       supabase.from('clients').select('id, name, company').order('name'),
       supabase.from('high_scores').select('*').order('updated_at', { ascending: false }),
-    ]).then(([clientResult, scoreResult]) => {
+      supabase.from('custom_metrics').select('*').eq('archived', false),
+    ]).then(([clientResult, scoreResult, customResult]) => {
       if (!active) return
-      const queryError = clientResult.error || scoreResult.error
+      const queryError = clientResult.error || scoreResult.error || customResult.error
       if (queryError) {
         setError(queryError.message)
         return
       }
       setClients((clientResult.data || []) as ClientRow[])
       setScores((scoreResult.data || []) as HighScoreRow[])
+      const byClient: Record<string, Map<string, Metric>> = {}
+      ;(customResult.data ?? []).forEach((row: any) => {
+        if (!byClient[row.client_id]) byClient[row.client_id] = new Map()
+        byClient[row.client_id].set(row.metric_key, customMetricToMetric(row))
+      })
+      setCustomMetricsByClient(byClient)
     }).catch(queryError => {
       if (active) setError(queryError instanceof Error ? queryError.message : 'Unexpected error while loading high scores.')
     }).finally(() => {
@@ -83,11 +96,15 @@ export function HighScoresPage() {
 
   const clientMap = useMemo(() => new Map(clients.map(client => [client.id, client])), [clients])
 
+  const resolveMetric = (score: HighScoreRow) =>
+    metricMap.get(score.metric_id)
+      ?? (score.client_id ? customMetricsByClient[score.client_id]?.get(score.metric_id) : undefined)
+
   const filteredScores = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase()
     return scores.filter(score => {
       const client = score.client_id ? clientMap.get(score.client_id) : undefined
-      const metric = metricMap.get(score.metric_id)
+      const metric = resolveMetric(score)
       const category = metric?.category ?? (score.metric_id.startsWith('C') ? 'content' : 'leadgen')
       if (clientFilter !== 'all' && score.client_id !== clientFilter) return false
       if (categoryFilter !== 'all' && category !== categoryFilter) return false
@@ -95,7 +112,7 @@ export function HighScoresPage() {
       return [client?.name, client?.company, score.metric_name, metric?.name, score.metric_id]
         .some(value => value?.toLowerCase().includes(normalizedSearch))
     })
-  }, [categoryFilter, clientFilter, clientMap, scores, search])
+  }, [categoryFilter, clientFilter, clientMap, customMetricsByClient, scores, search])
 
   const summary = useMemo(() => {
     const clientIds = new Set(filteredScores.map(score => score.client_id).filter(Boolean))
@@ -167,17 +184,25 @@ export function HighScoresPage() {
                 <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground">No high scores match these filters.</TableCell></TableRow>
               ) : filteredScores.map(score => {
                 const client = score.client_id ? clientMap.get(score.client_id) : undefined
-                const metric = metricMap.get(score.metric_id)
+                const metric = resolveMetric(score)
                 const metricName = score.metric_name || metric?.name || score.metric_id
+                // formatMetricDisplay looks the metric up in the global catalog itself
+                // and misses custom (X##) metrics — format those directly from the
+                // already-resolved `metric` instead of falling back to a bare number.
+                const isUncatalogedPercent = !!metric && !metricMap.has(metric.id) && metric.unit === '%'
+                const fmtScore = (val: number | null) => {
+                  if (val === null || val === undefined) return '-'
+                  return isUncatalogedPercent ? `${Number(val).toFixed(1)}%` : formatMetricDisplay(val, score.metric_id)
+                }
                 return (
                   <TableRow key={score.id}>
                     <TableCell><p className="font-bold">{client?.name || 'Unknown client'}</p>{client?.company ? <p className="text-xs text-muted-foreground">{client.company}</p> : null}</TableCell>
                     <TableCell><p className="font-medium">{metricName}</p><p className="text-xs font-mono text-muted-foreground">{score.metric_id}</p></TableCell>
-                    <TableCell className="text-right text-base font-black text-gold">{formatMetricDisplay(score.lifetime_high, score.metric_id)}</TableCell>
+                    <TableCell className="text-right text-base font-black text-gold">{fmtScore(score.lifetime_high)}</TableCell>
                     <TableCell className="whitespace-nowrap text-sm">{formatWeek(score.achieved_week)}</TableCell>
-                    <TableCell className="text-right text-base font-black text-amber-700">{formatMetricDisplay(score.lifetime_high_month, score.metric_id)}</TableCell>
+                    <TableCell className="text-right text-base font-black text-amber-700">{fmtScore(score.lifetime_high_month)}</TableCell>
                     <TableCell className="whitespace-nowrap text-sm">{formatMonth(score.achieved_month)}</TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground">{formatMetricDisplay(score.previous_high, score.metric_id)}</TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground">{fmtScore(score.previous_high)}</TableCell>
                   </TableRow>
                 )
               })}

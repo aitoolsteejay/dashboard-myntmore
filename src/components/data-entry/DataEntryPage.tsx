@@ -196,7 +196,10 @@ function LeadGenCampaignEntry({
             answered: rows[0].answered ?? '',
             positive_replies: rows[0].positive_replies ?? '',
             negative_replies: rows[0].negative_replies ?? '',
+            hot_leads: rows[0].hot_leads ?? '',
             meetings_booked: rows[0].meetings_booked ?? '',
+            existing_conn_sent: rows[0].existing_conn_sent ?? '',
+            existing_conn_replied: rows[0].existing_conn_replied ?? '',
             notes: rows[0].notes ?? ''
           }
         }))
@@ -215,9 +218,12 @@ function LeadGenCampaignEntry({
           answered: row.answered ?? '',
           positive_replies: row.positive_replies ?? '',
           negative_replies: row.negative_replies ?? '',
+          hot_leads: row.hot_leads ?? '',
           meetings_booked: row.meetings_booked ?? '',
+          existing_conn_sent: row.existing_conn_sent ?? '',
+          existing_conn_replied: row.existing_conn_replied ?? '',
           notes: row.notes ?? ''
-        } : { conn_requests_sent: '', accepted: '', answered: '', positive_replies: '', negative_replies: '', meetings_booked: '', notes: '' }
+        } : { conn_requests_sent: '', accepted: '', answered: '', positive_replies: '', negative_replies: '', hot_leads: '', meetings_booked: '', existing_conn_sent: '', existing_conn_replied: '', notes: '' }
       }))
     }
 
@@ -364,7 +370,10 @@ function LeadGenCampaignEntry({
                 answered: data?.answered ?? '',
                 positive_replies: data?.positive_replies ?? '',
                 negative_replies: data?.negative_replies ?? '',
+                hot_leads: data?.hot_leads ?? '',
                 meetings_booked: data?.meetings_booked ?? '',
+                existing_conn_sent: data?.existing_conn_sent ?? '',
+                existing_conn_replied: data?.existing_conn_replied ?? '',
                 notes: data?.notes ?? ''
             }
         })
@@ -444,7 +453,10 @@ function LeadGenCampaignEntry({
                 answered: Number(dataSnapshot.answered) || 0,
                 positive_replies: Number(dataSnapshot.positive_replies) || 0,
                 negative_replies: Number(dataSnapshot.negative_replies) || 0,
+                hot_leads: Number(dataSnapshot.hot_leads) || 0,
                 meetings_booked: Number(dataSnapshot.meetings_booked) || 0,
+                existing_conn_sent: Number(dataSnapshot.existing_conn_sent) || 0,
+                existing_conn_replied: Number(dataSnapshot.existing_conn_replied) || 0,
                 notes: dataSnapshot.notes || '',
                 submitted_by: user?.id
             }
@@ -469,7 +481,7 @@ function LeadGenCampaignEntry({
 
             const latestData = localCampaignDataRef.current[campaignId]
             const savedSnapshotIsLatest = latestData
-              && ['conn_requests_sent', 'accepted', 'answered', 'positive_replies', 'negative_replies', 'meetings_booked', 'notes']
+              && ['conn_requests_sent', 'accepted', 'answered', 'positive_replies', 'negative_replies', 'hot_leads', 'meetings_booked', 'existing_conn_sent', 'existing_conn_replied', 'notes']
                 .every(field => String(latestData[field] ?? '') === String(dataSnapshot[field] ?? ''))
             if (savedSnapshotIsLatest) {
               dirtyCampaignIds.current.delete(campaignId)
@@ -572,7 +584,7 @@ function LeadGenCampaignEntry({
             if (error) throw error
             toast.success("Campaign created")
             setCampaigns(sortAlphabetically([...campaigns, data], campaign => campaign.name))
-            setLocalCampaignData({ ...localCampaignData, [data.id]: { conn_requests_sent: '', accepted: '', answered: '', positive_replies: '', negative_replies: '', meetings_booked: '', notes: '' } })
+            setLocalCampaignData({ ...localCampaignData, [data.id]: { conn_requests_sent: '', accepted: '', answered: '', positive_replies: '', negative_replies: '', hot_leads: '', meetings_booked: '', existing_conn_sent: '', existing_conn_replied: '', notes: '' } })
             setShowNewCampaignForm(false)
             setNewCampaign({ name: '', icp_description: '', message_narrative: '', started_date: new Date().toISOString().split('T')[0] })
         } catch (error: any) {
@@ -1086,10 +1098,28 @@ function LeadGenCampaignEntry({
 
                                             <div className="space-y-2">
                                                 <Label className="text-[10px] font-bold uppercase text-muted-foreground">Results</Label>
-                                                <div className="grid grid-cols-1 gap-2">
+                                                <div className="grid grid-cols-2 gap-2">
                                                     <div className="space-y-1">
                                                         <Label className="text-[9px] uppercase">Meetings</Label>
                                                         <Input type="number" placeholder="-" value={data.meetings_booked ?? ''} onChange={(e) => handleCampaignChange(campaign.id, 'meetings_booked', e.target.value)} />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[9px] uppercase">Hot Leads</Label>
+                                                        <Input type="number" placeholder="-" value={data.hot_leads ?? ''} onChange={(e) => handleCampaignChange(campaign.id, 'hot_leads', e.target.value)} />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Existing Connections</Label>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[9px] uppercase">Msgs Sent</Label>
+                                                        <Input type="number" placeholder="-" value={data.existing_conn_sent ?? ''} onChange={(e) => handleCampaignChange(campaign.id, 'existing_conn_sent', e.target.value)} />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[9px] uppercase">Replied</Label>
+                                                        <Input type="number" placeholder="-" value={data.existing_conn_replied ?? ''} onChange={(e) => handleCampaignChange(campaign.id, 'existing_conn_replied', e.target.value)} />
                                                     </div>
                                                 </div>
                                             </div>
@@ -1276,10 +1306,27 @@ function LeadGenCampaignEntry({
                                                 </div>
                                                 <div className="space-y-2">
                                                     <Label className="text-[10px] font-bold uppercase text-muted-foreground">Results</Label>
-                                                    <div className="grid grid-cols-1 gap-2">
+                                                    <div className="grid grid-cols-2 gap-2">
                                                         <div className="space-y-1">
                                                             <Label className="text-[9px] uppercase">Meetings</Label>
                                                             <Input type="number" placeholder="-" value={data.meetings_booked ?? ''} onChange={(e) => handleCampaignChange(campaign.id, 'meetings_booked', e.target.value)} />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[9px] uppercase">Hot Leads</Label>
+                                                            <Input type="number" placeholder="-" value={data.hot_leads ?? ''} onChange={(e) => handleCampaignChange(campaign.id, 'hot_leads', e.target.value)} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Existing Connections</Label>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[9px] uppercase">Msgs Sent</Label>
+                                                            <Input type="number" placeholder="-" value={data.existing_conn_sent ?? ''} onChange={(e) => handleCampaignChange(campaign.id, 'existing_conn_sent', e.target.value)} />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[9px] uppercase">Replied</Label>
+                                                            <Input type="number" placeholder="-" value={data.existing_conn_replied ?? ''} onChange={(e) => handleCampaignChange(campaign.id, 'existing_conn_replied', e.target.value)} />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -2024,6 +2071,16 @@ export function DataEntryPage() {
     )
     if (!confirmed) return
 
+    // Every week this campaign had data for feeds weekly_data.leadgen_metrics'
+    // rollup totals (client dashboard, portal, EOM report) — read them before
+    // deleting so those totals can be resynced afterward, or they'd keep
+    // silently counting this campaign's numbers forever.
+    const { data: affectedWeeks } = await supabase
+      .from('campaign_weekly_data')
+      .select('week_start')
+      .eq('campaign_id', campaignId)
+      .eq('client_id', selectedClientId)
+
     await supabase
       .from('campaign_weekly_data')
       .delete()
@@ -2035,6 +2092,9 @@ export function DataEntryPage() {
       .delete()
       .eq('id', campaignId)
       .eq('client_id', selectedClientId)
+
+    const weekStarts = [...new Set((affectedWeeks ?? []).map(w => w.week_start))]
+    await Promise.all(weekStarts.map(weekStart => syncAllCampaignTotals(selectedClientId, weekStart, false)))
 
     toast.success(`Campaign "${name}" deleted.`)
     await fetchData()

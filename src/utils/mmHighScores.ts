@@ -20,7 +20,10 @@ export async function fetchMMLifetimeHighs(): Promise<MMLifetimeHighs> {
       const metrics = row[column] as Record<string, { value?: unknown }> | null
       if (!metrics) continue
       for (const [metricId, field] of Object.entries(metrics)) {
-        const n = Number(field?.value)
+        // Number('') is 0, not NaN — a cleared/blank field would otherwise
+        // register as a real "0" high instead of being skipped as no data.
+        if (field?.value === null || field?.value === undefined || field?.value === '') continue
+        const n = Number(field.value)
         if (isNaN(n)) continue
         if (!highs[metricId] || n > highs[metricId].value) {
           highs[metricId] = { value: n, week: row.week_start }
