@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/lib/auth'
 import { buildWeekMetrics, formatPct } from '@/utils/metricCalculations'
+import { RATE_DEPENDENCIES, computeVolumeWeightedRate } from '@/utils/rateAggregation'
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from '@/data/metrics'
 import { fetchEffectiveMetrics } from '@/hooks/useEffectiveMetrics'
 import { formatDashboardValue } from '@/utils/dataUtils'
@@ -320,6 +321,19 @@ export function ClientPortalPage() {
     if (val === null || val === undefined) return null
     const n = Number(val)
     return isNaN(n) ? null : n
+  }
+
+  // A rate metric's Total/Avg across weeks can't be a sum or a simple mean of
+  // each week's already-computed rate — recompute one volume-weighted value
+  // from each week's summed raw numerator/denominator instead.
+  const getReportVolumeWeightedRate = (weekStarts: string[], metricId: string): number | null => {
+    const deps = RATE_DEPENDENCIES[metricId]
+    if (!deps) return null
+    const rows = weekStarts
+      .map(w => reportWeeklyData.find(r => r.week_start === w))
+      .filter(Boolean)
+    const category = ALL_METRICS.find(m => m.id === metricId)?.category === 'content' ? 'content' : 'leadgen'
+    return computeVolumeWeightedRate(rows, metricId, category)
   }
 
   const getReportTarget = (metricId: string, weekStart?: string): number | null => {
@@ -1166,8 +1180,13 @@ export function ClientPortalPage() {
                               {reportAvailableMetrics.map(m => {
                                 const values = reportWeekList.map(w => getReportCellValue(w, m.id))
                                 const numVals = values.filter(v => v !== null) as number[]
+                                const isRate = !!RATE_DEPENDENCIES[m.id]
                                 const total = numVals.length > 0 ? numVals.reduce((a, b) => a + b, 0) : null
-                                const avg = total !== null && numVals.length > 0 ? total / numVals.length : null
+                                // Rate metrics recompute one volume-weighted value from summed
+                                // raw fields instead of averaging each week's already-computed rate.
+                                const avg = isRate
+                                  ? getReportVolumeWeightedRate(reportWeekList, m.id)
+                                  : total !== null && numVals.length > 0 ? total / numVals.length : null
                                 const tgt = getReportTarget(m.id)
 
                                 return (
@@ -1191,7 +1210,8 @@ export function ClientPortalPage() {
                                       )
                                     })}
                                     <TableCell className="py-1 text-center text-xs font-black bg-amber-50/60 tabular-nums">
-                                      {total !== null ? formatDashboardValue(total, m.id) : '-'}
+                                      {/* Summing a %-type metric across weeks is meaningless — only Avg/wk applies to rates. */}
+                                      {m.unit === '%' ? '—' : total !== null ? formatDashboardValue(total, m.id) : '-'}
                                     </TableCell>
                                     <TableCell className="py-1 text-center text-xs font-bold bg-amber-50/60 tabular-nums">
                                       {avg !== null ? formatDashboardValue(Math.round(avg * 10) / 10, m.id) : '-'}
@@ -1260,8 +1280,9 @@ export function ClientPortalPage() {
                           const values = reportWeekList.map(w => getReportCellValue(w, m.id))
                           const numVals = values.filter(v => v !== null) as number[]
                           if (numVals.length === 0) return null
+                          const isRate = !!RATE_DEPENDENCIES[m.id]
                           const total = numVals.reduce((a, b) => a + b, 0)
-                          const avg = total / numVals.length
+                          const avg = isRate ? (getReportVolumeWeightedRate(reportWeekList, m.id) ?? total / numVals.length) : total / numVals.length
                           const best = Math.max(...numVals)
                           const bestWeekIdx = values.findIndex(v => v === best)
                           const bestWeek = bestWeekIdx >= 0 ? fmtWeekShort(reportWeekList[bestWeekIdx]) : '-'
@@ -1273,15 +1294,17 @@ export function ClientPortalPage() {
                             <Card key={m.id} className="overflow-hidden">
                               <CardContent className="p-3">
                                 <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground truncate mb-1">{m.name}</div>
+                                {/* Headline number — a %-metric summed across weeks (e.g. "312%")
+                                    is meaningless, so its headline is the (volume-weighted) average instead. */}
                                 <div className={cn("text-2xl font-black tabular-nums leading-none", achTextColor(avgAch))}>
-                                  {formatDashboardValue(total, m.id)}
+                                  {formatDashboardValue(m.unit === '%' ? Math.round(avg * 10) / 10 : total, m.id)}
                                 </div>
-                                <div className="text-[9px] text-muted-foreground mt-0.5">total · {numVals.length}w</div>
+                                <div className="text-[9px] text-muted-foreground mt-0.5">{m.unit === '%' ? 'avg' : 'total'} · {numVals.length}w</div>
                                 <div className="mt-2.5 space-y-1">
-                                  <div className="flex items-center justify-between text-[10px]">
+                                  {m.unit !== '%' && <div className="flex items-center justify-between text-[10px]">
                                     <span className="text-muted-foreground">Avg/wk</span>
                                     <span className="font-bold tabular-nums">{formatDashboardValue(Math.round(avg * 10) / 10, m.id)}</span>
-                                  </div>
+                                  </div>}
                                   <div className="flex items-center justify-between text-[10px]">
                                     <span className="text-muted-foreground">Best wk</span>
                                     <span className="font-bold tabular-nums">{formatDashboardValue(best, m.id)}</span>

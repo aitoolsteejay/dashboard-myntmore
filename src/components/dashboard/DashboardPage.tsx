@@ -18,6 +18,7 @@ import { EditCampaignModal } from "../monday/EditCampaignModal"
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from "@/data/metrics"
 import { customMetricToMetric } from "@/hooks/useEffectiveMetrics"
 import { findTarget } from "@/utils/targets"
+import { RATE_DEPENDENCIES, computeVolumeWeightedRate } from "@/utils/rateAggregation"
 import { mv, mt, fmt, delta, deltaColor, tjVal, salesVal, sv, readMetric, formatMetricValue, formatDashboardValue } from "@/utils/dataUtils"
 
 import { fmt as gFmt, fmtDelta, Delta, fmtPct, fmtPctDelta } from "@/utils/format"
@@ -459,11 +460,11 @@ export function DashboardPage() {
                     <TableCell className="py-1 text-center text-xs font-bold">
                       <span className="inline-flex items-center gap-1 justify-center">
                         {isNewHigh && <span title="New high score!" className="text-yellow-500 text-sm leading-none">★</span>}
-                        {['L12', 'L14', 'L17'].includes(m.id) ? formatPct(current as number) : formatDashboardValue(current, m.id)}
+                        {['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(current as number) : formatDashboardValue(current, m.id)}
                       </span>
                     </TableCell>
                     <TableCell className="py-1 text-center text-xs text-muted-foreground">
-                      {['L12', 'L14', 'L17'].includes(m.id) ? formatPct(prev as number) : formatDashboardValue(prev, m.id)}
+                      {['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(prev as number) : formatDashboardValue(prev, m.id)}
                     </TableCell>
                     <TableCell
                       className={cn("py-1 text-center text-xs font-black rounded", achColor(achNum), achBg(achNum))}
@@ -482,13 +483,13 @@ export function DashboardPage() {
                       style={{ color: bestEver !== null ? '#B8860B' : undefined }}
                       title={hs?.achieved_week ? `Achieved: w/c ${new Date(hs.achieved_week).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : undefined}
                     >
-                      {bestEver !== null ? (['L12', 'L14', 'L17'].includes(m.id) ? formatPct(bestEver as number) : formatDashboardValue(bestEver, m.id)) : '-'}
+                      {bestEver !== null ? (['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(bestEver as number) : formatDashboardValue(bestEver, m.id)) : '-'}
                     </TableCell>
                     <TableCell
                       className="py-1 text-center text-xs font-bold text-amber-600 cursor-help"
                       title={hs?.achieved_month ? `Achieved: ${new Date(hs.achieved_month + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}` : undefined}
                     >
-                      {bestEverMonth !== null ? (['L12', 'L14', 'L17'].includes(m.id) ? formatPct(bestEverMonth as number) : formatDashboardValue(bestEverMonth, m.id)) : '-'}
+                      {bestEverMonth !== null ? (['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(bestEverMonth as number) : formatDashboardValue(bestEverMonth, m.id)) : '-'}
                     </TableCell>
                   </>
                 )}
@@ -522,9 +523,15 @@ export function DashboardPage() {
       })
     })
 
-    // Recalculate rates for monthly totals
-    monthlyTotals['L12'] = calcRateCapped(monthlyTotals['L11'], monthlyTotals['L10']) || 0
-    monthlyTotals['L14'] = calcRateCapped(monthlyTotals['L13'], monthlyTotals['L11']) || 0
+    // Recalculate rates for monthly totals — every known rate metric (L05,
+    // L12, L14, L17, L18, L21, L26), not just L12/L14, needs its monthly value
+    // recomputed from summed raw numerator/denominator fields rather than left
+    // as a naive sum of each week's already-computed rate (which the loop
+    // above produces for every field it doesn't know is a percentage).
+    Object.keys(RATE_DEPENDENCIES).forEach(metricId => {
+      const category = clientMetrics.find(m => m.id === metricId)?.category === 'content' ? 'content' : 'leadgen'
+      monthlyTotals[metricId] = computeVolumeWeightedRate(weeks, metricId, category) ?? 0
+    })
     monthlyTotals['C26'] = monthlyTotals['C09'] > 0 ? monthlyTotals['C10'] / monthlyTotals['C09'] : 0
     MONTHLY_AVERAGE_METRICS.forEach(metricId => {
       if (monthlyCounts[metricId] > 0) monthlyTotals[metricId] /= monthlyCounts[metricId]
@@ -576,12 +583,15 @@ export function DashboardPage() {
                         )}
                         style={{ color }}
                       >
-                        {['L12', 'L14', 'L17'].includes(m.id) ? formatPct(val as number) : formatDashboardValue(val, m.id)}
+                        {['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(val as number) : formatDashboardValue(val, m.id)}
                       </TableCell>
                     )
                   })}
                   <TableCell className="py-1 text-center text-[11px] font-black bg-gold/5">
-                    {isMonthlyOnly || ['L12', 'L14', 'L17', 'L18'].includes(m.id) ? '-' : formatDashboardValue(monthlyTotals[m.id], m.id)}
+                    {/* Any known rate metric now has its correct volume-weighted value
+                        recomputed above — display it, don't hide it like the old
+                        hardcoded L12/L14/L17/L18-only list used to for L05/L21/L26. */}
+                    {isMonthlyOnly ? '-' : formatDashboardValue(monthlyTotals[m.id], m.id)}
                   </TableCell>
                 </TableRow>
               )
@@ -635,10 +645,13 @@ export function DashboardPage() {
       })
 
       Object.entries(totals).forEach(([clientId, total]) => {
+        total.L05 = calcRateCapped(total.L03, total.L02) || 0
         total.L12 = calcRateCapped(total.L11, total.L10) || 0
         total.L14 = calcRateCapped(total.L13, total.L11) || 0
         total.L17 = calcRateCapped(total.L15, total.L13) || 0
         total.L18 = calcRateCapped(total.L16, total.L13) || 0
+        total.L21 = calcRateCapped(total.L20, total.L19) || 0
+        total.L26 = calcRateCapped(total.L25, total.L24) || 0
         total.C26 = total.C09 > 0 ? total.C10 / total.C09 : 0
         MONTHLY_AVERAGE_METRICS.forEach(metricId => {
           if (counts[clientId][metricId] > 0) total[metricId] /= counts[clientId][metricId]
@@ -804,13 +817,13 @@ export function DashboardPage() {
                         <TableRow key={m.id} className="h-8">
                           <TableCell className="py-1 text-[11px] font-medium">{m.name}</TableCell>
                           <TableCell className="py-1 text-center text-[11px] text-muted-foreground">
-                            {['L12', 'L14', 'L17'].includes(m.id) ? formatPct(pTotals[m.id]) : gFmt(pTotals[m.id])}
+                            {['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(pTotals[m.id]) : gFmt(pTotals[m.id])}
                           </TableCell>
                           <TableCell className="py-1 text-center text-[11px] font-black bg-gold/5">
-                            {['L12', 'L14', 'L17'].includes(m.id) ? formatPct(cTotals[m.id]) : gFmt(cTotals[m.id])}
+                            {['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(cTotals[m.id]) : gFmt(cTotals[m.id])}
                           </TableCell>
                           <TableCell className="py-1 text-center text-[11px] font-bold">
-                            {['L12', 'L14', 'L17'].includes(m.id) ? (
+                            {['L12', 'L14', 'L17', 'L18'].includes(m.id) ? (
                               <span style={{ color: fmtPctDelta(cTotals[m.id], 100, pTotals[m.id], 100).color }}>
                                 {fmtPctDelta(cTotals[m.id], 100, pTotals[m.id], 100).text}
                               </span>
@@ -877,8 +890,39 @@ export function DashboardPage() {
     meeting_tracker: aggregateSalesSection(monthSalesRows, 'meeting_tracker'),
   }
 
+  // The split-vs-legacy impressions decision (withLinkedInImpressionTotals,
+  // below) has to be made PER WEEK, not once for the whole month's already-
+  // summed fields — a month mixing one legacy-only week (raw MML02 only) with
+  // one split-tracked week (MML10/MML11) would otherwise silently discard the
+  // legacy week's impressions entirely, since "the month has some split data"
+  // would make the aggregate-level decision ignore the summed MML02 in favor
+  // of the (incomplete) summed MML10+MML11.
+  const aggregateMmLinkedInRows = (rows: any[]) => {
+    const out: Record<string, number> = {}
+    let posts = 0
+    for (const row of rows) {
+      const ch = row['linkedin']
+      if (!ch) continue
+      for (const [k, v] of Object.entries(ch)) {
+        if (k === 'MML02' || k === 'MML10' || k === 'MML11' || k === 'MML12') continue
+        const n = typeof v === 'object' && v !== null && 'value' in (v as any) ? Number((v as any).value) : Number(v)
+        if (!isNaN(n)) out[k] = (out[k] ?? 0) + n
+      }
+      const inNetwork = tjVal(ch, 'MML10')
+      const outOfNetwork = tjVal(ch, 'MML11')
+      const hasSplit = inNetwork !== null || outOfNetwork !== null
+      const weekTotal = hasSplit ? (inNetwork ?? 0) + (outOfNetwork ?? 0) : (tjVal(ch, 'MML02') ?? 0)
+      out.MML02 = (out.MML02 ?? 0) + weekTotal
+      if (inNetwork !== null) out.MML10 = (out.MML10 ?? 0) + inNetwork
+      if (outOfNetwork !== null) out.MML11 = (out.MML11 ?? 0) + outOfNetwork
+    }
+    posts = out.MML01 ?? 0
+    out.MML12 = posts > 0 ? Math.round((out.MML02 / posts) * 100) / 100 : 0
+    return out
+  }
+
   const monthMmAgg = {
-    linkedin: aggregateChannelRows(monthMmRows, 'linkedin'),
+    linkedin: aggregateMmLinkedInRows(monthMmRows),
     instagram: aggregateChannelRows(monthMmRows, 'instagram'),
     website: aggregateChannelRows(monthMmRows, 'website'),
     quora: aggregateChannelRows(monthMmRows, 'quora'),
@@ -2033,7 +2077,7 @@ export function DashboardPage() {
                             { id: 'MML07', name: 'Page Views' },
                             { id: 'MML08', name: 'Articles Published' },
                             { id: 'MML09', name: 'Article Impressions' },
-                          ]} currentData={withLinkedInImpressionTotals(isMonthlyView ? monthMmAgg.linkedin : mmData?.linkedin)} prevData={isMonthlyView ? null : withLinkedInImpressionTotals(prevMmData?.linkedin)}
+                          ]} currentData={isMonthlyView ? monthMmAgg.linkedin : withLinkedInImpressionTotals(mmData?.linkedin)} prevData={isMonthlyView ? null : withLinkedInImpressionTotals(prevMmData?.linkedin)}
                         />
                         <MMContentRow title="Instagram Presence" icon={Instagram} metrics={[
                             { id: 'MMI01', name: 'Posts' },

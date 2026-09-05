@@ -106,6 +106,16 @@ export async function backfillHighScores(clientId: string): Promise<void> {
   // Derive monthly bests: sum of underlying counters per month, max across all months.
   // Rate metrics (L12/L14/L17) are derived from the monthly sums of their inputs,
   // since rates can't be summed across weeks.
+  //
+  // A volume metric (posts, impressions, etc.) is naturally disadvantaged by a
+  // partial, still-in-progress month — fewer weeks means a smaller sum, so it
+  // can't unfairly win a "best month" record. A RATE is a valid ratio no
+  // matter how few weeks contributed, though, so without this guard a strong
+  // week or two early in the current month could set a "Best Month" record
+  // that hasn't actually been earned yet — and would silently vanish (revert
+  // to the true historical best) the next time this runs, once the rest of
+  // the month's weaker weeks are counted.
+  const currentMonth = new Date().toISOString().slice(0, 7)
   const bestMonth: Record<string, { value: number; month: string }> = {}
   for (const [month, sums] of Object.entries(monthSums)) {
     for (const [id, value] of Object.entries(sums)) {
@@ -116,6 +126,7 @@ export async function backfillHighScores(clientId: string): Promise<void> {
         bestMonth[id] = { value: monthlyValue, month }
       }
     }
+    if (month === currentMonth) continue
     const accRate = calcAcceptanceRate(sums['L11'] ?? null, sums['L10'] ?? null)
     const respRate = calcResponseRate(sums['L13'] ?? null, sums['L11'] ?? null)
     const posRate = calcPositiveRate(sums['L15'] ?? null, sums['L13'] ?? null)

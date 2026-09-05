@@ -540,7 +540,9 @@ export async function generateWeeklySummary(weekStart: string) {
   if (salesData) {
     text += `\nSALES & OUTREACH\n────────────────────────────\n`
     const m = (salesData as any).meeting_tracker || {}
-    text += `Booked: ${m.SO40 || '0'} | Proposals: ${m.SO42 || '0'} | Conversions: ${m.SO46 || '0'}\n`
+    // SO42 is "No-Show / Rescheduled" (see SALES_FIELDS above) — SO44 is the
+    // actual "Proposals Sent" field this line is meant to report.
+    text += `Booked: ${m.SO40 || '0'} | Proposals: ${m.SO44 || '0'} | Conversions: ${m.SO46 || '0'}\n`
     text += `Revenue: ₹${(parseFloat(m.SO49 || 0) / 100000).toFixed(1)}L\n`
   }
 

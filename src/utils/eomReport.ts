@@ -4,6 +4,7 @@ import { buildWeekMetrics } from '@/utils/metricCalculations'
 import { assertClientRows } from '@/utils/clientScope'
 import { Metric } from '@/data/metrics'
 import { customMetricToMetric } from '@/hooks/useEffectiveMetrics'
+import { calcRateCapped } from '@/utils/readMetric'
 
 type EomClient = { id: string; name: string; company: string | null }
 
@@ -93,10 +94,15 @@ function aggregateWeeks(rows: any[], extraMetrics: Metric[] = []): MetricMap {
 
   total.C09 = num(total.C06) + num(total.C07) + num(total.C08)
   total.C26 = num(total.C09) > 0 ? num(total.C10) / num(total.C09) : null
-  total.L12 = num(total.L10) > 0 ? (num(total.L11) / num(total.L10)) * 100 : null
-  total.L14 = num(total.L11) > 0 ? (num(total.L13) / num(total.L11)) * 100 : null
-  total.L17 = num(total.L13) > 0 ? (num(total.L15) / num(total.L13)) * 100 : null
-  total.L21 = num(total.L19) > 0 ? (num(total.L20) / num(total.L19)) * 100 : null
+  // Use the app-wide rate helper (caps at 100% for bad data instead of
+  // showing an impossible rate in this client-facing PDF, matching every
+  // other rate computation in the app) instead of an uncapped inline formula.
+  total.L12 = calcRateCapped(total.L11, total.L10)
+  total.L14 = calcRateCapped(total.L13, total.L11)
+  total.L17 = calcRateCapped(total.L15, total.L13)
+  total.L18 = calcRateCapped(total.L16, total.L13)
+  total.L21 = calcRateCapped(total.L20, total.L19)
+  total.L26 = calcRateCapped(total.L25, total.L24)
   return total
 }
 
@@ -257,7 +263,12 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
   kpi(margin + 92, 88, 42, 'Positive replies', fmt(currentMetrics.L15), `${fmt(currentMetrics.L17, true)} positive rate`)
   kpi(margin + 138, 88, 42, 'Meetings booked', fmt(currentMetrics.L24), `${fmt(currentMetrics.L27)} total leads`)
   sectionTitle('Executive snapshot', 132)
-  const totalEngagement = num(currentMetrics.C13) || num(currentMetrics.C11) + num(currentMetrics.C12)
+  // Presence check, not a truthy check — a genuine "0" for C13 (e.g. no
+  // engagement this month) must not fall back to C11+C12, the same class of
+  // fallback bug already fixed for MM Content's impressions total.
+  const totalEngagement = currentMetrics.C13 !== null && currentMetrics.C13 !== undefined
+    ? num(currentMetrics.C13)
+    : num(currentMetrics.C11) + num(currentMetrics.C12)
   let snapshotY = 140
   snapshotY += insightBox(snapshotY, 'Content', `${fmt(currentMetrics.C09)} posts generated ${fmt(currentMetrics.C10)} impressions and ${fmt(totalEngagement)} engagements, averaging ${fmt(currentMetrics.C26)} impressions per post.`, 27) + 6
   snapshotY += insightBox(snapshotY, 'Outreach', `${fmt(currentMetrics.L10)} connection requests produced ${fmt(currentMetrics.L11)} acceptances (${fmt(currentMetrics.L12, true)}), ${fmt(currentMetrics.L13)} replies and ${fmt(currentMetrics.L15)} positive conversations.`, 27) + 6

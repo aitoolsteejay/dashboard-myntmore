@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from "@/integrations/supabase/client"
 import { ALL_METRICS } from "@/data/metrics"
 import { buildWeekMetrics } from "@/utils/metricCalculations"
+import { RATE_DEPENDENCIES, computeVolumeWeightedRate } from "@/utils/rateAggregation"
 import { formatDashboardValue } from "@/utils/dataUtils"
 import { cn } from "@/lib/utils"
 import {
@@ -238,6 +239,20 @@ export function ReportsPage() {
     return isNaN(n) ? null : n
   }
 
+  // A rate metric's Total/Avg across weeks can't be a sum or a simple mean of
+  // each week's already-computed rate (two weeks at 50%-of-10 and 10%-of-100
+  // do NOT average to "the combined rate" unless volumes happen to be equal)
+  // — recompute from each week's summed raw numerator/denominator instead.
+  const getVolumeWeightedRate = (clientId: string, weekStarts: string[], metricId: string): number | null => {
+    const deps = RATE_DEPENDENCIES[metricId]
+    if (!deps) return null
+    const rows = weekStarts
+      .map(w => weeklyData.find(r => r.client_id === clientId && r.week_start === w))
+      .filter((r): r is WeeklyData => !!r)
+    const category = ALL_METRICS.find(m => m.id === metricId)?.category === 'content' ? 'content' : 'leadgen'
+    return computeVolumeWeightedRate(rows as any, metricId, category)
+  }
+
   // Get target for a specific (client, metric, week). Falls back to any available target for that metric.
   const getTarget = (clientId: string, metricId: string, weekStart?: string): number | null => {
     let t = weekStart
@@ -302,8 +317,13 @@ export function ReportsPage() {
                   {displayMetrics.map(m => {
                     const values = weekList.map(w => getCellValue(clientId, w, m.id))
                     const numVals = values.filter(v => v !== null) as number[]
+                    const isRate = !!RATE_DEPENDENCIES[m.id]
                     const total = numVals.length > 0 ? numVals.reduce((a, b) => a + b, 0) : null
-                    const avg = total !== null && numVals.length > 0 ? total / numVals.length : null
+                    // Rate metrics recompute one volume-weighted value from summed raw
+                    // fields (see getVolumeWeightedRate) instead of averaging weekly rates.
+                    const avg = isRate
+                      ? getVolumeWeightedRate(clientId, weekList, m.id)
+                      : total !== null && numVals.length > 0 ? total / numVals.length : null
                     const tgt = getTarget(clientId, m.id) // fallback target for Total/Avg columns
 
                     return (
@@ -448,8 +468,9 @@ export function ReportsPage() {
                 const values = weekList.map(w => getCellValue(clientId, w, m.id))
                 const numVals = values.filter(v => v !== null) as number[]
                 if (numVals.length === 0) return null
+                const isRate = !!RATE_DEPENDENCIES[m.id]
                 const total = numVals.reduce((a, b) => a + b, 0)
-                const avg = total / numVals.length
+                const avg = isRate ? (getVolumeWeightedRate(clientId, weekList, m.id) ?? total / numVals.length) : total / numVals.length
                 const best = Math.max(...numVals)
                 const bestWeekIdx = values.findIndex(v => v === best)
                 const bestWeek = bestWeekIdx >= 0 ? fmtWeekShort(weekList[bestWeekIdx]) : '-'

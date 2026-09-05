@@ -4,6 +4,7 @@ import { Line, LineChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, X
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { calcRateCapped } from '@/utils/readMetric'
 
 type CampaignDetailsDialogProps = {
   campaign: any | null
@@ -12,7 +13,12 @@ type CampaignDetailsDialogProps = {
 }
 
 const number = (value: unknown) => Number(value || 0) || 0
-const rate = (numerator: number, denominator: number) => denominator > 0 ? Math.round((numerator / denominator) * 10000) / 100 : null
+// Use the app-wide rate helper (1-decimal rounding, capped at 100% for bad
+// data like accepted > sent) instead of a local reimplementation that used to
+// round to 2 decimals and had no cap — the same campaign's acceptance rate
+// showed different precision here than everywhere else in the app, and could
+// show an impossible >100% rate that nowhere else in the app would display.
+const rate = (numerator: number, denominator: number) => calcRateCapped(numerator, denominator)
 const display = (value: number | null, suffix = '') => value === null ? '–' : `${value.toLocaleString('en-IN')}${suffix}`
 
 export function CampaignDetailsDialog({ campaign, open, onOpenChange }: CampaignDetailsDialogProps) {
