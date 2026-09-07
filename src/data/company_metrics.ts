@@ -22,6 +22,8 @@ export const TJ_INSTAGRAM_METRICS: CompanyMetric[] = [
   { id: 'TJI09', name: 'Saves', type: 'number' },
   { id: 'TJI10', name: 'Followers Gained', type: 'number', hasTarget: true },
   { id: 'TJI11', name: 'Total Follower Count', type: 'number' },
+  { id: 'TJI12', name: 'Trial Reel Count', type: 'number', hasTarget: true },
+  { id: 'TJI13', name: 'Trial Reel Views', type: 'number', hasTarget: true },
 ]
 
 export const TJ_YOUTUBE_METRICS: CompanyMetric[] = [
