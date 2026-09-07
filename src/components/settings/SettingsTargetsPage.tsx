@@ -468,11 +468,16 @@ export function SettingsTargetsPage() {
   }
 
   const renderInternalTargetRow = (
-    metric: Pick<CompanyMetric, 'id' | 'name' | 'unit'>,
+    metric: Pick<CompanyMetric, 'id' | 'name' | 'unit' | 'type'>,
     values: Record<string, number>,
     actuals: Record<string, number>,
     setValues: React.Dispatch<React.SetStateAction<Record<string, number>>>,
   ) => {
+    // Percentage-type entries in company_metrics.ts (standard and custom)
+    // don't always carry an explicit unit — derive '%' from type so the
+    // suffix isn't silently missing, matching the same fallback added to
+    // DashboardPage.tsx's TJChannelCard.
+    const unit = metric.unit ?? (metric.type === 'percentage' ? '%' : undefined)
     const target = values[metric.id]
     const actual = actuals[metric.id]
     const achievement = target && actual !== undefined ? Math.round((actual / target) * 100) : null
@@ -499,7 +504,7 @@ export function SettingsTargetsPage() {
             onFocus={event => event.target.style.borderColor = '#FFC947'}
             onBlur={event => event.target.style.borderColor = '#E5E5E5'}
           />
-          {metric.unit === '%' && <span style={{ marginLeft: '4px', color: '#999' }}>%</span>}
+          {unit === '%' && <span style={{ marginLeft: '4px', color: '#999' }}>%</span>}
         </td>
         <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: '600', fontSize: '14px' }}>
           {actual !== undefined ? actual.toLocaleString() : '-'}

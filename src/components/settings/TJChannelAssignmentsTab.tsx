@@ -28,6 +28,12 @@ import { toast } from 'sonner'
 import { Loader2, Plus, Archive } from 'lucide-react'
 import { sortAlphabetically } from '@/utils/sort'
 import type { Database } from '@/integrations/supabase/types'
+import {
+  TJ_INSTAGRAM_METRICS,
+  TJ_YOUTUBE_METRICS,
+  TJ_PODCAST_METRICS,
+  TJ_VIDEO_METRICS,
+} from '@/data/company_metrics'
 
 type TjCustomMetricRow = Database['myntmore']['Tables']['tj_custom_metrics']['Row']
 type TjCustomMetricInsert = Database['myntmore']['Tables']['tj_custom_metrics']['Insert']
@@ -39,6 +45,18 @@ const CHANNELS = [
   { key: 'email_newsletter',    label: 'Email Newsletter',     icon: '✉️' },
   { key: 'video_pipeline',      label: 'Video Pipeline',       icon: '🎬' },
 ]
+
+// Static catalog names per channel — used to block a custom metric from
+// being named the same as an existing field (e.g. "Impressions", already
+// TJI05 on Instagram). buildTjSheet (src/lib/export.ts) keys the exported
+// Excel row by "[IG] <name>", so a name collision would silently overwrite
+// the static metric's column with the custom one's value.
+const CHANNEL_STATIC_METRICS: Record<string, { name: string }[]> = {
+  instagram: TJ_INSTAGRAM_METRICS,
+  youtube: TJ_YOUTUBE_METRICS,
+  email_newsletter: TJ_PODCAST_METRICS,
+  video_pipeline: TJ_VIDEO_METRICS,
+}
 
 const NEW_METRIC_DEFAULTS = { name: '', type: 'number' as TjMetricType, unit: '', hasTarget: false }
 
@@ -60,6 +78,7 @@ export function TJChannelAssignmentsTab() {
       .select('*')
       .eq('archived', false)
       .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true })
     setCustomMetrics(data ?? [])
   }
 
@@ -127,14 +146,40 @@ export function TJChannelAssignmentsTab() {
 
   const handleAddCustomMetric = async () => {
     if (!addDialogChannel || !newMetric.name.trim()) return
+    const trimmedName = newMetric.name.trim()
+    const channelCustomMetrics = customMetrics.filter(m => m.channel === addDialogChannel)
+
+    // buildTjSheet (src/lib/export.ts) keys each exported column by
+    // "[IG] <name>" etc — a name matching an existing static or custom
+    // metric on this channel would silently overwrite that column instead
+    // of adding a new one, with no error surfaced anywhere.
+    const nameCollision = [
+      ...(CHANNEL_STATIC_METRICS[addDialogChannel] ?? []),
+      ...channelCustomMetrics,
+    ].some(m => m.name.trim().toLowerCase() === trimmedName.toLowerCase())
+    if (nameCollision) {
+      toast.error(`"${trimmedName}" already exists on this channel — pick a different name.`)
+      return
+    }
+
     setSavingNewMetric(true)
     try {
+      // Custom metrics on the same channel all default to sort_order 0 with
+      // no tiebreaker on read, which left display order across Settings,
+      // data entry, and exports non-deterministic once a channel had 2+ of
+      // them. Assign the next order explicitly so new metrics append after
+      // existing ones, matching creation order.
+      const nextSortOrder = channelCustomMetrics.length
+        ? Math.max(...channelCustomMetrics.map(m => m.sort_order)) + 1
+        : 0
+
       const insert: TjCustomMetricInsert = {
         channel: addDialogChannel,
-        name: newMetric.name.trim(),
+        name: trimmedName,
         type: newMetric.type,
         unit: newMetric.unit.trim() || null,
         has_target: newMetric.type === 'textarea' ? false : newMetric.hasTarget,
+        sort_order: nextSortOrder,
         created_by: user?.id,
       }
       const { data, error } = await supabase.from('tj_custom_metrics').insert(insert).select('*').single()
@@ -272,6 +317,13 @@ export function TJChannelAssignmentsTab() {
                           placeholder="e.g. Trial Reel Count"
                           autoFocus
                         />
+                        {newMetric.name.trim() && [...(CHANNEL_STATIC_METRICS[ch.key] ?? []), ...channelMetrics].some(
+                          m => m.name.trim().toLowerCase() === newMetric.name.trim().toLowerCase()
+                        ) && (
+                          <p className="text-[11px] text-destructive">
+                            "{newMetric.name.trim()}" already exists on {ch.label} — exports key columns by name, so a duplicate would silently overwrite it.
+                          </p>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
@@ -308,7 +360,15 @@ export function TJChannelAssignmentsTab() {
                       )}
                     </div>
                     <DialogFooter>
-                      <Button onClick={handleAddCustomMetric} disabled={savingNewMetric || !newMetric.name.trim()}>
+                      <Button
+                        onClick={handleAddCustomMetric}
+                        disabled={
+                          savingNewMetric || !newMetric.name.trim() ||
+                          [...(CHANNEL_STATIC_METRICS[ch.key] ?? []), ...channelMetrics].some(
+                            m => m.name.trim().toLowerCase() === newMetric.name.trim().toLowerCase()
+                          )
+                        }
+                      >
                         {savingNewMetric ? 'Adding…' : 'Add Metric'}
                       </Button>
                     </DialogFooter>

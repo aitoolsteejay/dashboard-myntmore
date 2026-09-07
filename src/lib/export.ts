@@ -429,7 +429,8 @@ export async function generateLifetimeExport(options: {
       .from('tj_custom_metrics')
       .select('*')
       .eq('archived', false)
-      .order('sort_order'),
+      .order('sort_order')
+      .order('created_at'),
 
     supabase
       .from('mm_weekly_data')

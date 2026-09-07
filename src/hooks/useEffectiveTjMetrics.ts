@@ -56,6 +56,7 @@ export async function fetchEffectiveTjMetrics(): Promise<EffectiveTjMetrics> {
     .select('*')
     .eq('archived', false)
     .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
   if (error) throw error
 
   const byBucket: Record<keyof EffectiveTjMetrics, CompanyMetric[]> = {
@@ -66,7 +67,15 @@ export async function fetchEffectiveTjMetrics(): Promise<EffectiveTjMetrics> {
   }
   ;(data ?? []).forEach(row => {
     const bucket = CHANNEL_TO_BUCKET[row.channel]
-    if (bucket) byBucket[bucket].push(tjCustomMetricToCompanyMetric(row))
+    if (bucket) {
+      byBucket[bucket].push(tjCustomMetricToCompanyMetric(row))
+    } else {
+      // Currently unreachable — the DB's CHECK constraint restricts channel
+      // to exactly these 4 values — but if that constraint is ever widened
+      // without updating CHANNEL_TO_BUCKET in the same change, a row would
+      // otherwise vanish from every surface with no error anywhere.
+      console.warn(`TJ custom metric "${row.name}" has an unmapped channel "${row.channel}" — it will not appear anywhere.`)
+    }
   })
 
   return {

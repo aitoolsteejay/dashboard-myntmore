@@ -80,5 +80,6 @@ alter table myntmore.tj_custom_metrics enable row level security;
 drop policy if exists "tj_custom_metrics_internal_all" on myntmore.tj_custom_metrics;
 create policy "tj_custom_metrics_internal_all" on myntmore.tj_custom_metrics
   for all
+  to authenticated
   using (myntmore.is_internal_user())
   with check (myntmore.is_internal_user());
