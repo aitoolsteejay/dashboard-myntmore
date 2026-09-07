@@ -152,7 +152,13 @@ function buildClientSheet(
   return rows
 }
 
-function buildTjSheet(rows: any[]) {
+function buildTjSheet(rows: any[], customMetrics: any[] = []) {
+  // Admin-defined custom metrics (Settings -> TJ Channels -> Custom Metrics)
+  // bucketed onto the same 4 channels as the static catalog, so they show up
+  // as extra columns with the same [IG]/[YT]/[Newsletter]/[Video] prefix
+  // convention as the standard fields above.
+  const customByChannel = (channel: string) => customMetrics.filter(m => m.channel === channel)
+
   return rows
     .sort((a, b) => a.week_start.localeCompare(b.week_start))
     .map((row: any) => {
@@ -166,9 +172,13 @@ function buildTjSheet(rows: any[]) {
         'Week Label': row.week_label ?? '',
       }
       for (const m of TJ_INSTAGRAM_METRICS)  base[`[IG] ${m.name}`]      = readField(ig, m.id)
+      for (const m of customByChannel('instagram'))       base[`[IG] ${m.name}`]         = readField(ig, m.metric_key)
       for (const m of TJ_YOUTUBE_METRICS)    base[`[YT] ${m.name}`]      = readField(yt, m.id)
+      for (const m of customByChannel('youtube'))         base[`[YT] ${m.name}`]         = readField(yt, m.metric_key)
       for (const m of TJ_PODCAST_METRICS)    base[`[Newsletter] ${m.name}`] = readField(em, m.id)
+      for (const m of customByChannel('email_newsletter')) base[`[Newsletter] ${m.name}`] = readField(em, m.metric_key)
       for (const m of TJ_VIDEO_METRICS)      base[`[Video] ${m.name}`]   = readField(vid, m.id)
+      for (const m of customByChannel('video_pipeline'))  base[`[Video] ${m.name}`]      = readField(vid, m.metric_key)
       return base
     })
 }
@@ -384,6 +394,7 @@ export async function generateLifetimeExport(options: {
     { data: weeklyData },
     { data: healthScores },
     { data: tjData },
+    { data: tjCustomMetrics },
     { data: mmData },
     { data: salesData },
     { data: targets },
@@ -413,6 +424,12 @@ export async function generateLifetimeExport(options: {
       .lte('week_start', upToDate)
       .gte('week_start', fromDate ?? '2000-01-01')
       .order('week_start'),
+
+    supabase
+      .from('tj_custom_metrics')
+      .select('*')
+      .eq('archived', false)
+      .order('sort_order'),
 
     supabase
       .from('mm_weekly_data')
@@ -449,7 +466,7 @@ export async function generateLifetimeExport(options: {
       : healthScores ?? [],
     displayClients,
   )
-  const tjRows = !clientId ? buildTjSheet(tjData ?? []) : []
+  const tjRows = !clientId ? buildTjSheet(tjData ?? [], tjCustomMetrics ?? []) : []
   const mmRows = !clientId ? buildMmSheet(mmData ?? []) : []
   const salesRows = !clientId ? buildSalesSheet(salesData ?? []) : []
   const targetRows = buildTargetsSheet(targets ?? [], displayClients)

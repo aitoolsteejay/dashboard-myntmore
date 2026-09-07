@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
@@ -19,13 +20,8 @@ import {
   Video,
   Trophy
 } from "lucide-react"
-import {
-  TJ_INSTAGRAM_METRICS,
-  TJ_YOUTUBE_METRICS,
-  TJ_PODCAST_METRICS,
-  TJ_VIDEO_METRICS,
-  CompanyMetric
-} from "@/data/company_metrics"
+import { CompanyMetric } from "@/data/company_metrics"
+import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
 import { BackButton } from "@/components/ui/BackButton"
 import { getWeekOptions } from "@/utils/weekUtils"
 import { useWorkspace } from "@/lib/workspace"
@@ -42,6 +38,13 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
 
   const weekOptions = useMemo(() => getWeekOptions(12), [])
   const { selectedWeek, setSelectedWeek } = useWorkspace()
+
+  // Static catalog + any admin-defined custom metrics per channel (Settings ->
+  // TJ Channels -> Custom Metrics). `newsletter` here is sourced from the
+  // 'email_newsletter' DB channel/column — this page's internal form-section
+  // key for that channel is 'newsletter_podcast' (a naming holdover), so it's
+  // mapped explicitly at each of this hook's four render call sites below.
+  const { instagram: instagramMetrics, youtube: youtubeMetrics, newsletter: newsletterMetrics, video: videoMetrics } = useEffectiveTjMetrics()
 
   // Lifetime high (all-time best week) per metric — see fetchTJLifetimeHighs for why
   // this is computed on the fly rather than read from a stored table.
@@ -218,14 +221,30 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
         )
     }
 
+    if (metric.type === 'textarea') {
+      return (
+        <Card key={metric.id} className="border-2 border-border/50 md:col-span-2 lg:col-span-2">
+          <CardContent className="p-4 space-y-3">
+            <Label className="text-[10px] font-black uppercase text-muted-foreground">{metric.name}</Label>
+            <Textarea
+              value={data.value ?? ''}
+              onChange={e => updateMetric(section, metric.id, e.target.value)}
+              placeholder="Enter details..."
+              className="min-h-[100px] resize-y"
+            />
+          </CardContent>
+        </Card>
+      )
+    }
+
     return (
       <Card key={metric.id} className="border-2 border-border/50">
         <CardContent className="p-4 space-y-3">
           <Label className="text-[10px] font-black uppercase text-muted-foreground">{metric.name}</Label>
           <div className="relative">
-            <Input 
-              type="number" 
-              value={data.value} 
+            <Input
+              type="number"
+              value={data.value}
               onChange={e => updateMetric(section, metric.id, e.target.value)}
               className="h-12 text-2xl font-black pr-8"
             />
@@ -328,28 +347,28 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
           <div className="space-y-8">
             <TabsContent value="instagram" className="mt-0">
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {TJ_INSTAGRAM_METRICS.map(m => renderMetricCard('instagram', m))}
+                    {instagramMetrics.map(m => renderMetricCard('instagram', m))}
                 </div>
             </TabsContent>
             <TabsContent value="youtube" className="mt-0">
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {TJ_YOUTUBE_METRICS.map(m => renderMetricCard('youtube', m))}
+                    {youtubeMetrics.map(m => renderMetricCard('youtube', m))}
                 </div>
             </TabsContent>
             <TabsContent value="podcast" className="mt-0 space-y-6">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 border-b pb-1">Email Newsletter</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {/* Renders every metric in the array (not a hardcoded id allowlist,
-                        which used to silently exclude any newsletter metric added later)
-                        so a future TJ_PODCAST_METRICS entry shows up automatically. */}
-                    {TJ_PODCAST_METRICS.map(m => renderMetricCard('newsletter_podcast', m))}
+                    {/* Renders every metric in the effective list (standard catalog +
+                        this channel's custom metrics, not a hardcoded id allowlist,
+                        which used to silently exclude any newsletter metric added later). */}
+                    {newsletterMetrics.map(m => renderMetricCard('newsletter_podcast', m))}
                   </div>
                 </div>
             </TabsContent>
             <TabsContent value="pipeline" className="mt-0">
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {TJ_VIDEO_METRICS.map(m => renderMetricCard('video_pipeline', m))}
+                    {videoMetrics.map(m => renderMetricCard('video_pipeline', m))}
                 </div>
             </TabsContent>
 

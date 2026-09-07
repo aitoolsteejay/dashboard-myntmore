@@ -17,6 +17,7 @@ import { CampaignMonthTable } from "../monday/CampaignMonthTable"
 import { EditCampaignModal } from "../monday/EditCampaignModal"
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from "@/data/metrics"
 import { customMetricToMetric } from "@/hooks/useEffectiveMetrics"
+import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
 import { findTarget } from "@/utils/targets"
 import { RATE_DEPENDENCIES, computeVolumeWeightedRate } from "@/utils/rateAggregation"
 import { mv, mt, fmt, delta, deltaColor, tjVal, salesVal, sv, readMetric, formatMetricValue, formatDashboardValue } from "@/utils/dataUtils"
@@ -139,6 +140,7 @@ export function DashboardPage() {
   const [tjData, setTjData] = useState<TjWeeklyData | null>(null)
   const [tjPrev, setTjPrev] = useState<TjWeeklyData | null>(null)
   const [tjLifetimeHighs, setTjLifetimeHighs] = useState<TJLifetimeHighs>({})
+  const effectiveTjMetrics = useEffectiveTjMetrics()
   const [expandedTJCards, setExpandedTJCards] = useState<Set<string>>(new Set())
   const [mmLifetimeHighs, setMmLifetimeHighs] = useState<MMLifetimeHighs>({})
   const [expandedMMRows, setExpandedMMRows] = useState<Set<string>>(new Set())
@@ -963,6 +965,12 @@ export function DashboardPage() {
         <CardContent className="p-4 space-y-2">
           <div className="grid grid-cols-1 gap-1">
             {metrics.map((m: any) => {
+              // company_metrics.ts's percentage-type entries don't carry an
+              // explicit unit (unlike the old hand-curated arrays here, which
+              // set unit: '%' per field) — derive it from type so the % sign
+              // isn't silently lost for TJP09-13 and any future percentage
+              // custom metric.
+              const unit = m.unit ?? (m.type === 'percentage' ? '%' : undefined)
               const current = tjVal(currentData, m.id)
               const prev = tjVal(prevData, m.id)
               const high = tjLifetimeHighs[m.id]
@@ -971,8 +979,8 @@ export function DashboardPage() {
                   <div className="flex justify-between items-center text-[11px]">
                     <span className="text-muted-foreground">{m.name}</span>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold">{gFmt(current, { unit: m.unit })}</span>
-                      <Delta current={current} previous={prev} unit={m.unit} />
+                      <span className="font-bold">{gFmt(current, { unit })}</span>
+                      <Delta current={current} previous={prev} unit={unit} />
                     </div>
                   </div>
                   {isExpanded && (
@@ -982,7 +990,7 @@ export function DashboardPage() {
                       </span>
                       {high ? (
                         <span className="font-bold text-gold">
-                          {gFmt(high.value, { unit: m.unit })}
+                          {gFmt(high.value, { unit })}
                           <span className="opacity-60 font-normal ml-1">· {formatWeekDate(high.week)}</span>
                         </span>
                       ) : (
@@ -1868,60 +1876,28 @@ export function DashboardPage() {
                         <TJChannelCard
                           title="Instagram"
                           icon={Instagram}
-                          metrics={[
-                            { id: 'TJI11', name: 'Total Followers' },
-                            { id: 'TJI10', name: 'Followers Gained' },
-                            { id: 'TJI05', name: 'Impressions' },
-                            { id: 'TJI04', name: 'Total Posts' },
-                            { id: 'TJI01', name: 'Stories' },
-                            { id: 'TJI02', name: 'Carousels' },
-                            { id: 'TJI03', name: 'Reels' },
-                            { id: 'TJI06', name: 'Likes' },
-                            { id: 'TJI07', name: 'Comments' },
-                            { id: 'TJI08', name: 'Shares' },
-                            { id: 'TJI09', name: 'Saves' },
-                          ]}
+                          metrics={effectiveTjMetrics.instagram.filter(m => m.type !== 'textarea')}
                           currentData={isMonthlyView ? monthTjAgg.instagram : tjData?.instagram}
                           prevData={isMonthlyView ? null : tjPrev?.instagram}
                         />
                         <TJChannelCard
                           title="YouTube"
                           icon={Youtube}
-                          metrics={[
-                            { id: 'TJY07', name: 'Total Subscribers' },
-                            { id: 'TJY06', name: 'New Subscribers' },
-                            { id: 'TJY02', name: 'Views' },
-                            { id: 'TJY01', name: 'Shorts Uploaded' },
-                            { id: 'TJY03', name: 'Impressions' },
-                            { id: 'TJY04', name: 'Likes' },
-                            { id: 'TJY05', name: 'Comments' },
-                            { id: 'TJY08', name: 'Watch Time', unit: 'hrs' },
-                          ]}
+                          metrics={effectiveTjMetrics.youtube.filter(m => m.type !== 'textarea')}
                           currentData={isMonthlyView ? monthTjAgg.youtube : tjData?.youtube}
                           prevData={isMonthlyView ? null : tjPrev?.youtube}
                         />
                         <TJChannelCard
                           title="Newsletter"
                           icon={Mail}
-                          metrics={[
-                            { id: 'TJP08', name: 'Emails Sent' },
-                            { id: 'TJP09', name: 'Delivery Rate', unit: '%' },
-                            { id: 'TJP10', name: 'Open Rate', unit: '%' },
-                            { id: 'TJP11', name: 'Click Rate', unit: '%' },
-                            { id: 'TJP12', name: 'Click-to-Open Rate', unit: '%' },
-                            { id: 'TJP13', name: 'Unsubscribe Rate', unit: '%' },
-                          ]}
+                          metrics={effectiveTjMetrics.newsletter.filter(m => m.type !== 'textarea')}
                           currentData={isMonthlyView ? monthTjAgg.newsletter : tjData?.email_newsletter}
                           prevData={isMonthlyView ? null : tjPrev?.email_newsletter}
                         />
                         <TJChannelCard
                           title="Video Pipeline"
                           icon={Mic}
-                          metrics={[
-                            { id: 'TJV01', name: 'Videos Shot' },
-                            { id: 'TJV02', name: 'Videos Edited' },
-                            { id: 'TJV03', name: 'Videos Scheduled' },
-                          ]}
+                          metrics={effectiveTjMetrics.video.filter(m => m.type !== 'textarea')}
                           currentData={isMonthlyView ? monthTjAgg.video_pipeline : tjData?.video_pipeline}
                           prevData={isMonthlyView ? null : tjPrev?.video_pipeline}
                         />

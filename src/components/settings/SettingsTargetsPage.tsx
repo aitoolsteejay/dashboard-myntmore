@@ -10,11 +10,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { sortAlphabetically } from "@/utils/sort"
-import {
-  CompanyMetric,
-  TJ_INSTAGRAM_METRICS,
-  TJ_YOUTUBE_METRICS,
-} from "@/data/company_metrics"
+import { CompanyMetric } from "@/data/company_metrics"
+import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
 
 interface TargetRowProps {
   metric: Metric
@@ -110,11 +107,6 @@ const COLD_EMAIL_INTERNAL_METRICS = [
   { id: 'SO55', name: 'Replied with OOO', auto: false },
 ]
 const SALES_TARGET_METRIC_IDS = ['SO50', 'SO51', 'SO53', 'SO55'] // only non-auto ones get targets
-const TJ_TARGET_GROUPS = [
-  { title: 'Instagram', metrics: TJ_INSTAGRAM_METRICS.filter(metric => metric.hasTarget) },
-  { title: 'YouTube', metrics: TJ_YOUTUBE_METRICS.filter(metric => metric.hasTarget) },
-]
-const TJ_TARGET_METRIC_IDS = TJ_TARGET_GROUPS.flatMap(group => group.metrics.map(metric => metric.id))
 
 export function SettingsTargetsPage() {
   const { user } = useAuth()
@@ -137,6 +129,18 @@ export function SettingsTargetsPage() {
   const [tjSaving, setTjSaving] = useState(false)
   const [clients, setClients] = useState<any[]>([])
   const [customMetrics, setCustomMetrics] = useState<Metric[]>([])
+
+  const effectiveTjMetrics = useEffectiveTjMetrics()
+  const TJ_TARGET_GROUPS = useMemo(() => [
+    { title: 'Instagram', metrics: effectiveTjMetrics.instagram.filter(metric => metric.hasTarget) },
+    { title: 'YouTube', metrics: effectiveTjMetrics.youtube.filter(metric => metric.hasTarget) },
+    { title: 'Newsletter', metrics: effectiveTjMetrics.newsletter.filter(metric => metric.hasTarget) },
+    { title: 'Video Pipeline', metrics: effectiveTjMetrics.video.filter(metric => metric.hasTarget) },
+  ], [effectiveTjMetrics])
+  const TJ_TARGET_METRIC_IDS = useMemo(
+    () => TJ_TARGET_GROUPS.flatMap(group => group.metrics.map(metric => metric.id)),
+    [TJ_TARGET_GROUPS]
+  )
 
   const period = targetType === 'weekly' ? selectedWeekStart : selectedMonth
   const monthOptions = useMemo(() => getMonthOptions(6), [])
@@ -393,7 +397,7 @@ export function SettingsTargetsPage() {
   const loadTjActuals = async (weekStart: string) => {
     const { data } = await supabase
       .from('tj_weekly_data')
-      .select('instagram, youtube')
+      .select('instagram, youtube, email_newsletter, video_pipeline')
       .eq('week_start', weekStart)
       .maybeSingle()
 
@@ -405,6 +409,8 @@ export function SettingsTargetsPage() {
     const sources = [
       data.instagram,
       data.youtube,
+      data.email_newsletter,
+      data.video_pipeline,
     ] as Array<Record<string, any> | null>
     const actuals: Record<string, number> = {}
 

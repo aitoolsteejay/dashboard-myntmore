@@ -1304,6 +1304,59 @@ export type Database = {
           },
         ]
       }
+      tj_custom_metrics: {
+        Row: {
+          archived: boolean
+          channel: string
+          created_at: string | null
+          created_by: string | null
+          has_target: boolean
+          id: string
+          metric_key: string
+          name: string
+          sort_order: number
+          type: string
+          unit: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          archived?: boolean
+          channel: string
+          created_at?: string | null
+          created_by?: string | null
+          has_target?: boolean
+          id?: string
+          metric_key?: string
+          name: string
+          sort_order?: number
+          type: string
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          archived?: boolean
+          channel?: string
+          created_at?: string | null
+          created_by?: string | null
+          has_target?: boolean
+          id?: string
+          metric_key?: string
+          name?: string
+          sort_order?: number
+          type?: string
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tj_custom_metrics_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tj_weekly_data: {
         Row: {
           created_at: string | null

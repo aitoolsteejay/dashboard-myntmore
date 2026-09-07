@@ -1,4 +1,10 @@
 // Metrics for TJ Personal Brand and Myntmore Company Content
+//
+// TJ Personal Brand also supports admin-defined custom metrics (see
+// supabase/add_tj_custom_metrics.sql + src/hooks/useEffectiveTjMetrics.ts),
+// stored with a reserved 'Y##' metric_key prefix — deliberately distinct from
+// the per-client custom_metrics table's 'X##' prefix (see
+// supabase/add_custom_metrics.sql) so the two id namespaces never collide.
 
 export interface CompanyMetric {
   id: string
