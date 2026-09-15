@@ -45,8 +45,6 @@ function asDashboardRecord(value: unknown): Record<string, unknown> {
     : {}
 }
 
-const MONTHLY_AVERAGE_METRICS = new Set(['C36', 'C37'])
-
 // Targets are stored one row per (client, metric, period) — teams don't re-enter a target
 // every single week/month, so most periods have no exact row. Prefer an exact match for the
 // period being viewed, else fall back to the most recently set target for that metric.
@@ -178,6 +176,11 @@ export function DashboardPage() {
   // Every client's own custom metrics, bulk-fetched once (not N+1 per client).
   const [customMetricsByClient, setCustomMetricsByClient] = useState<Record<string, Metric[]>>({})
 
+  // Moved up from further down in this component so monthTjAgg/monthSalesAgg/
+  // monthMmAgg (below) can scope their "(Month to Date)" totals to the
+  // selected week, matching clientMtdRows' behavior for client metrics.
+  const { selectedWeek: displayWeek } = useWorkspace()
+
   const isServiceEnabled = (clientId: string, category: 'content' | 'leadgen') => {
     const settings = clientSettings[clientId]
     return category === 'content'
@@ -214,14 +217,17 @@ export function DashboardPage() {
   // anniversaries are derived from this SAME computation so they can't drift
   // out of sync with each other the way they used to.
   const getNextOccurrence = (dateStr: string, today: Date): { date: Date; daysUntil: number } => {
+    // dateStr ("YYYY-MM-DD") parses as UTC midnight — read it back with UTC
+    // getters, not local ones, or the month/day silently shift back a day
+    // for any negative-UTC-offset viewer (e.g. the Americas).
     const d = new Date(dateStr)
     const thisYear = today.getFullYear()
 
-    let next = new Date(thisYear, d.getMonth(), d.getDate())
+    let next = new Date(thisYear, d.getUTCMonth(), d.getUTCDate())
     next.setHours(0, 0, 0, 0)
 
     if (next < today) {
-      next = new Date(thisYear + 1, d.getMonth(), d.getDate())
+      next = new Date(thisYear + 1, d.getUTCMonth(), d.getUTCDate())
     }
 
     const daysUntil = Math.round((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
@@ -483,13 +489,13 @@ export function DashboardPage() {
                     <TableCell
                       className="py-1 text-center text-xs font-bold cursor-help"
                       style={{ color: bestEver !== null ? '#B8860B' : undefined }}
-                      title={hs?.achieved_week ? `Achieved: w/c ${new Date(hs.achieved_week).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : undefined}
+                      title={hs?.achieved_week ? `Achieved: w/c ${new Date(hs.achieved_week).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}` : undefined}
                     >
                       {bestEver !== null ? (['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(bestEver as number) : formatDashboardValue(bestEver, m.id)) : '-'}
                     </TableCell>
                     <TableCell
                       className="py-1 text-center text-xs font-bold text-amber-600 cursor-help"
-                      title={hs?.achieved_month ? `Achieved: ${new Date(hs.achieved_month + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}` : undefined}
+                      title={hs?.achieved_month ? `Achieved: ${new Date(hs.achieved_month + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })}` : undefined}
                     >
                       {bestEverMonth !== null ? (['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(bestEverMonth as number) : formatDashboardValue(bestEverMonth, m.id)) : '-'}
                     </TableCell>
@@ -535,8 +541,16 @@ export function DashboardPage() {
       monthlyTotals[metricId] = computeVolumeWeightedRate(weeks, metricId, category) ?? 0
     })
     monthlyTotals['C26'] = monthlyTotals['C09'] > 0 ? monthlyTotals['C10'] / monthlyTotals['C09'] : 0
-    MONTHLY_AVERAGE_METRICS.forEach(metricId => {
-      if (monthlyCounts[metricId] > 0) monthlyTotals[metricId] /= monthlyCounts[metricId]
+    // Any percentage-type metric (standard or custom) not already recomputed
+    // via volume-weighting above is a per-week rate — average it across
+    // weeks instead of leaving it as the raw sum the loop above produces. A
+    // hardcoded id allowlist here (previously just C36/C37) missed the
+    // pre-existing C34/C35 (Newsletter Open/Click Rate) entirely and would
+    // silently sum any custom percentage metric too.
+    clientMetrics.forEach(m => {
+      if (m.type === 'percentage' && !RATE_DEPENDENCIES[m.id] && monthlyCounts[m.id] > 0) {
+        monthlyTotals[m.id] /= monthlyCounts[m.id]
+      }
     })
 
     return (
@@ -655,8 +669,17 @@ export function DashboardPage() {
         total.L21 = calcRateCapped(total.L20, total.L19) || 0
         total.L26 = calcRateCapped(total.L25, total.L24) || 0
         total.C26 = total.C09 > 0 ? total.C10 / total.C09 : 0
-        MONTHLY_AVERAGE_METRICS.forEach(metricId => {
-          if (counts[clientId][metricId] > 0) total[metricId] /= counts[clientId][metricId]
+        // Any percentage-type metric (standard or custom) not already
+        // recomputed via calcRateCapped above is a per-week rate — average
+        // it across weeks instead of leaving it as the raw sum the loop
+        // above produces. A hardcoded id allowlist here (previously just
+        // C36/C37) missed the pre-existing C34/C35 (Newsletter Open/Click
+        // Rate) entirely and would silently sum any custom percentage metric.
+        const clientMetrics = [...ALL_METRICS, ...(customMetricsByClient[clientId] ?? [])]
+        clientMetrics.forEach(metric => {
+          if (metric.type === 'percentage' && !RATE_DEPENDENCIES[metric.id] && counts[clientId][metric.id] > 0) {
+            total[metric.id] /= counts[clientId][metric.id]
+          }
         })
       })
 
@@ -877,19 +900,28 @@ export function DashboardPage() {
     return out
   }
 
+  // These sections render under a "(Month to Date)" title in Monthly View —
+  // scope them to weeks up to and including the selected week, the same way
+  // clientMtdRows does for client metrics below. Without this, they silently
+  // included every week through the true end of the month regardless of
+  // which week was selected, disagreeing with the client-metrics MTD total
+  // shown elsewhere on the same screen.
+  const mtdTjRows = monthTjRows.filter(r => r.week_start <= displayWeek)
+  const mtdSalesRows = monthSalesRows.filter(r => r.week_start <= displayWeek)
+
   const monthTjAgg = {
-    instagram: aggregateChannelRows(monthTjRows, 'instagram'),
-    youtube: aggregateChannelRows(monthTjRows, 'youtube'),
-    newsletter: aggregateChannelRows(monthTjRows, 'email_newsletter'),
-    video_pipeline: aggregateChannelRows(monthTjRows, 'video_pipeline'),
+    instagram: aggregateChannelRows(mtdTjRows, 'instagram'),
+    youtube: aggregateChannelRows(mtdTjRows, 'youtube'),
+    newsletter: aggregateChannelRows(mtdTjRows, 'email_newsletter'),
+    video_pipeline: aggregateChannelRows(mtdTjRows, 'video_pipeline'),
   }
 
   const monthSalesAgg = {
-    tj_outreach: aggregateSalesSection(monthSalesRows, 'tj_outreach'),
-    jahnvi_outreach: aggregateSalesSection(monthSalesRows, 'jahnvi_outreach'),
-    shirin_outreach: aggregateSalesSection(monthSalesRows, 'shirin_outreach'),
-    cold_email: aggregateSalesSection(monthSalesRows, 'cold_email'),
-    meeting_tracker: aggregateSalesSection(monthSalesRows, 'meeting_tracker'),
+    tj_outreach: aggregateSalesSection(mtdSalesRows, 'tj_outreach'),
+    jahnvi_outreach: aggregateSalesSection(mtdSalesRows, 'jahnvi_outreach'),
+    shirin_outreach: aggregateSalesSection(mtdSalesRows, 'shirin_outreach'),
+    cold_email: aggregateSalesSection(mtdSalesRows, 'cold_email'),
+    meeting_tracker: aggregateSalesSection(mtdSalesRows, 'meeting_tracker'),
   }
 
   // The split-vs-legacy impressions decision (withLinkedInImpressionTotals,
@@ -923,13 +955,15 @@ export function DashboardPage() {
     return out
   }
 
+  const mtdMmRows = monthMmRows.filter(r => r.week_start <= displayWeek)
+
   const monthMmAgg = {
-    linkedin: aggregateMmLinkedInRows(monthMmRows),
-    instagram: aggregateChannelRows(monthMmRows, 'instagram'),
-    website: aggregateChannelRows(monthMmRows, 'website'),
-    quora: aggregateChannelRows(monthMmRows, 'quora'),
-    reddit: aggregateChannelRows(monthMmRows, 'reddit'),
-    ads: aggregateChannelRows(monthMmRows, 'ads'),
+    linkedin: aggregateMmLinkedInRows(mtdMmRows),
+    instagram: aggregateChannelRows(mtdMmRows, 'instagram'),
+    website: aggregateChannelRows(mtdMmRows, 'website'),
+    quora: aggregateChannelRows(mtdMmRows, 'quora'),
+    reddit: aggregateChannelRows(mtdMmRows, 'reddit'),
+    ads: aggregateChannelRows(mtdMmRows, 'ads'),
   }
 
   const withLinkedInImpressionTotals = (data: any) => {
@@ -1073,8 +1107,6 @@ export function DashboardPage() {
     )
   }
 
-  const { selectedWeek: displayWeek } = useWorkspace()
-  
   const loadAllDashboardData = async (weekStart: string) => {
     setLoading(true)
     try {
@@ -1086,8 +1118,12 @@ export function DashboardPage() {
       // (April/June/September/November have 30, February has 28/29).
       // A literal "-31" here made every monthly-view fetch for a 30-day
       // month throw "date/time field value out of range" from Postgres.
+      // Built in UTC (not a local-midnight Date + toISOString(), which is
+      // off by one day for any UTC+ viewer — e.g. IST — whenever the true
+      // last day of the month is itself a Monday week_start, silently
+      // dropping that week from every monthly-view total).
       const [monthYear, monthNum] = weekStart.slice(0, 7).split('-').map(Number)
-      const monthEnd = new Date(monthYear, monthNum, 0).toISOString().split('T')[0]
+      const monthEnd = new Date(Date.UTC(monthYear, monthNum, 0)).toISOString().split('T')[0]
 
       const dashboardResults = await Promise.all([
         supabase.from('clients').select('*, content_manager:profiles!content_manager_id(full_name), leadgen_manager:profiles!leadgen_manager_id(full_name)').eq('status', 'active').order('name'),
@@ -1560,8 +1596,16 @@ export function DashboardPage() {
                           }
                         })
                       }
-                      MONTHLY_AVERAGE_METRICS.forEach(metricId => {
-                        if (clientMtdCounts[metricId] > 0) clientMtdTotals[metricId] /= clientMtdCounts[metricId]
+                      // Any percentage-type metric (standard or custom) is a per-week
+                      // rate — average it across weeks, not sum it. 'auto' types (the
+                      // volume-weighted rate metrics) were already excluded above, so
+                      // no RATE_DEPENDENCIES guard is needed here. A hardcoded id
+                      // allowlist here (previously just C36/C37) missed the
+                      // pre-existing C34/C35 and any custom percentage metric.
+                      ;[...ALL_METRICS, ...(customMetricsByClient[client.id] ?? [])].forEach(m => {
+                        if (m.type === 'percentage' && clientMtdCounts[m.id] > 0) {
+                          clientMtdTotals[m.id] /= clientMtdCounts[m.id]
+                        }
                       })
                       // Auto-computed metrics were skipped above (they aren't raw JSON fields),
                       // so their monthly totals — needed for the Monthly Target Status column —

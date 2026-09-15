@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf'
 import { supabase } from '@/integrations/supabase/client'
 import { buildWeekMetrics } from '@/utils/metricCalculations'
 import { assertClientRows } from '@/utils/clientScope'
-import { Metric } from '@/data/metrics'
+import { ALL_METRICS, Metric } from '@/data/metrics'
 import { customMetricToMetric } from '@/hooks/useEffectiveMetrics'
 import { calcRateCapped } from '@/utils/readMetric'
 
@@ -77,7 +77,16 @@ function aggregateWeeks(rows: any[], extraMetrics: Metric[] = []): MetricMap {
     .filter(Boolean) as Record<string, any>[]
   const total: MetricMap = {}
   const latest = new Set(['C16', 'C32'])
-  const averages = new Set(['C34', 'C35', 'C36', 'C37'])
+  // Any percentage-type metric (standard or custom) is a per-week rate and
+  // should be averaged across weeks, not summed — a hardcoded id allowlist
+  // here (previously just C34-C37) silently summed every custom percentage
+  // metric instead, inflating this client-facing PDF's totals. The
+  // L12/L14/L17/L18/L21/L26 rate metrics are recomputed from raw
+  // numerator/denominator totals below regardless of what this loop
+  // produces for them.
+  const percentageIds = new Set(
+    [...ALL_METRICS, ...extraMetrics].filter(m => m.type === 'percentage').map(m => m.id)
+  )
   const ids = new Set(builtRows.flatMap(row => Object.keys(row)))
 
   ids.forEach(id => {
@@ -87,7 +96,7 @@ function aggregateWeeks(rows: any[], extraMetrics: Metric[] = []): MetricMap {
     // a stray data-entry mistake can't surface as an impossible number here.
     total[id] = Math.max(0, latest.has(id)
       ? values[values.length - 1]
-      : averages.has(id)
+      : percentageIds.has(id)
         ? values.reduce((sum, value) => sum + value, 0) / values.length
         : values.reduce((sum, value) => sum + value, 0))
   })

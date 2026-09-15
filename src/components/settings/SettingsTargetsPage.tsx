@@ -87,13 +87,19 @@ function TargetRow({ metric, currentTarget, previousTarget, mtdActual, onChange,
 }
 
 function getMonthOptions(count = 6) {
+  // UTC throughout: `period` used to be built via a local Date + toISOString()
+  // while `label` was formatted in local time with no timeZone override — in
+  // any UTC+ timezone (e.g. IST), the pair could silently disagree for the
+  // first ~5.5 hours of a day (period one month behind its own label), and
+  // since `period` is what actually gets written to the targets table,
+  // targets could be saved under the wrong month while the UI showed the
+  // right one.
+  const now = new Date()
   return Array.from({ length: count }, (_, i) => {
-    const d = new Date()
-    d.setDate(1)
-    d.setMonth(d.getMonth() - i)
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
     return {
       period: d.toISOString().slice(0, 7), // '2026-05'
-      label: d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) // 'May 2026'
+      label: d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }) // 'May 2026'
     }
   })
 }
@@ -209,8 +215,11 @@ export function SettingsTargetsPage() {
       d.setDate(d.getDate() - 7)
       prevPeriod = d.toISOString().split('T')[0]
     } else {
-      const d = new Date(currentPeriod + '-01')
-      d.setMonth(d.getMonth() - 1)
+      // UTC throughout — mixing a UTC-parsed date with local getMonth/setMonth
+      // shifted the result by an extra month for negative-UTC-offset viewers.
+      const [year, month] = currentPeriod.split('-').map(Number) // month is 1-indexed
+      const prevMonthIndex = month - 2 // -1 for 0-indexing, -1 for "previous"
+      const d = new Date(Date.UTC(year, prevMonthIndex, 1))
       prevPeriod = d.toISOString().slice(0, 7)
     }
 
@@ -230,14 +239,19 @@ export function SettingsTargetsPage() {
     let weekStarts: string[] = []
 
     if (type === 'monthly') {
+      // UTC throughout — this used to build local-midnight Dates and read
+      // getDay()/setDate() (local), then serialize with toISOString() (UTC).
+      // In any UTC+ timezone (e.g. IST), every emitted date landed on the
+      // wrong weekday (a Sunday instead of the true Monday week_start),
+      // so `.in('week_start', weekStarts)` matched zero rows and MTD
+      // actuals were always blank for monthly targets.
       const [year, month] = p.split('-').map(Number)
-      const start = new Date(year, month - 1, 1)
-      const end = new Date(year, month, 0)
-      const d = new Date(start)
-      while (d.getDay() !== 1) d.setDate(d.getDate() + 1)
+      const end = new Date(Date.UTC(year, month, 0))
+      const d = new Date(Date.UTC(year, month - 1, 1))
+      while (d.getUTCDay() !== 1) d.setUTCDate(d.getUTCDate() + 1)
       while (d <= end) {
         weekStarts.push(d.toISOString().split('T')[0])
-        d.setDate(d.getDate() + 7)
+        d.setUTCDate(d.getUTCDate() + 7)
       }
     } else {
       weekStarts = [p]
@@ -430,7 +444,12 @@ export function SettingsTargetsPage() {
     if (activeSection !== 'tj') return
     loadTjTargets(selectedWeekStart)
     loadTjActuals(selectedWeekStart)
-  }, [activeSection, selectedWeekStart])
+    // TJ_TARGET_METRIC_IDS starts as the static catalog and is replaced once
+    // useEffectiveTjMetrics' async fetch resolves. Without it as a
+    // dependency, opening the TJ tab before that fetch resolves loaded
+    // targets/actuals filtered to the stale id list, silently omitting any
+    // custom TJ metric until the week or tab was changed again.
+  }, [activeSection, selectedWeekStart, TJ_TARGET_METRIC_IDS])
 
   const saveTjTargets = async () => {
     setTjSaving(true)

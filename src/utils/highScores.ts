@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { calcAcceptanceRate, calcResponseRate, calcPositiveRate } from './metricCalculations'
 import { readNum, readLinkedInImpressions } from './readMetric'
 import { customMetricToMetric } from '@/hooks/useEffectiveMetrics'
+import { ALL_METRICS } from '@/data/metrics'
 
 // Custom metrics are always number/percentage/textarea (never 'auto'), so unlike
 // TRACKED_METRICS they need none of the special live-calc branches below — just
@@ -32,6 +33,13 @@ export async function backfillHighScores(clientId: string): Promise<void> {
   if (!rows || rows.length === 0) return
 
   const customMetrics = await fetchNumericCustomMetrics(clientId)
+  // Any percentage-type metric (standard or custom) is a per-week rate: a
+  // recorded 0% is a meaningful, real week (unlike a volume metric, where 0
+  // usually just means "no data entered") and must count toward the monthly
+  // average — see the two uses below.
+  const percentageIds = new Set(
+    [...ALL_METRICS, ...customMetrics].filter(m => m.type === 'percentage').map(m => m.id)
+  )
 
   // Track best single-week value and which week it was achieved
   const best: Record<string, { value: number; week: string; name: string }> = {}
@@ -72,9 +80,10 @@ export async function backfillHighScores(clientId: string): Promise<void> {
         if (val > 0 && (!best[id] || val > best[id].value)) {
           best[id] = { value: val, week: weekStart, name }
         }
-        // Network shares are averaged monthly, so a recorded 0% is meaningful
-        // and must count as a week. C26 is derived separately and not summed.
-        if (id !== 'C26' && (val > 0 || id === 'C36' || id === 'C37')) addToMonth(month, id, val)
+        // Percentage-type metrics are averaged monthly, so a recorded 0% is
+        // meaningful and must count as a week. C26 is derived separately and
+        // not summed.
+        if (id !== 'C26' && (val > 0 || percentageIds.has(id))) addToMonth(month, id, val)
       }
     })
 
@@ -85,7 +94,7 @@ export async function backfillHighScores(clientId: string): Promise<void> {
         if (val > 0 && (!best[m.id] || val > best[m.id].value)) {
           best[m.id] = { value: val, week: weekStart, name: m.name }
         }
-        if (val > 0) addToMonth(month, m.id, val)
+        if (val > 0 || percentageIds.has(m.id)) addToMonth(month, m.id, val)
       }
     })
 
@@ -119,7 +128,7 @@ export async function backfillHighScores(clientId: string): Promise<void> {
   const bestMonth: Record<string, { value: number; month: string }> = {}
   for (const [month, sums] of Object.entries(monthSums)) {
     for (const [id, value] of Object.entries(sums)) {
-      const monthlyValue = (id === 'C36' || id === 'C37')
+      const monthlyValue = percentageIds.has(id)
         ? value / (monthCounts[month]?.[id] ?? 1)
         : value
       if (!bestMonth[id] || monthlyValue > bestMonth[id].value) {

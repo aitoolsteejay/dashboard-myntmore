@@ -16,11 +16,16 @@ import { cn } from "@/lib/utils"
 import { sortAlphabetically } from "@/utils/sort"
 import { getWeekOptions } from "@/utils/weekUtils"
 
-// ISO date of the very first Monday on or before a given date
+// ISO date of the very first Monday on or before a given date. UTC
+// throughout — the previous version built a local-midnight Date and read/set
+// it with local getDay()/setDate(), then serialized with toISOString() (UTC),
+// which rolled the result back a day for any UTC+ viewer (e.g. IST):
+// unconditionally, on every call. Matches the equivalent snapToMonday() in
+// ReportsPage.tsx/ClientPortalPage.tsx.
 function toMonday(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  const day = d.getDay()
-  d.setDate(d.getDate() - ((day + 6) % 7))
+  const d = new Date(dateStr)
+  const day = d.getUTCDay()
+  d.setUTCDate(d.getUTCDate() - (day === 0 ? 6 : day - 1))
   return d.toISOString().split('T')[0]
 }
 

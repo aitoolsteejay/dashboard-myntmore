@@ -172,7 +172,6 @@ function aggregatePeriodMetrics(rows: any[], extraMetrics: Metric[] = []): Recor
 
   const totals: Record<string, any> = {}
   const latestValueMetrics = new Set(['C16', 'C32'])
-  const averageMetrics = new Set(['C34', 'C35', 'C36', 'C37'])
 
   for (const metric of [...ALL_METRICS, ...extraMetrics]) {
     if (metric.type === 'auto' || metric.type === 'textarea' || metric.type === 'boolean') continue
@@ -181,7 +180,14 @@ function aggregatePeriodMetrics(rows: any[], extraMetrics: Metric[] = []): Recor
       totals[metric.id] = null
     } else if (latestValueMetrics.has(metric.id)) {
       totals[metric.id] = values[values.length - 1]
-    } else if (averageMetrics.has(metric.id)) {
+    } else if (metric.type === 'percentage') {
+      // Any percentage-type metric (standard or custom) is a per-week rate —
+      // average it across weeks, don't sum it. A hardcoded id allowlist here
+      // (previously just C34-C37) silently summed every custom percentage
+      // metric instead, and any future standard one, since it wouldn't be
+      // added to that list. The L05/L12/L14/L17/L18/L21/L26 rate metrics are
+      // recomputed from raw numerator/denominator totals below regardless of
+      // what this branch produces for them.
       totals[metric.id] = Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 100) / 100
     } else {
       totals[metric.id] = values.reduce((sum, value) => sum + value, 0)

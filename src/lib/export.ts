@@ -531,7 +531,10 @@ export async function generateWeeklySummary(weekStart: string) {
     supabase.from('sales_weekly_data').select('*').eq('week_start', weekStart).maybeSingle(),
   ])
 
-  let text = `MYNTMORE WEEKLY REVIEW - ${new Date(weekStart).toLocaleDateString()} – ${new Date(new Date(weekStart).getTime() + 6 * 24 * 60 * 60 * 1000).toLocaleDateString()}\n`
+  // weekStart parses as UTC midnight — format in UTC too, or the printed
+  // header shows a day earlier than the real week_start for any
+  // negative-UTC-offset viewer (e.g. the Americas).
+  let text = `MYNTMORE WEEKLY REVIEW - ${new Date(weekStart).toLocaleDateString('en-US', { timeZone: 'UTC' })} – ${new Date(new Date(weekStart).getTime() + 6 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { timeZone: 'UTC' })}\n`
   text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`
   text += `CLIENT PERFORMANCE SNAPSHOT\n────────────────────────────\n`
 
