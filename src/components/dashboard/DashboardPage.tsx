@@ -1082,6 +1082,13 @@ export function DashboardPage() {
       prevDate.setDate(prevDate.getDate() - 7)
       const prevWeekStart = prevDate.toISOString().split('T')[0]
 
+      // The last calendar day of weekStart's month — NOT always the 31st
+      // (April/June/September/November have 30, February has 28/29).
+      // A literal "-31" here made every monthly-view fetch for a 30-day
+      // month throw "date/time field value out of range" from Postgres.
+      const [monthYear, monthNum] = weekStart.slice(0, 7).split('-').map(Number)
+      const monthEnd = new Date(monthYear, monthNum, 0).toISOString().split('T')[0]
+
       const dashboardResults = await Promise.all([
         supabase.from('clients').select('*, content_manager:profiles!content_manager_id(full_name), leadgen_manager:profiles!leadgen_manager_id(full_name)').eq('status', 'active').order('name'),
         supabase.from('client_alerts').select('*, clients(name, company)').eq('is_resolved', false).order('created_at', { ascending: false }),
@@ -1103,13 +1110,13 @@ export function DashboardPage() {
         supabase.from('high_scores').select('*'),
         supabase.from('weekly_data').select('week_start, week_label, content_metrics, leadgen_metrics, client_id, content_submitted_at, leadgen_submitted_at')
           .gte('week_start', weekStart.slice(0, 7) + '-01')
-          .lte('week_start', (() => { const [y, m] = weekStart.slice(0, 7).split('-').map(Number); return new Date(y, m, 0).toISOString().split('T')[0] })())
+          .lte('week_start', monthEnd)
           .order('week_start', { ascending: true }),
         supabase.from('myntmore_processes').select('*').eq('status', 'active').order('priority', { ascending: true }).order('created_at', { ascending: true }),
         supabase.from('process_weekly_updates').select('*, profiles(full_name)').eq('week_start', weekStart),
-        supabase.from('tj_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', weekStart.slice(0, 7) + '-31'),
-        supabase.from('sales_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', weekStart.slice(0, 7) + '-31'),
-        supabase.from('mm_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', weekStart.slice(0, 7) + '-31'),
+        supabase.from('tj_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', monthEnd),
+        supabase.from('sales_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', monthEnd),
+        supabase.from('mm_weekly_data').select('*').gte('week_start', weekStart.slice(0, 7) + '-01').lte('week_start', monthEnd),
         supabase.from('client_settings').select('client_id, active_content_metrics, active_leadgen_metrics, content_enabled, leadgen_enabled'),
         supabase.from('custom_metrics').select('*').eq('archived', false).order('sort_order', { ascending: true }),
       ])
