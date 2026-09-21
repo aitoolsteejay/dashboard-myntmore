@@ -84,6 +84,7 @@ export const MM_LINKEDIN_METRICS: CompanyMetric[] = [
   { id: 'MML07', name: 'Page Views', type: 'number' },
   { id: 'MML08', name: 'LinkedIn Articles Published', type: 'number' },
   { id: 'MML09', name: 'LinkedIn Article Impressions', type: 'number' },
+  { id: 'MML13', name: 'Invite to Follow', type: 'number' },
 ]
 
 export const MM_INSTAGRAM_METRICS: CompanyMetric[] = [

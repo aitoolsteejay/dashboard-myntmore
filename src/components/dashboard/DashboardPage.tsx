@@ -2101,6 +2101,7 @@ export function DashboardPage() {
                             { id: 'MML04', name: 'Comments' },
                             { id: 'MML05', name: 'New Followers' },
                             { id: 'MML06', name: 'Total Followers' },
+                            { id: 'MML13', name: 'Invite to Follow' },
                             { id: 'MML07', name: 'Page Views' },
                             { id: 'MML08', name: 'Articles Published' },
                             { id: 'MML09', name: 'Article Impressions' },
