@@ -114,7 +114,8 @@ function CampaignWaalaxyImport({
       {summary && (
         <div role="status" className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-medium text-emerald-800">
           Imported {weekStart}–{weekEnd}: <strong>{summary.conn_requests_sent}</strong> sent, <strong>{summary.accepted}</strong> accepted and <strong>{summary.answered}</strong> answered from {summary.totalRows} prospects
-          {summary.skippedRows ? ` · ${summary.skippedRows} blank rows skipped` : ''}. Autosaving now; review or edit below.
+          {summary.skippedRows ? ` · ${summary.skippedRows} blank rows skipped` : ''}
+          {summary.duplicateRows ? ` · ${summary.duplicateRows} duplicate rows ignored` : ''}. Autosaving now; review or edit below.
         </div>
       )}
     </div>

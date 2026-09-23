@@ -124,13 +124,21 @@ export function TeamSettingsPage() {
   }
 
   const promoteToAdmin = async (userId: string) => {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('user_roles')
       .update({ role: 'admin' })
       .eq('user_id', userId)
+      .select('user_id')
 
     if (error) {
       toast.error('Failed to promote user: ' + error.message)
+      return
+    }
+    // A missing user_roles row updates zero rows with no error — every
+    // current invite path always creates one, but if that invariant is
+    // ever broken this silently no-ops instead of claiming success.
+    if (!data || data.length === 0) {
+      toast.error('No role record found for this user — could not promote.')
       return
     }
 
@@ -147,13 +155,18 @@ export function TeamSettingsPage() {
   }
 
   const revokeAdmin = async (userId: string) => {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('user_roles')
       .update({ role: 'member' })
       .eq('user_id', userId)
+      .select('user_id')
 
     if (error) {
       toast.error('Failed to revoke admin: ' + error.message)
+      return
+    }
+    if (!data || data.length === 0) {
+      toast.error('No role record found for this user — could not revoke.')
       return
     }
 
@@ -162,6 +175,14 @@ export function TeamSettingsPage() {
   }
 
   const handleToggleDisable = async (userId: string, currentDisabled: boolean) => {
+    // Defense-in-depth: the button itself is hidden for the signed-in admin's
+    // own row (see below), but guard the handler too. Disabling your own
+    // account signs you out on the very next route guard check (routeGuards.ts
+    // / lib/auth.tsx) — if you're the only admin, there's no in-app way back in.
+    if (userId === currentUser?.id) {
+      toast.error("You can't disable your own account.")
+      return
+    }
     try {
       const { error } = await supabase
         .from('profiles')
@@ -380,9 +401,11 @@ export function TeamSettingsPage() {
                       >
                         <KeyRound className="w-3.5 h-3.5" /> Reset Password
                       </Button>
-                      <Button variant="ghost" size="icon" title={u.disabled ? "Enable" : "Disable"} onClick={() => handleToggleDisable(u.id, !!u.disabled)}>
-                        {u.disabled ? <Check className="w-4 h-4 text-status-on" /> : <Ban className="w-4 h-4 text-destructive" />}
-                      </Button>
+                      {u.id !== currentUser?.id && (
+                        <Button variant="ghost" size="icon" title={u.disabled ? "Enable" : "Disable"} onClick={() => handleToggleDisable(u.id, !!u.disabled)}>
+                          {u.disabled ? <Check className="w-4 h-4 text-status-on" /> : <Ban className="w-4 h-4 text-destructive" />}
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

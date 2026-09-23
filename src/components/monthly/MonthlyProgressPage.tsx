@@ -2,9 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/lib/auth'
 import { ALL_METRICS } from '@/data/metrics'
-import { readNum } from '@/utils/readMetric'
+import { readNum, calcRateCapped } from '@/utils/readMetric'
 import { buildWeekMetrics } from '@/utils/metricCalculations'
 import { findTarget } from '@/utils/targets'
+import { RATE_DEPENDENCIES } from '@/utils/rateAggregation'
 import { cn } from '@/lib/utils'
 import { ChevronLeft, ChevronRight, ChevronDown, Target, TrendingUp, AlertTriangle, CheckCircle2, Minus, ExternalLink } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
@@ -323,10 +324,11 @@ export function MonthlyProgressPage() {
     // 30%, when the true volume-weighted rate is 15/110 = 13.6%). Recompute
     // the monthly rate metrics that can actually have a target from summed
     // raw numerator/denominator fields instead, matching how the dashboard's
-    // monthly totals already do this.
-    const RATE_DEPENDENCIES: Record<string, [string, string]> = {
-      L12: ['L11', 'L10'], L14: ['L13', 'L11'], L21: ['L20', 'L19'],
-    }
+    // monthly totals already do this. Uses the shared RATE_DEPENDENCIES/
+    // calcRateCapped (not a local duplicate) so this stays in sync with
+    // every other rate-aggregation consumer, and so a bad week's numerator
+    // exceeding its denominator renders as '-' instead of an impossible
+    // rate over 100%.
     Object.entries(RATE_DEPENDENCIES).forEach(([rateId, [numId, denId]]) => {
       if (targets[rateId] === undefined) return
       let numSum = 0, denSum = 0, any = false
@@ -338,7 +340,7 @@ export function MonthlyProgressPage() {
         if (n !== null) { numSum += n; any = true }
         if (d !== null) { denSum += d; any = true }
       }
-      metricActuals[rateId] = !any ? null : denSum > 0 ? Math.round((numSum / denSum) * 1000) / 10 : 0
+      metricActuals[rateId] = !any ? null : calcRateCapped(numSum, denSum) ?? 0
     })
 
     return { metricActuals, weeklyActuals }

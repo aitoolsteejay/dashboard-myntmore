@@ -166,7 +166,8 @@ export function EditCampaignWeekModal({ campaign, weekData, weekStart, weekLabel
               <strong>Imported {weekStart} to {weekEnd}:</strong>{' '}
               {importSummary.conn_requests_sent} requests sent, {importSummary.accepted} accepted,
               {' '}{importSummary.answered} answered from {importSummary.totalRows} prospects
-              {importSummary.skippedRows > 0 ? ` (${importSummary.skippedRows} blank rows skipped)` : ''}.
+              {importSummary.skippedRows > 0 ? ` (${importSummary.skippedRows} blank rows skipped)` : ''}
+              {importSummary.duplicateRows > 0 ? ` (${importSummary.duplicateRows} duplicate rows ignored)` : ''}.
             </div>
           )}
         </div>

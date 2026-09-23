@@ -14,6 +14,7 @@ export type WaalaxyImportSummary = {
   answered: number
   totalRows: number
   skippedRows: number
+  duplicateRows: number
 }
 
 function isInWeek(value: string | undefined, weekStart: string, weekEnd: string) {
@@ -54,12 +55,26 @@ export function parseWaalaxyExport(
   let answered = 0
   let totalRows = 0
   let skippedRows = 0
+  let duplicateRows = 0
+  // A prospect can appear more than once in a Waalaxy export (re-added to a
+  // sequence, overlapping pagination) — without this, a duplicated row would
+  // silently inflate every count below with no way to notice from the CSV
+  // alone, since these numbers directly overwrite the week's manually-entered
+  // campaign data.
+  const seenUrls = new Set<string>()
 
   for (const row of parsed.data) {
-    if (!row.linkedinUrl?.trim()) {
+    const linkedinUrl = row.linkedinUrl?.trim()
+    if (!linkedinUrl) {
       skippedRows += 1
       continue
     }
+    const key = linkedinUrl.toLowerCase()
+    if (seenUrls.has(key)) {
+      duplicateRows += 1
+      continue
+    }
+    seenUrls.add(key)
 
     totalRows += 1
     if (isInWeek(row.connectionRequestDate, weekStart, weekEnd)) connRequestsSent += 1
@@ -73,5 +88,6 @@ export function parseWaalaxyExport(
     answered,
     totalRows,
     skippedRows,
+    duplicateRows,
   }
 }

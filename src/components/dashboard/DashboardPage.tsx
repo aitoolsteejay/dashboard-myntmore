@@ -45,9 +45,6 @@ function asDashboardRecord(value: unknown): Record<string, unknown> {
     : {}
 }
 
-// Targets are stored one row per (client, metric, period) — teams don't re-enter a target
-// every single week/month, so most periods have no exact row. Prefer an exact match for the
-// period being viewed, else fall back to the most recently set target for that metric.
 // --- DeliverableAlertRow sub-component ---
 interface DeliverableAlertItem {
   clientId: string

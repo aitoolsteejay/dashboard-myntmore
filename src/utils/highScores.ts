@@ -1,8 +1,16 @@
 import { supabase } from '@/integrations/supabase/client'
-import { calcAcceptanceRate, calcResponseRate, calcPositiveRate } from './metricCalculations'
-import { readNum, readLinkedInImpressions } from './readMetric'
+import { readNum, readLinkedInImpressions, calcRateCapped } from './readMetric'
 import { customMetricToMetric } from '@/hooks/useEffectiveMetrics'
 import { ALL_METRICS } from '@/data/metrics'
+import { RATE_DEPENDENCIES } from './rateAggregation'
+
+const rateMetricName = (id: string) => ALL_METRICS.find(m => m.id === id)?.name ?? id
+
+// TRACKED_METRICS (below) already covers most raw fields that feed a rate
+// metric (L10/L11/L13/L15/L16/L19/L20/L24) — these three (L02/L03, feeding
+// L05; L25, feeding L26) are the only ones that aren't tracked on their own
+// and need summing separately for the monthly rate derivation.
+const RATE_RAW_ONLY_IDS = ['L02', 'L03', 'L25']
 
 // Custom metrics are always number/percentage/textarea (never 'auto'), so unlike
 // TRACKED_METRICS they need none of the special live-calc branches below — just
@@ -98,18 +106,23 @@ export async function backfillHighScores(clientId: string): Promise<void> {
       }
     })
 
-    // Computed rates
-    const L10 = readNum(lm, 'L10'), L11 = readNum(lm, 'L11')
-    const L13 = readNum(lm, 'L13'), L15 = readNum(lm, 'L15')
-    const accRate = calcAcceptanceRate(L11, L10)
-    const respRate = calcResponseRate(L13, L11)
-    const posRate = calcPositiveRate(L15, L13)
-    if (accRate && accRate > 0 && (!best['L12'] || accRate > best['L12'].value))
-      best['L12'] = { value: accRate, week: weekStart, name: 'Acceptance Rate' }
-    if (respRate && respRate > 0 && (!best['L14'] || respRate > best['L14'].value))
-      best['L14'] = { value: respRate, week: weekStart, name: 'Response Rate' }
-    if (posRate && posRate > 0 && (!best['L17'] || posRate > best['L17'].value))
-      best['L17'] = { value: posRate, week: weekStart, name: 'Positive Response Rate' }
+    // Computed rates — every id in RATE_DEPENDENCIES (not just L12/L14/L17),
+    // or L05/L18/L21/L26 silently never got a "best week" record at all.
+    Object.entries(RATE_DEPENDENCIES).forEach(([id, [numId, denId]]) => {
+      const rate = calcRateCapped(readNum(lm, numId), readNum(lm, denId))
+      if (rate !== null && rate > 0 && (!best[id] || rate > best[id].value)) {
+        best[id] = { value: rate, week: weekStart, name: rateMetricName(id) }
+      }
+    })
+
+    // Sum each rate's raw numerator/denominator into the monthly totals below
+    // (needed to derive monthly bests for L05/L18/L21/L26) — most of these
+    // ids are already summed via TRACKED_METRICS above; RATE_RAW_ONLY_IDS is
+    // just the ones (L02, L03, L25) that aren't tracked on their own.
+    RATE_RAW_ONLY_IDS.forEach(id => {
+      const val = readNum(lm, id)
+      if (val !== null && val > 0) addToMonth(month, id, val)
+    })
   }
 
   // Derive monthly bests: sum of underlying counters per month, max across all months.
@@ -136,15 +149,14 @@ export async function backfillHighScores(clientId: string): Promise<void> {
       }
     }
     if (month === currentMonth) continue
-    const accRate = calcAcceptanceRate(sums['L11'] ?? null, sums['L10'] ?? null)
-    const respRate = calcResponseRate(sums['L13'] ?? null, sums['L11'] ?? null)
-    const posRate = calcPositiveRate(sums['L15'] ?? null, sums['L13'] ?? null)
-    if (accRate && accRate > 0 && (!bestMonth['L12'] || accRate > bestMonth['L12'].value))
-      bestMonth['L12'] = { value: accRate, month }
-    if (respRate && respRate > 0 && (!bestMonth['L14'] || respRate > bestMonth['L14'].value))
-      bestMonth['L14'] = { value: respRate, month }
-    if (posRate && posRate > 0 && (!bestMonth['L17'] || posRate > bestMonth['L17'].value))
-      bestMonth['L17'] = { value: posRate, month }
+    // Every id in RATE_DEPENDENCIES (not just L12/L14/L17), or L05/L18/L21/L26
+    // silently never got a "best month" record at all.
+    Object.entries(RATE_DEPENDENCIES).forEach(([id, [numId, denId]]) => {
+      const rate = calcRateCapped(sums[numId] ?? null, sums[denId] ?? null)
+      if (rate !== null && rate > 0 && (!bestMonth[id] || rate > bestMonth[id].value)) {
+        bestMonth[id] = { value: rate, month }
+      }
+    })
   }
 
   if (Object.keys(best).length === 0) return
@@ -228,19 +240,13 @@ export async function detectAndUpdateHighScores(
     }
   })
 
-  // Add live-calculated rates
-  const L10 = readNum(leadgenMetrics, 'L10')
-  const L11 = readNum(leadgenMetrics, 'L11')
-  const L13 = readNum(leadgenMetrics, 'L13')
-  const L15 = readNum(leadgenMetrics, 'L15')
-
-  const accRate = calcAcceptanceRate(L11, L10)
-  const respRate = calcResponseRate(L13, L11)
-  const posRate = calcPositiveRate(L15, L13)
-
-  if (accRate && accRate > 0) values['L12'] = { value: accRate, name: 'Acceptance Rate' }
-  if (respRate && respRate > 0) values['L14'] = { value: respRate, name: 'Response Rate' }
-  if (posRate && posRate > 0) values['L17'] = { value: posRate, name: 'Positive Response Rate' }
+  // Add live-calculated rates — every id in RATE_DEPENDENCIES (not just
+  // L12/L14/L17), or L05/L18/L21/L26 silently never got a high-score record
+  // updated on save.
+  Object.entries(RATE_DEPENDENCIES).forEach(([id, [numId, denId]]) => {
+    const rate = calcRateCapped(readNum(leadgenMetrics, numId), readNum(leadgenMetrics, denId))
+    if (rate !== null && rate > 0) values[id] = { value: rate, name: rateMetricName(id) }
+  })
 
   const customMetrics = await fetchNumericCustomMetrics(clientId)
   customMetrics.forEach(m => {
