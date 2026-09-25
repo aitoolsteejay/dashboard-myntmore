@@ -365,8 +365,14 @@ export function DashboardPage() {
         const target = findTarget(clientMonthlyTargets, m.id, displayWeek.slice(0, 7))
         const targetNum = target !== null ? Number(target) : null
         const mtdVal = clientMtdTotals[m.id] ?? null
+        // `targetNum` can legitimately be 0 (a cleared target input saves as
+        // 0, not null/undefined — see SettingsTargetsPage's saveAllTargets),
+        // so every branch below must test `!== null`, never plain truthiness,
+        // or a 0 target reads as "no target" and throws off pct/remaining.
         const remaining = targetNum !== null && mtdVal !== null ? Math.max(targetNum - mtdVal, 0) : null
-        const pct = targetNum && mtdVal !== null ? Math.min(Math.round((mtdVal / targetNum) * 100), 100) : null
+        const pct = targetNum !== null && mtdVal !== null
+          ? (targetNum > 0 ? Math.min(Math.round((mtdVal / targetNum) * 100), 100) : 100)
+          : null
         return { m, mtdVal, targetNum, remaining, pct }
       })
       .filter(r => r.targetNum !== null)
@@ -384,14 +390,22 @@ export function DashboardPage() {
             </div>
             <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1.5">
               <div
-                className={cn("h-full rounded-full", (pct ?? 0) >= 100 ? "bg-green-500" : (pct ?? 0) >= 50 ? "bg-amber-500" : "bg-red-500")}
-                style={{ width: `${pct ?? 0}%` }}
+                className={cn(
+                  "h-full rounded-full",
+                  mtdVal === null ? "bg-muted-foreground/30"
+                    : (pct ?? 0) >= 100 ? "bg-green-500"
+                    : (pct ?? 0) >= 50 ? "bg-amber-500"
+                    : "bg-red-500"
+                )}
+                style={{ width: `${mtdVal === null ? 0 : (pct ?? 0)}%` }}
               />
             </div>
             <p className="text-[11px] font-semibold">
-              {remaining !== null && remaining > 0
-                ? <span className="text-orange-600">{fmt(remaining)} more needed this month</span>
-                : <span className="text-green-600">Target hit this month ✓</span>}
+              {mtdVal === null
+                ? <span className="text-muted-foreground">No data yet this month</span>
+                : remaining !== null && remaining > 0
+                  ? <span className="text-orange-600">{fmt(remaining)} more needed this month</span>
+                  : <span className="text-green-600">Target hit this month ✓</span>}
             </p>
           </div>
         ))}
