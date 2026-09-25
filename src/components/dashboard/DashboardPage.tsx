@@ -1762,7 +1762,7 @@ export function DashboardPage() {
                                     <WeeklyBreakdown client={client} weeks={monthWeeklyData.filter(w => w.client_id === client.id)} />
                                   </div>
                                 )}
-                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                                <div className="grid grid-cols-1 gap-8">
                                   {/* Content Metrics */}
                                   {isServiceEnabled(client.id, 'content') && <div className="space-y-4">
                                     <div className="flex items-center gap-2 pb-2 border-b border-muted sticky top-0 bg-background z-20">
