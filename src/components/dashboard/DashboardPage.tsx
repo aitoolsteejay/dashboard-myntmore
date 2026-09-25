@@ -339,6 +339,66 @@ export function DashboardPage() {
     </div>
   )
 
+  // The handful of metrics called out as monthly goals worth surfacing up
+  // front (rather than left in the Monthly Target Status column's hover
+  // tooltip) — one glance shows progress and what's left, no hovering needed.
+  const MONTHLY_GOAL_METRICS: Record<'content_metrics' | 'leadgen_metrics', string[]> = {
+    content_metrics: ['C01', 'C03', 'C09'],
+    leadgen_metrics: ['L10'],
+  }
+
+  const MonthlyGoalCards = ({
+    metrics,
+    category,
+    clientMonthlyTargets,
+    clientMtdTotals,
+  }: {
+    metrics: any[]
+    category: 'content_metrics' | 'leadgen_metrics'
+    clientMonthlyTargets: any[]
+    clientMtdTotals: Record<string, number>
+  }) => {
+    const rows = MONTHLY_GOAL_METRICS[category]
+      .map(id => metrics.find(m => m.id === id))
+      .filter((m): m is any => !!m)
+      .map(m => {
+        const target = findTarget(clientMonthlyTargets, m.id, displayWeek.slice(0, 7))
+        const targetNum = target !== null ? Number(target) : null
+        const mtdVal = clientMtdTotals[m.id] ?? null
+        const remaining = targetNum !== null && mtdVal !== null ? Math.max(targetNum - mtdVal, 0) : null
+        const pct = targetNum && mtdVal !== null ? Math.min(Math.round((mtdVal / targetNum) * 100), 100) : null
+        return { m, mtdVal, targetNum, remaining, pct }
+      })
+      .filter(r => r.targetNum !== null)
+
+    if (rows.length === 0) return null
+
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        {rows.map(({ m, mtdVal, targetNum, remaining, pct }) => (
+          <div key={m.id} className="rounded-lg border p-3 bg-muted/20">
+            <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground mb-1.5">{m.name}</p>
+            <div className="flex items-baseline gap-1 mb-1.5">
+              <span className="text-lg font-black">{fmt(mtdVal)}</span>
+              <span className="text-xs text-muted-foreground">/ {fmt(targetNum)} this month</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1.5">
+              <div
+                className={cn("h-full rounded-full", (pct ?? 0) >= 100 ? "bg-green-500" : (pct ?? 0) >= 50 ? "bg-amber-500" : "bg-red-500")}
+                style={{ width: `${pct ?? 0}%` }}
+              />
+            </div>
+            <p className="text-[11px] font-semibold">
+              {remaining !== null && remaining > 0
+                ? <span className="text-orange-600">{fmt(remaining)} more needed this month</span>
+                : <span className="text-green-600">Target hit this month ✓</span>}
+            </p>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   const MetricTable = ({
     metrics,
     currentData,
@@ -1769,6 +1829,12 @@ export function DashboardPage() {
                                       <FileText className="w-4 h-4 text-gold" />
                                       <h4 className="text-xs font-black uppercase tracking-widest">Content Metrics</h4>
                                     </div>
+                                    <MonthlyGoalCards
+                                      metrics={activeMetricsFor(client.id, 'content')}
+                                      category="content_metrics"
+                                      clientMonthlyTargets={clientMonthlyTargets}
+                                      clientMtdTotals={clientMtdTotals}
+                                    />
                                     <MetricTable
                                       metrics={activeMetricsFor(client.id, 'content').filter(m => m.group !== 'Qualitative')}
                                       currentData={currentData}
@@ -1787,6 +1853,12 @@ export function DashboardPage() {
                                       <Users className="w-4 h-4 text-gold" />
                                       <h4 className="text-xs font-black uppercase tracking-widest">Lead Gen Metrics</h4>
                                     </div>
+                                    <MonthlyGoalCards
+                                      metrics={activeMetricsFor(client.id, 'leadgen')}
+                                      category="leadgen_metrics"
+                                      clientMonthlyTargets={clientMonthlyTargets}
+                                      clientMtdTotals={clientMtdTotals}
+                                    />
                                     <MetricTable
                                       metrics={activeMetricsFor(client.id, 'leadgen').filter(m => m.group !== 'Qualitative')}
                                       currentData={currentData}
