@@ -51,6 +51,9 @@ export const CONTENT_METRICS: Metric[] = [
   { id: 'C33', name: 'Newsletter Sent', type: 'number', category: 'content', group: 'Newsletter', hasTarget: true, hasNote: false },
   { id: 'C34', name: 'Newsletter Open Rate', type: 'percentage', category: 'content', group: 'Newsletter', hasTarget: true, hasNote: false, unit: '%' },
   { id: 'C35', name: 'Newsletter Click Rate', type: 'percentage', category: 'content', group: 'Newsletter', hasTarget: false, hasNote: false, unit: '%' },
+  { id: 'C38', name: 'Newsletter Delivery Rate', type: 'percentage', category: 'content', group: 'Newsletter', hasTarget: false, hasNote: false, unit: '%' },
+  { id: 'C39', name: 'Newsletter CTOR (Click-to-Open Rate)', type: 'percentage', category: 'content', group: 'Newsletter', hasTarget: false, hasNote: false, unit: '%' },
+  { id: 'C40', name: 'Newsletter Unsubscribe Rate', type: 'percentage', category: 'content', group: 'Newsletter', hasTarget: false, hasNote: false, unit: '%' },
   // Qualitative
   { id: 'C24', name: "What's Working (Content)", type: 'textarea', category: 'content', group: 'Qualitative', hasTarget: false, hasNote: false },
   { id: 'C25', name: "What's Not Working (Content)", type: 'textarea', category: 'content', group: 'Qualitative', hasTarget: false, hasNote: false },
