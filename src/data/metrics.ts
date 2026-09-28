@@ -46,14 +46,21 @@ export const CONTENT_METRICS: Metric[] = [
   { id: 'C21', name: 'Monthly Podcast Delivered', type: 'boolean', category: 'content', group: 'Delivery & Reporting', hasTarget: false, hasNote: false },
   { id: 'C22', name: 'Quarterly Client Feedback', type: 'boolean', category: 'content', group: 'Delivery & Reporting', hasTarget: false, hasNote: false },
   { id: 'C23', name: 'Aha Moments / Update Shared', type: 'boolean', category: 'content', group: 'Delivery & Reporting', hasTarget: false, hasNote: false },
-  // Newsletter
-  { id: 'C32', name: 'Newsletter Subscribers', type: 'number', category: 'content', group: 'Newsletter', hasTarget: true, hasNote: false },
-  { id: 'C33', name: 'Newsletter Sent', type: 'number', category: 'content', group: 'Newsletter', hasTarget: true, hasNote: false },
-  { id: 'C34', name: 'Newsletter Open Rate', type: 'percentage', category: 'content', group: 'Newsletter', hasTarget: true, hasNote: false, unit: '%' },
-  { id: 'C35', name: 'Newsletter Click Rate', type: 'percentage', category: 'content', group: 'Newsletter', hasTarget: false, hasNote: false, unit: '%' },
-  { id: 'C38', name: 'Newsletter Delivery Rate', type: 'percentage', category: 'content', group: 'Newsletter', hasTarget: false, hasNote: false, unit: '%' },
-  { id: 'C39', name: 'Newsletter CTOR (Click-to-Open Rate)', type: 'percentage', category: 'content', group: 'Newsletter', hasTarget: false, hasNote: false, unit: '%' },
-  { id: 'C40', name: 'Newsletter Unsubscribe Rate', type: 'percentage', category: 'content', group: 'Newsletter', hasTarget: false, hasNote: false, unit: '%' },
+  // Email Newsletter
+  { id: 'C32', name: 'Newsletter Subscribers', type: 'number', category: 'content', group: 'Email Newsletter', hasTarget: true, hasNote: false },
+  { id: 'C33', name: 'Newsletter Sent', type: 'number', category: 'content', group: 'Email Newsletter', hasTarget: true, hasNote: false },
+  { id: 'C34', name: 'Newsletter Open Rate', type: 'percentage', category: 'content', group: 'Email Newsletter', hasTarget: true, hasNote: false, unit: '%' },
+  { id: 'C35', name: 'Newsletter Click Rate', type: 'percentage', category: 'content', group: 'Email Newsletter', hasTarget: false, hasNote: false, unit: '%' },
+  { id: 'C38', name: 'Newsletter Delivery Rate', type: 'percentage', category: 'content', group: 'Email Newsletter', hasTarget: false, hasNote: false, unit: '%' },
+  { id: 'C39', name: 'Newsletter CTOR (Click-to-Open Rate)', type: 'percentage', category: 'content', group: 'Email Newsletter', hasTarget: false, hasNote: false, unit: '%' },
+  { id: 'C40', name: 'Newsletter Unsubscribe Rate', type: 'percentage', category: 'content', group: 'Email Newsletter', hasTarget: false, hasNote: false, unit: '%' },
+  // LinkedIn Newsletter — LinkedIn's own native newsletter feature, distinct
+  // from an emailed newsletter (Mailchimp/etc.) above: no open/click/bounce
+  // concept applies since it's not email, so this mirrors what LinkedIn's own
+  // newsletter analytics actually expose (subscribers, issues, views).
+  { id: 'C41', name: 'LinkedIn Newsletter Subscribers', type: 'number', category: 'content', group: 'LinkedIn Newsletter', hasTarget: true, hasNote: false },
+  { id: 'C42', name: 'LinkedIn Newsletter Issues Published', type: 'number', category: 'content', group: 'LinkedIn Newsletter', hasTarget: true, hasNote: false },
+  { id: 'C43', name: 'LinkedIn Newsletter Views', type: 'number', category: 'content', group: 'LinkedIn Newsletter', hasTarget: false, hasNote: false },
   // Qualitative
   { id: 'C24', name: "What's Working (Content)", type: 'textarea', category: 'content', group: 'Qualitative', hasTarget: false, hasNote: false },
   { id: 'C25', name: "What's Not Working (Content)", type: 'textarea', category: 'content', group: 'Qualitative', hasTarget: false, hasNote: false },

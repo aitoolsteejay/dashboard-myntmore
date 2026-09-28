@@ -546,7 +546,8 @@ export function ClientPortalPage() {
     { name: 'Performance', label: 'Audience Performance', description: 'How your published content performed with your audience.' },
     { name: 'Post Output', label: 'Content Published', description: 'The content delivered and published during this period.' },
     { name: 'Production Pipeline', label: 'Content Pipeline', description: 'Work currently moving through ideation, drafting and approval.' },
-    { name: 'Newsletter', label: 'Newsletter Performance', description: 'Newsletter output, audience and engagement.' },
+    { name: 'Email Newsletter', label: 'Email Newsletter Performance', description: 'Email newsletter output, audience and engagement.' },
+    { name: 'LinkedIn Newsletter', label: 'LinkedIn Newsletter Performance', description: 'LinkedIn newsletter subscribers, issues and views.' },
     { name: 'Custom', label: 'Custom Metrics', description: 'Metrics tracked specifically for your account.' },
   ].map(group => ({
     ...group,
