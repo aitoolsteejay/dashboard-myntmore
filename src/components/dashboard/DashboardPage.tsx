@@ -29,7 +29,7 @@ import { buildWeekMetrics, formatMetricDisplay, formatPct } from "@/utils/metric
 import { backfillHighScores } from "@/utils/highScores"
 import { fetchTJLifetimeHighs, TJLifetimeHighs } from "@/utils/tjHighScores"
 import { fetchMMLifetimeHighs, MMLifetimeHighs } from "@/utils/mmHighScores"
-import { formatWeekDate } from "@/utils/dateUtils"
+import { formatWeekDate, getTodayIST } from "@/utils/dateUtils"
 import { sortAlphabetically } from "@/utils/sort"
 import { useWorkspace } from "@/lib/workspace"
 import type {
@@ -213,7 +213,7 @@ export function DashboardPage() {
   // trigger date (used for persistence + display) and the "years" count for
   // anniversaries are derived from this SAME computation so they can't drift
   // out of sync with each other the way they used to.
-  const getNextOccurrence = (dateStr: string, today: Date): { date: Date; daysUntil: number } => {
+  const getNextOccurrence = (dateStr: string, today: Date): { date: Date; daysUntil: number; dateKey: string } => {
     // dateStr ("YYYY-MM-DD") parses as UTC midnight — read it back with UTC
     // getters, not local ones, or the month/day silently shift back a day
     // for any negative-UTC-offset viewer (e.g. the Americas).
@@ -228,7 +228,12 @@ export function DashboardPage() {
     }
 
     const daysUntil = Math.round((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    return { date: next, daysUntil }
+    // `next` is a LOCAL date already representing the right calendar day —
+    // next.toISOString() would re-serialize it via UTC and roll it back a
+    // day for any positive-UTC-offset viewer (e.g. IST, +5:30), even though
+    // `next` itself is correct. Format from the same local getters instead.
+    const dateKey = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
+    return { date: next, daysUntil, dateKey }
   }
 
   const checkNotifications = async () => {
@@ -244,10 +249,9 @@ export function DashboardPage() {
     clients?.forEach(client => {
       // Birthday check - 21 days ahead
       if (client.birthday) {
-        const { date: bdayNext, daysUntil } = getNextOccurrence(client.birthday, today)
+        const { date: bdayNext, daysUntil, dateKey: triggerDate } = getNextOccurrence(client.birthday, today)
         if (daysUntil >= 0 && daysUntil <= 21) {
           const bdayLabel = bdayNext.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
-          const triggerDate = bdayNext.toISOString().split('T')[0]
           upcoming.push({
             id: client.id + '_bday',
             clientId: client.id,
@@ -266,12 +270,11 @@ export function DashboardPage() {
       // Work anniversary check - 21 days ahead
       if (client.myntmore_start_date) {
         const start = new Date(client.myntmore_start_date)
-        const { date: annivNext, daysUntil } = getNextOccurrence(client.myntmore_start_date, today)
+        const { date: annivNext, daysUntil, dateKey: triggerDate } = getNextOccurrence(client.myntmore_start_date, today)
         const years = annivNext.getFullYear() - start.getFullYear()
 
         if (daysUntil >= 0 && daysUntil <= 21 && years > 0) {
           const annexLabel = annivNext.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
-          const triggerDate = annivNext.toISOString().split('T')[0]
           upcoming.push({
             id: client.id + '_anniv',
             clientId: client.id,
@@ -539,11 +542,11 @@ export function DashboardPage() {
                     <TableCell className="py-1 text-center text-xs font-bold">
                       <span className="inline-flex items-center gap-1 justify-center">
                         {isNewHigh && <span title="New high score!" className="text-yellow-500 text-sm leading-none">★</span>}
-                        {['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(current as number) : formatDashboardValue(current, m.id)}
+                        {m.type === 'percentage' ? formatPct(current as number) : formatDashboardValue(current, m.id)}
                       </span>
                     </TableCell>
                     <TableCell className="py-1 text-center text-xs text-muted-foreground">
-                      {['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(prev as number) : formatDashboardValue(prev, m.id)}
+                      {m.type === 'percentage' ? formatPct(prev as number) : formatDashboardValue(prev, m.id)}
                     </TableCell>
                     <TableCell
                       className={cn("py-1 text-center text-xs font-black rounded", achColor(achNum), achBg(achNum))}
@@ -562,13 +565,13 @@ export function DashboardPage() {
                       style={{ color: bestEver !== null ? '#B8860B' : undefined }}
                       title={hs?.achieved_week ? `Achieved: w/c ${new Date(hs.achieved_week).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}` : undefined}
                     >
-                      {bestEver !== null ? (['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(bestEver as number) : formatDashboardValue(bestEver, m.id)) : '-'}
+                      {bestEver !== null ? (m.type === 'percentage' ? formatPct(bestEver as number) : formatDashboardValue(bestEver, m.id)) : '-'}
                     </TableCell>
                     <TableCell
                       className="py-1 text-center text-xs font-bold text-amber-600 cursor-help"
                       title={hs?.achieved_month ? `Achieved: ${new Date(hs.achieved_month + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })}` : undefined}
                     >
-                      {bestEverMonth !== null ? (['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(bestEverMonth as number) : formatDashboardValue(bestEverMonth, m.id)) : '-'}
+                      {bestEverMonth !== null ? (m.type === 'percentage' ? formatPct(bestEverMonth as number) : formatDashboardValue(bestEverMonth, m.id)) : '-'}
                     </TableCell>
                   </>
                 )}
@@ -657,7 +660,7 @@ export function DashboardPage() {
                     const prevVal = prevBuilt?.[m.id as keyof typeof prevBuilt] ?? null
 
                     let color = 'inherit'
-                    if (['L12', 'L14', 'L17', 'L18'].includes(m.id) && val !== null && prevVal !== null) {
+                    if (m.type === 'percentage' && val !== null && prevVal !== null) {
                       color = Number(val) > Number(prevVal) ? '#22C55E' : Number(val) < Number(prevVal) ? '#EF4444' : 'inherit'
                     }
 
@@ -670,7 +673,7 @@ export function DashboardPage() {
                         )}
                         style={{ color }}
                       >
-                        {['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(val as number) : formatDashboardValue(val, m.id)}
+                        {m.type === 'percentage' ? formatPct(val as number) : formatDashboardValue(val, m.id)}
                       </TableCell>
                     )
                   })}
@@ -913,13 +916,13 @@ export function DashboardPage() {
                         <TableRow key={m.id} className="h-8">
                           <TableCell className="py-1 text-[11px] font-medium">{m.name}</TableCell>
                           <TableCell className="py-1 text-center text-[11px] text-muted-foreground">
-                            {['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(pTotals[m.id]) : gFmt(pTotals[m.id])}
+                            {m.type === 'percentage' ? formatPct(pTotals[m.id]) : gFmt(pTotals[m.id])}
                           </TableCell>
                           <TableCell className="py-1 text-center text-[11px] font-black bg-gold/5">
-                            {['L12', 'L14', 'L17', 'L18'].includes(m.id) ? formatPct(cTotals[m.id]) : gFmt(cTotals[m.id])}
+                            {m.type === 'percentage' ? formatPct(cTotals[m.id]) : gFmt(cTotals[m.id])}
                           </TableCell>
                           <TableCell className="py-1 text-center text-[11px] font-bold">
-                            {['L12', 'L14', 'L17', 'L18'].includes(m.id) ? (
+                            {m.type === 'percentage' ? (
                               <span style={{ color: fmtPctDelta(cTotals[m.id], 100, pTotals[m.id], 100).color }}>
                                 {fmtPctDelta(cTotals[m.id], 100, pTotals[m.id], 100).text}
                               </span>
@@ -1464,7 +1467,7 @@ export function DashboardPage() {
     return contentReady && leadgenReady
   }).length
   const completionPct = clients.length ? Math.round((submittedClientCount / clients.length) * 100) : 0
-  const overdueActionables = actionables.filter(item => item.due_date && item.due_date < new Date().toISOString().slice(0, 10)).length
+  const overdueActionables = actionables.filter(item => item.due_date && item.due_date < getTodayIST()).length
 
   return (
     <div className="flex flex-1 flex-col">

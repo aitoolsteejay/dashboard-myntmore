@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
 import { getPreviousWeekStart, getWeekOptions } from "@/utils/weekUtils";
+import { getTodayIST } from "@/utils/dateUtils";
 import { useWorkspace } from "@/lib/workspace";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -41,13 +42,14 @@ export function AppTopbar({ pageLabel }: { pageLabel: string }) {
 
   useEffect(() => {
     let active = true;
+    const todayIST = getTodayIST();
     Promise.all([
       supabase.from("client_alerts").select("id", { count: "exact", head: true }).eq("is_resolved", false),
-      supabase.from("actionables").select("id", { count: "exact", head: true }).neq("status", "done").lt("due_date", new Date().toISOString().slice(0, 10)),
+      supabase.from("actionables").select("id", { count: "exact", head: true }).neq("status", "done").lt("due_date", todayIST),
       // Bounded to today-forward so a stale, never-dismissed row from a past
       // window (e.g. a birthday nobody dismissed last year) doesn't keep
       // inflating this count indefinitely.
-      supabase.from("client_notifications").select("id", { count: "exact", head: true }).eq("is_dismissed", false).gte("trigger_date", new Date().toISOString().slice(0, 10)),
+      supabase.from("client_notifications").select("id", { count: "exact", head: true }).eq("is_dismissed", false).gte("trigger_date", todayIST),
     ]).then(([alerts, tasks, milestones]) => {
       if (active) setAttention({ alerts: alerts.count || 0, tasks: tasks.count || 0, milestones: milestones.count || 0 });
     });

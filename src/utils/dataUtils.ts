@@ -43,7 +43,9 @@ export function formatDashboardValue(val: any, metricId: string): string {
   if (typeof val === 'boolean') return val ? '✅' : '❌'
   const n = Number(val)
   if (isNaN(n)) return String(val)
-  if (n === 0) return '0'
+  // Don't shortcut a real 0 to a bare '0' here — formatMetricDisplay needs to
+  // see it too, since a percentage metric's genuine 0% must render "0.0%",
+  // not the same bare "0" a count metric's zero would show.
   return formatMetricDisplay(val, metricId)
 }
 

@@ -11,6 +11,7 @@ import { ChevronLeft, ChevronRight, ChevronDown, Target, TrendingUp, AlertTriang
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { sortAlphabetically } from '@/utils/sort'
+import { getTodayIST } from '@/utils/dateUtils'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -49,8 +50,7 @@ function getWeeksInMonth(yearMonth: string): string[] {
 
 /** How many weeks have started on or before today */
 function weeksElapsed(weekStarts: string[]): number {
-  const today = new Date().toISOString().split('T')[0]
-  return weekStarts.filter(w => w <= today).length
+  return weekStarts.filter(w => w <= getTodayIST()).length
 }
 
 function fmt(v: number | null): string {
@@ -62,7 +62,11 @@ function fmt(v: number | null): string {
 type Status = 'hit' | 'on_track' | 'slightly_behind' | 'behind' | 'no_data'
 
 function getStatus(actual: number | null, target: number, elapsed: number, total: number): Status {
-  if (actual === null || actual === 0) return 'no_data'
+  // `actual === 0` is a real, reachable value (e.g. a 0% rate this month, or
+  // a count metric with an explicit 0 entered) — treating it the same as
+  // "no data at all" (actual === null) hid genuinely behind-target metrics
+  // as neutral gray "No Data" instead of red "Behind".
+  if (actual === null) return 'no_data'
   const pct = actual / target
   if (pct >= 1) return 'hit'
   const expectedFraction = total > 0 ? elapsed / total : 0
@@ -368,7 +372,7 @@ export function MonthlyProgressPage() {
     return diff
   }, [selectedMonth])
 
-  const isCurrentMonth = selectedMonth === new Date().toISOString().slice(0, 7)
+  const isCurrentMonth = selectedMonth === getTodayIST().slice(0, 7)
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">

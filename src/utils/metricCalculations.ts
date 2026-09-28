@@ -69,9 +69,12 @@ export function formatMetricDisplay(
   if (typeof val === 'string') return val.length > 0 ? val : '-'
   if (isNaN(Number(val))) return '-'
   const n = Number(val)
-  if (n === 0) return '0'
   const metric = ALL_METRICS.find(item => item.id === metricId)
+  // A percentage metric must check its type BEFORE the `n === 0` shortcut
+  // below — a real 0% (data exists, the rate is genuinely zero) needs to
+  // render as "0.0%", not a bare "0" indistinguishable from a count metric.
   if (metric?.type === 'percentage' || metric?.unit === '%') return fmt(n, { unit: '%' })
+  if (n === 0) return '0'
   return fmt(n)
 }
 

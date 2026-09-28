@@ -3,6 +3,7 @@ import { readNum, readLinkedInImpressions, calcRateCapped } from './readMetric'
 import { customMetricToMetric } from '@/hooks/useEffectiveMetrics'
 import { ALL_METRICS } from '@/data/metrics'
 import { RATE_DEPENDENCIES } from './rateAggregation'
+import { getTodayIST } from './dateUtils'
 
 const rateMetricName = (id: string) => ALL_METRICS.find(m => m.id === id)?.name ?? id
 
@@ -137,7 +138,7 @@ export async function backfillHighScores(clientId: string): Promise<void> {
   // that hasn't actually been earned yet — and would silently vanish (revert
   // to the true historical best) the next time this runs, once the rest of
   // the month's weaker weeks are counted.
-  const currentMonth = new Date().toISOString().slice(0, 7)
+  const currentMonth = getTodayIST().slice(0, 7)
   const bestMonth: Record<string, { value: number; month: string }> = {}
   for (const [month, sums] of Object.entries(monthSums)) {
     for (const [id, value] of Object.entries(sums)) {

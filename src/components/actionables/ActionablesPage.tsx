@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { BackButton } from "@/components/ui/BackButton";
 import { getCurrentWeekStart } from "@/utils/weekUtils";
+import { getTodayIST } from "@/utils/dateUtils";
 import type { Actionable, Client, Profile } from "@/types";
 
 type ActionableRow = Actionable & {
@@ -65,7 +66,7 @@ function formatDate(value: string | null) {
 }
 
 function isOverdue(actionable: ActionableRow) {
-  return Boolean(actionable.due_date && actionable.status !== "done" && actionable.due_date < new Date().toISOString().slice(0, 10));
+  return Boolean(actionable.due_date && actionable.status !== "done" && actionable.due_date < getTodayIST());
 }
 
 function statusForColumn(actionable: ActionableRow) {
