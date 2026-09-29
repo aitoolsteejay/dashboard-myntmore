@@ -1071,7 +1071,7 @@ export function DashboardPage() {
           {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
         </CardHeader>
         <CardContent className="p-4 space-y-2">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-wrap gap-x-4 gap-y-3">
             {metrics.map((m: any) => {
               // company_metrics.ts's percentage-type entries don't carry an
               // explicit unit (unlike the old hand-curated arrays here, which
@@ -1083,14 +1083,14 @@ export function DashboardPage() {
               const prev = tjVal(prevData, m.id)
               const high = tjLifetimeHighs[m.id]
               return (
-                <div key={m.id} className="space-y-1">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase whitespace-nowrap">{m.name}</p>
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-lg font-black">{gFmt(current, { unit })}</p>
+                <div key={m.id} className="text-center min-w-[64px]">
+                  <p className="text-[9px] font-black uppercase text-muted-foreground mb-1 whitespace-nowrap">{m.name}</p>
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-sm font-black">{gFmt(current, { unit })}</span>
                     <Delta current={current} previous={prev} unit={unit} />
                   </div>
                   {isExpanded && (
-                    <div className="flex items-center gap-1 text-[10px] text-gold font-bold pt-1 border-t border-border/30">
+                    <div className="flex items-center justify-center gap-1 text-[9px] text-gold font-bold mt-1 pt-1 border-t border-border/30">
                       <Trophy className="w-2.5 h-2.5" />
                       {high ? (
                         <span>
