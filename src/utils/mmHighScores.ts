@@ -1,10 +1,20 @@
 import { supabase } from '@/integrations/supabase/client'
+import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from '@/data/company_metrics'
 
 // The JSON columns in mm_weekly_data that hold {metricId: {value, target}} maps —
 // used to scan every week's history for each metric's all-time high. There's no
 // separate highscores table for MM's own metrics (unlike per-client metrics, which
 // use `high_scores`), so this is computed on the fly instead of stored.
 const MM_METRIC_COLUMNS = ['linkedin', 'instagram', 'website', 'quora', 'reddit', 'ads'] as const
+
+// A boolean field's Number(true)/Number(false) both pass the isNaN guard
+// below and would register a fake numeric "high" (e.g. Site Health Check's
+// Pass registering as a lifetime-high value of 1) — the same guard already
+// applied to aggregateChannelRows in DashboardPage.tsx.
+const MM_BOOLEAN_IDS = new Set(
+  [...MM_LINKEDIN_METRICS, ...MM_INSTAGRAM_METRICS, ...MM_WEBSITE_METRICS, ...MM_SEO_METRICS, ...MM_OTHER_METRICS, ...MM_ADS_METRICS]
+    .filter(m => m.type === 'boolean').map(m => m.id)
+)
 
 export type MMLifetimeHighs = Record<string, { value: number; week: string }>
 
@@ -20,6 +30,7 @@ export async function fetchMMLifetimeHighs(): Promise<MMLifetimeHighs> {
       const metrics = row[column] as Record<string, { value?: unknown }> | null
       if (!metrics) continue
       for (const [metricId, field] of Object.entries(metrics)) {
+        if (MM_BOOLEAN_IDS.has(metricId)) continue
         // Number('') is 0, not NaN — a cleared/blank field would otherwise
         // register as a real "0" high instead of being skipped as no data.
         if (field?.value === null || field?.value === undefined || field?.value === '') continue

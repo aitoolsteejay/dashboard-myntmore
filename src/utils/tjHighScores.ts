@@ -19,7 +19,13 @@ export type TJLifetimeHighs = Record<string, TJHighScoreEntry>
 export async function fetchTJLifetimeHighs(): Promise<TJLifetimeHighs> {
   const [{ data }, { data: customMetrics }] = await Promise.all([
     supabase.from('tj_weekly_data').select(`week_start, ${TJ_METRIC_COLUMNS.join(', ')}`),
-    supabase.from('tj_custom_metrics').select('metric_key, type').eq('archived', false),
+    // No `archived` filter here — this set decides how to correctly derive a
+    // HISTORICAL month's value (average vs sum), which must hold for every
+    // week that ever existed, not just currently-visible metrics. Excluding
+    // an archived percentage metric here would make its historical weeks
+    // silently sum instead of average, permanently corrupting its "Best
+    // Ever Month" into an impossible >100% value.
+    supabase.from('tj_custom_metrics').select('metric_key, type'),
   ])
   if (!data) return {}
 
