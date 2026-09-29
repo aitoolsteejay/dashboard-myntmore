@@ -122,22 +122,12 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
         ...prev[section],
         [id]: { ...(prev[section][id] || {}), [field]: value }
       }
-      if (section === 'linkedin' && field === 'value' && (id === 'MML10' || id === 'MML11' || id === 'MML01')) {
-        // Presence check (has either split field actually been entered?), not a
-        // truthy check — `0 || 0` is falsy and would wrongly fall back to a
-        // stale MML02, the same class of bug the ClientPortalPage/dashboard/
-        // export/mmHighScores versions of this exact fallback already avoid.
-        const inNetworkRaw = updatedSection.MML10?.value
-        const outOfNetworkRaw = updatedSection.MML11?.value
-        const hasSplit = (inNetworkRaw !== undefined && inNetworkRaw !== '') || (outOfNetworkRaw !== undefined && outOfNetworkRaw !== '')
-        const inNetwork = Number(inNetworkRaw || 0)
-        const outOfNetwork = Number(outOfNetworkRaw || 0)
-        const total = hasSplit ? inNetwork + outOfNetwork : Number(updatedSection.MML02?.value || 0)
-        updatedSection.MML02 = { ...(updatedSection.MML02 || {}), value: total }
+      if (section === 'linkedin' && field === 'value' && (id === 'MML02' || id === 'MML01')) {
         // MML12 ("Avg Impressions Per Post") is otherwise only ever computed
         // live at render time and never actually saved — persist it too so a
         // future reader that trusts the stored field (instead of recomputing,
         // the way every current reader carefully does) doesn't see a stale blank.
+        const total = Number(updatedSection.MML02?.value || 0)
         const posts = Number(updatedSection.MML01?.value || 0)
         const avg = posts > 0 ? Math.round((total / posts) * 100) / 100 : 0
         updatedSection.MML12 = { ...(updatedSection.MML12 || {}), value: avg }
@@ -159,22 +149,11 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
 
   const renderMetricCard = (section: string, metric: CompanyMetric) => {
     const data = formData[section][metric.id] || { value: '', target: '' }
-    const isLinkedInAuto = section === 'linkedin' && (metric.id === 'MML02' || metric.id === 'MML12')
-    // Presence check, not a truthy check — a real, entered "0" for both split
-    // fields must not fall back to a stale/legacy MML02 (see updateMetric's
-    // matching fix above for the full explanation).
-    const inNetworkRaw = formData.linkedin.MML10?.value
-    const outOfNetworkRaw = formData.linkedin.MML11?.value
-    const hasSplit = (inNetworkRaw !== undefined && inNetworkRaw !== '') || (outOfNetworkRaw !== undefined && outOfNetworkRaw !== '')
-    const inNetwork = Number(inNetworkRaw || 0)
-    const outOfNetwork = Number(outOfNetworkRaw || 0)
-    const storedTotal = Number(formData.linkedin.MML02?.value || 0)
-    const totalImpressions = hasSplit ? inNetwork + outOfNetwork : storedTotal
+    const isLinkedInAuto = section === 'linkedin' && metric.id === 'MML12'
+    const totalImpressions = Number(formData.linkedin.MML02?.value || 0)
     const posts = Number(formData.linkedin.MML01?.value || 0)
-    const autoValue = metric.id === 'MML02'
-      ? totalImpressions
-      : posts > 0 ? Math.round((totalImpressions / posts) * 100) / 100 : 0
-    
+    const autoValue = posts > 0 ? Math.round((totalImpressions / posts) * 100) / 100 : 0
+
     return (
       <Card key={metric.id} className="border-2 border-border/50">
         <CardContent className="p-4 space-y-3">

@@ -2175,8 +2175,6 @@ export function DashboardPage() {
                       <>
                         <MMContentRow title="LinkedIn Presence" icon={Linkedin} metrics={[
                             { id: 'MML01', name: 'Posts' },
-                            { id: 'MML10', name: 'In-Network Impressions' },
-                            { id: 'MML11', name: 'Out-of-Network Impressions' },
                             { id: 'MML02', name: 'Total Impressions' },
                             { id: 'MML12', name: 'Avg Impressions / Post' },
                             { id: 'MML03', name: 'Reactions' },

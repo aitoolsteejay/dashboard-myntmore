@@ -73,9 +73,13 @@ export const TJ_VIDEO_METRICS: CompanyMetric[] = [
 
 export const MM_LINKEDIN_METRICS: CompanyMetric[] = [
   { id: 'MML01', name: 'Posts Published', type: 'number', hasTarget: true },
-  { id: 'MML10', name: 'In-Network Impressions', type: 'number' },
-  { id: 'MML11', name: 'Out-of-Network Impressions', type: 'number' },
-  { id: 'MML02', name: 'Total Impressions', type: 'auto', hasTarget: true },
+  // MML10/MML11 (In-Network/Out-of-Network Impressions split) are retired —
+  // Total Impressions is now entered directly as one number. The ids stay
+  // reserved (never reused) since historical weekly_data rows still have
+  // them, and every reader (DashboardPage's aggregateMmLinkedInRows/
+  // withLinkedInImpressionTotals, export.ts, mmHighScores.ts) keeps its
+  // hasSplit fallback so that old data still totals correctly.
+  { id: 'MML02', name: 'Total Impressions', type: 'number', hasTarget: true },
   { id: 'MML12', name: 'Avg Impressions Per Post', type: 'auto' },
   { id: 'MML03', name: 'Reactions', type: 'number' },
   { id: 'MML04', name: 'Comments', type: 'number' },
