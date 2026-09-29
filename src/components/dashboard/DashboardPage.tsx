@@ -1071,7 +1071,7 @@ export function DashboardPage() {
           {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
         </CardHeader>
         <CardContent className="p-4 space-y-2">
-          <div className="grid grid-cols-1 gap-1">
+          <div className="grid grid-cols-2 gap-4">
             {metrics.map((m: any) => {
               // company_metrics.ts's percentage-type entries don't carry an
               // explicit unit (unlike the old hand-curated arrays here, which
@@ -1083,26 +1083,22 @@ export function DashboardPage() {
               const prev = tjVal(prevData, m.id)
               const high = tjLifetimeHighs[m.id]
               return (
-                <div key={m.id} className={cn("py-0.5", isExpanded && "border-b border-border/30 last:border-0 pb-1.5")}>
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-muted-foreground">{m.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">{gFmt(current, { unit })}</span>
-                      <Delta current={current} previous={prev} unit={unit} />
-                    </div>
+                <div key={m.id} className="space-y-1">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase whitespace-nowrap">{m.name}</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-lg font-black">{gFmt(current, { unit })}</p>
+                    <Delta current={current} previous={prev} unit={unit} />
                   </div>
                   {isExpanded && (
-                    <div className="flex justify-between items-center text-[10px] mt-0.5">
-                      <span className="flex items-center gap-1 text-gold font-bold">
-                        <Trophy className="w-2.5 h-2.5" /> Lifetime High
-                      </span>
+                    <div className="flex items-center gap-1 text-[10px] text-gold font-bold pt-1 border-t border-border/30">
+                      <Trophy className="w-2.5 h-2.5" />
                       {high ? (
-                        <span className="font-bold text-gold">
+                        <span>
                           {gFmt(high.value, { unit })}
                           <span className="opacity-60 font-normal ml-1">· {formatWeekDate(high.week)}</span>
                         </span>
                       ) : (
-                        <span className="text-muted-foreground italic">No data yet</span>
+                        <span className="text-muted-foreground italic font-normal">No data yet</span>
                       )}
                     </div>
                   )}
