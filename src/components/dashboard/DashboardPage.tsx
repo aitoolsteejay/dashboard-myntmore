@@ -17,6 +17,7 @@ import { CampaignMonthTable } from "../monday/CampaignMonthTable"
 import { EditCampaignModal } from "../monday/EditCampaignModal"
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from "@/data/metrics"
 import { customMetricToMetric } from "@/hooks/useEffectiveMetrics"
+import { MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from "@/data/company_metrics"
 import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
 import { findTarget } from "@/utils/targets"
 import { RATE_DEPENDENCIES, computeVolumeWeightedRate } from "@/utils/rateAggregation"
@@ -136,7 +137,6 @@ export function DashboardPage() {
   const [tjPrev, setTjPrev] = useState<TjWeeklyData | null>(null)
   const [tjLifetimeHighs, setTjLifetimeHighs] = useState<TJLifetimeHighs>({})
   const effectiveTjMetrics = useEffectiveTjMetrics()
-  const [expandedTJCards, setExpandedTJCards] = useState<Set<string>>(new Set())
   const [mmLifetimeHighs, setMmLifetimeHighs] = useState<MMLifetimeHighs>({})
   const [expandedMMRows, setExpandedMMRows] = useState<Set<string>>(new Set())
   const [salesData, setSalesData] = useState<SalesWeeklyData | null>(null)
@@ -943,9 +943,16 @@ export function DashboardPage() {
     )
   }
 
-  // Aggregate rows for monthly view: sum all numeric metric values across weeks
-  const aggregateChannelRows = (rows: any[], channel: string) => {
+  // Aggregate rows for monthly view: sum all numeric metric values across
+  // weeks — except a percentage-type metric (e.g. TJ's Delivery Rate, MM's
+  // Google Ads CTR/Bounce Rate), which is a per-week rate and must be
+  // averaged across the contributing weeks instead, or a month's MTD value
+  // reads as an impossible 300%+. `metrics` is optional so existing callers
+  // that don't pass one keep their previous (sum-only) behavior.
+  const aggregateChannelRows = (rows: any[], channel: string, metrics: any[] = []) => {
     const out: Record<string, number> = {}
+    const counts: Record<string, number> = {}
+    const percentageIds = new Set(metrics.filter(m => m.type === 'percentage').map(m => m.id))
     for (const row of rows) {
       const ch = row[channel]
       if (!ch) continue
@@ -953,9 +960,15 @@ export function DashboardPage() {
         const n = typeof v === 'object' && v !== null && 'value' in (v as any)
           ? Number((v as any).value)
           : Number(v)
-        if (!isNaN(n)) out[k] = (out[k] ?? 0) + n
+        if (!isNaN(n)) {
+          out[k] = (out[k] ?? 0) + n
+          counts[k] = (counts[k] ?? 0) + 1
+        }
       }
     }
+    percentageIds.forEach(id => {
+      if (counts[id] > 0) out[id] /= counts[id]
+    })
     return out
   }
 
@@ -983,11 +996,17 @@ export function DashboardPage() {
   const mtdTjRows = monthTjRows.filter(r => r.week_start <= displayWeek)
   const mtdSalesRows = monthSalesRows.filter(r => r.week_start <= displayWeek)
 
+  // TJ's own targets are stored in the same `targets` table as per-client
+  // ones, just with client_id NULL — the unfiltered fetch above already
+  // includes them, so no separate query is needed here.
+  const tjTargets = targets.filter(t => t.client_id === null)
+  const tjMonthlyTargets = monthlyTargets.filter(t => t.client_id === null)
+
   const monthTjAgg = {
-    instagram: aggregateChannelRows(mtdTjRows, 'instagram'),
-    youtube: aggregateChannelRows(mtdTjRows, 'youtube'),
-    newsletter: aggregateChannelRows(mtdTjRows, 'email_newsletter'),
-    video_pipeline: aggregateChannelRows(mtdTjRows, 'video_pipeline'),
+    instagram: aggregateChannelRows(mtdTjRows, 'instagram', effectiveTjMetrics.instagram),
+    youtube: aggregateChannelRows(mtdTjRows, 'youtube', effectiveTjMetrics.youtube),
+    newsletter: aggregateChannelRows(mtdTjRows, 'email_newsletter', effectiveTjMetrics.newsletter),
+    video_pipeline: aggregateChannelRows(mtdTjRows, 'video_pipeline', effectiveTjMetrics.video),
   }
 
   const monthSalesAgg = {
@@ -1033,11 +1052,11 @@ export function DashboardPage() {
 
   const monthMmAgg = {
     linkedin: aggregateMmLinkedInRows(mtdMmRows),
-    instagram: aggregateChannelRows(mtdMmRows, 'instagram'),
-    website: aggregateChannelRows(mtdMmRows, 'website'),
-    quora: aggregateChannelRows(mtdMmRows, 'quora'),
-    reddit: aggregateChannelRows(mtdMmRows, 'reddit'),
-    ads: aggregateChannelRows(mtdMmRows, 'ads'),
+    instagram: aggregateChannelRows(mtdMmRows, 'instagram', MM_INSTAGRAM_METRICS),
+    website: aggregateChannelRows(mtdMmRows, 'website', MM_WEBSITE_METRICS),
+    quora: aggregateChannelRows(mtdMmRows, 'quora', MM_OTHER_METRICS),
+    reddit: aggregateChannelRows(mtdMmRows, 'reddit', MM_OTHER_METRICS),
+    ads: aggregateChannelRows(mtdMmRows, 'ads', MM_ADS_METRICS),
   }
 
   const withLinkedInImpressionTotals = (data: any) => {
@@ -1051,63 +1070,196 @@ export function DashboardPage() {
     return { ...data, MML02: total, MML12: average }
   }
 
-  const TJChannelCard = ({ title, icon: Icon, metrics, currentData, prevData }: { title: string, icon: any, metrics: any[], currentData: any, prevData: any }) => {
-    const isExpanded = expandedTJCards.has(title)
-    const toggle = () => {
-      const next = new Set(expandedTJCards)
-      next.has(title) ? next.delete(title) : next.add(title)
-      setExpandedTJCards(next)
-    }
+  // Same "this month so far vs monthly target" progress card used for
+  // client Content/Lead Gen metrics, generalized to any metric with
+  // hasTarget rather than a hardcoded id list (TJ's channels don't share a
+  // fixed curated set the way clients' C01/C03/C09/L10 do).
+  const TJGoalCards = ({ metrics, tjMonthlyTargets, tjMtdTotals }: { metrics: any[], tjMonthlyTargets: any[], tjMtdTotals: Record<string, number> }) => {
+    const rows = metrics
+      .filter(m => m.hasTarget)
+      .map(m => {
+        const target = findTarget(tjMonthlyTargets, m.id, displayWeek.slice(0, 7))
+        const targetNum = target !== null ? Number(target) : null
+        const mtdVal = tjMtdTotals[m.id] ?? null
+        const remaining = targetNum !== null && mtdVal !== null ? Math.max(targetNum - mtdVal, 0) : null
+        const pct = targetNum !== null && mtdVal !== null
+          ? (targetNum > 0 ? Math.min(Math.round((mtdVal / targetNum) * 100), 100) : 100)
+          : null
+        return { m, mtdVal, targetNum, remaining, pct }
+      })
+      .filter(r => r.targetNum !== null)
+
+    if (rows.length === 0) return null
 
     return (
-      <Card className="border shadow-sm bg-card h-full">
-        <CardHeader
-          className="py-3 border-b bg-muted/20 flex-row items-center justify-between cursor-pointer select-none"
-          onClick={toggle}
-        >
-          <CardTitle className="text-sm font-black flex items-center gap-2 uppercase tracking-wider">
-            <Icon className="w-4 h-4 text-gold" /> {title}
-          </CardTitle>
-          {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-        </CardHeader>
-        <CardContent className="p-4 space-y-2">
-          <div className="flex flex-wrap gap-x-4 gap-y-3">
-            {metrics.map((m: any) => {
-              // company_metrics.ts's percentage-type entries don't carry an
-              // explicit unit (unlike the old hand-curated arrays here, which
-              // set unit: '%' per field) — derive it from type so the % sign
-              // isn't silently lost for TJP09-13 and any future percentage
-              // custom metric.
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        {rows.map(({ m, mtdVal, targetNum, remaining, pct }) => {
+          const unit = m.unit ?? (m.type === 'percentage' ? '%' : undefined)
+          return (
+            <div key={m.id} className="rounded-lg border p-3 bg-muted/20">
+              <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground mb-1.5">{m.name}</p>
+              <div className="flex items-baseline gap-1 mb-1.5">
+                <span className="text-lg font-black">{gFmt(mtdVal, { unit })}</span>
+                <span className="text-xs text-muted-foreground">/ {gFmt(targetNum, { unit })} this month</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1.5">
+                <div
+                  className={cn(
+                    "h-full rounded-full",
+                    mtdVal === null ? "bg-muted-foreground/30"
+                      : (pct ?? 0) >= 100 ? "bg-green-500"
+                      : (pct ?? 0) >= 50 ? "bg-amber-500"
+                      : "bg-red-500"
+                  )}
+                  style={{ width: `${mtdVal === null ? 0 : (pct ?? 0)}%` }}
+                />
+              </div>
+              <p className="text-[11px] font-semibold">
+                {mtdVal === null
+                  ? <span className="text-muted-foreground">No data yet this month</span>
+                  : remaining !== null && remaining > 0
+                    ? <span className="text-orange-600">{gFmt(remaining, { unit })} more needed this month</span>
+                    : <span className="text-green-600">Target hit this month ✓</span>}
+              </p>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // Same columns/ACH%-coloring/Freeze behavior as the per-client MetricTable,
+  // adapted for TJ's differently-shaped data (tj_weekly_data channels, not
+  // weekly_data content/leadgen; tjVal not buildWeekMetrics; tjLifetimeHighs
+  // for both Best Ever Week and Best Ever Month instead of a high_scores row).
+  const TJMetricTable = ({
+    metrics,
+    currentData,
+    prevData,
+    tjTargets,
+    tjMonthlyTargets,
+    tjMtdTotals,
+  }: {
+    metrics: any[]
+    currentData: any
+    prevData: any
+    tjTargets: any[]
+    tjMonthlyTargets: any[]
+    tjMtdTotals: Record<string, number>
+  }) => {
+    const [stickyHeader, setStickyHeader] = React.useState(false)
+    return (
+      <div>
+        <div className="flex items-center gap-3 px-1 py-1.5 text-[10px] font-semibold text-muted-foreground border-b mb-1">
+          <span className="uppercase tracking-wide">Ach% key:</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-100 border border-green-400"></span><span className="text-green-700">≥100% On target</span></span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-yellow-100 border border-yellow-400"></span><span className="text-yellow-700">75–99% Close</span></span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-orange-100 border border-orange-400"></span><span className="text-orange-600">50–74% Below</span></span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-400"></span><span className="text-red-600">&lt;50% Off track</span></span>
+          <span className="flex items-center gap-1 ml-2"><span className="text-yellow-500">★</span><span>New high</span></span>
+          <span className="flex items-center gap-1"><span style={{ color: '#B8860B' }} className="font-bold">■</span><span style={{ color: '#B8860B' }}>Best ever</span></span>
+          <button
+            onClick={() => setStickyHeader(h => !h)}
+            className={`ml-auto flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border transition-colors ${stickyHeader ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:border-primary hover:text-primary'}`}
+          >
+            {stickyHeader ? '📌 Unfreeze' : '📌 Freeze'}
+          </button>
+        </div>
+        <Table wrapperClassName={stickyHeader ? "max-h-[70vh]" : undefined}>
+          <TableHeader className={`bg-muted/30${stickyHeader ? ' sticky top-0 z-10' : ''}`}>
+            <TableRow>
+              <TableHead className="text-[10px] font-black uppercase">Metric Name</TableHead>
+              <TableHead className="text-[10px] font-black uppercase text-center">Current Week</TableHead>
+              <TableHead className="text-[10px] font-black uppercase text-center">Previous Week</TableHead>
+              <TableHead className="text-[10px] font-black uppercase text-center">Weekly Target Status</TableHead>
+              <TableHead className="text-[10px] font-black uppercase text-center text-blue-600">Monthly Target Status</TableHead>
+              <TableHead className="text-[10px] font-black uppercase text-center text-amber-600">Best Ever Week</TableHead>
+              <TableHead className="text-[10px] font-black uppercase text-center text-amber-600">Best Ever Month</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {metrics.map(m => {
               const unit = m.unit ?? (m.type === 'percentage' ? '%' : undefined)
               const current = tjVal(currentData, m.id)
               const prev = tjVal(prevData, m.id)
-              const high = tjLifetimeHighs[m.id]
+              const target = findTarget(tjTargets, m.id, displayWeek)
+              const monthlyTarget = findTarget(tjMonthlyTargets, m.id, displayWeek.slice(0, 7))
+              const hs = tjLifetimeHighs[m.id]
+              const bestEver = hs?.value ?? null
+              const bestEverMonth = hs?.monthValue ?? null
+              const isNewHigh = current !== null && current > 0 && bestEver !== null && current > bestEver
+
+              let achNum: number | null = null
+              if (target && current !== null) achNum = Math.round((current / Number(target)) * 100)
+              const ach = target !== null ? gFmt(target, { unit }) : '-'
+
+              const achColor = (n: number | null) => n === null ? ''
+                : n >= 100 ? 'text-green-600'
+                : n >= 75  ? 'text-yellow-600'
+                : n >= 50  ? 'text-orange-500'
+                : 'text-red-600'
+              const achBg = (n: number | null) => n === null ? ''
+                : n >= 100 ? 'bg-green-50'
+                : n >= 75  ? 'bg-yellow-50'
+                : n >= 50  ? 'bg-orange-50'
+                : 'bg-red-50'
+
+              const mtdVal = tjMtdTotals[m.id] ?? null
+              let moAchNum: number | null = null
+              if (monthlyTarget && mtdVal !== null) moAchNum = Math.round((mtdVal / Number(monthlyTarget)) * 100)
+              const moAch = monthlyTarget !== null ? gFmt(monthlyTarget, { unit }) : '-'
+
               return (
-                <div key={m.id} className="text-center min-w-[64px]">
-                  <p className="text-[9px] font-black uppercase text-muted-foreground mb-1 whitespace-nowrap">{m.name}</p>
-                  <div className="flex items-center justify-center gap-1">
-                    <span className="text-sm font-black">{gFmt(current, { unit })}</span>
-                    <Delta current={current} previous={prev} unit={unit} />
-                  </div>
-                  {isExpanded && (
-                    <div className="flex items-center justify-center gap-1 text-[9px] text-gold font-bold mt-1 pt-1 border-t border-border/30">
-                      <Trophy className="w-2.5 h-2.5" />
-                      {high ? (
-                        <span>
-                          {gFmt(high.value, { unit })}
-                          <span className="opacity-60 font-normal ml-1">· {formatWeekDate(high.week)}</span>
+                <TableRow key={m.id} className="h-8">
+                  <TableCell className="py-1 text-xs font-medium">{m.name}</TableCell>
+                  {m.type === 'textarea' ? (
+                    <TableCell colSpan={6} className="py-1 text-left">
+                      <span className="text-xs text-muted-foreground">{current ? String(current) : '-'}</span>
+                    </TableCell>
+                  ) : (
+                    <>
+                      <TableCell className="py-1 text-center text-xs font-bold">
+                        <span className="inline-flex items-center gap-1 justify-center">
+                          {isNewHigh && <span title="New high score!" className="text-yellow-500 text-sm leading-none">★</span>}
+                          {gFmt(current, { unit })}
                         </span>
-                      ) : (
-                        <span className="text-muted-foreground italic font-normal">No data yet</span>
-                      )}
-                    </div>
+                      </TableCell>
+                      <TableCell className="py-1 text-center text-xs text-muted-foreground">
+                        {gFmt(prev, { unit })}
+                      </TableCell>
+                      <TableCell
+                        className={cn("py-1 text-center text-xs font-black rounded", achColor(achNum), achBg(achNum))}
+                        title={target !== null ? `Target: ${gFmt(target, { unit })}` : undefined}
+                      >
+                        {ach}
+                      </TableCell>
+                      <TableCell
+                        className={cn("py-1 text-center text-xs font-black rounded", achColor(moAchNum), achBg(moAchNum))}
+                        title={mtdVal !== null && monthlyTarget ? `MTD: ${gFmt(mtdVal, { unit })} / ${gFmt(monthlyTarget, { unit })}` : undefined}
+                      >
+                        {moAch}
+                      </TableCell>
+                      <TableCell
+                        className="py-1 text-center text-xs font-bold cursor-help"
+                        style={{ color: bestEver !== null ? '#B8860B' : undefined }}
+                        title={hs?.week ? `Achieved: w/c ${formatWeekDate(hs.week)}` : undefined}
+                      >
+                        {bestEver !== null ? gFmt(bestEver, { unit }) : '-'}
+                      </TableCell>
+                      <TableCell
+                        className="py-1 text-center text-xs font-bold text-amber-600 cursor-help"
+                        title={hs?.month ? `Achieved: ${new Date(hs.month + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })}` : undefined}
+                      >
+                        {bestEverMonth !== null ? gFmt(bestEverMonth, { unit }) : '-'}
+                      </TableCell>
+                    </>
                   )}
-                </div>
+                </TableRow>
               )
             })}
-          </div>
-        </CardContent>
-      </Card>
+          </TableBody>
+        </Table>
+      </div>
     )
   }
 
@@ -2003,47 +2155,43 @@ export function DashboardPage() {
               <div className="space-y-4">
                 <SectionHeader title={`TJ Personal Brand${isMonthlyView ? ' (Month to Date)' : ''}`} id="tj" icon={Star} />
                 {!collapsedSections.has('tj') && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                    {(isMonthlyView ? monthTjRows.length > 0 : !!tjData) ? (
-                      <>
-                        <TJChannelCard
-                          title="Instagram"
-                          icon={Instagram}
-                          metrics={effectiveTjMetrics.instagram.filter(m => m.type !== 'textarea')}
-                          currentData={isMonthlyView ? monthTjAgg.instagram : tjData?.instagram}
-                          prevData={isMonthlyView ? null : tjPrev?.instagram}
-                        />
-                        <TJChannelCard
-                          title="YouTube"
-                          icon={Youtube}
-                          metrics={effectiveTjMetrics.youtube.filter(m => m.type !== 'textarea')}
-                          currentData={isMonthlyView ? monthTjAgg.youtube : tjData?.youtube}
-                          prevData={isMonthlyView ? null : tjPrev?.youtube}
-                        />
-                        <TJChannelCard
-                          title="Newsletter"
-                          icon={Mail}
-                          metrics={effectiveTjMetrics.newsletter.filter(m => m.type !== 'textarea')}
-                          currentData={isMonthlyView ? monthTjAgg.newsletter : tjData?.email_newsletter}
-                          prevData={isMonthlyView ? null : tjPrev?.email_newsletter}
-                        />
-                        <TJChannelCard
-                          title="Video Pipeline"
-                          icon={Mic}
-                          metrics={effectiveTjMetrics.video.filter(m => m.type !== 'textarea')}
-                          currentData={isMonthlyView ? monthTjAgg.video_pipeline : tjData?.video_pipeline}
-                          prevData={isMonthlyView ? null : tjPrev?.video_pipeline}
-                        />
-                      </>
-                    ) : (
-                      <Card className="col-span-full border border-dashed py-10 flex flex-col items-center justify-center bg-muted/5">
-                        <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">No data submitted for this week</p>
-                        <Button asChild variant="link" className="text-gold font-bold mt-2">
-                          <Link to="/tj-personal-brand">Go to TJ Brand Entry →</Link>
-                        </Button>
-                      </Card>
-                    )}
-                  </div>
+                  (isMonthlyView ? monthTjRows.length > 0 : !!tjData) ? (
+                    <div className="grid grid-cols-1 gap-8">
+                      {[
+                        { title: 'Instagram', icon: Instagram, metrics: effectiveTjMetrics.instagram, current: isMonthlyView ? monthTjAgg.instagram : tjData?.instagram, prev: isMonthlyView ? null : tjPrev?.instagram, mtd: monthTjAgg.instagram },
+                        { title: 'YouTube', icon: Youtube, metrics: effectiveTjMetrics.youtube, current: isMonthlyView ? monthTjAgg.youtube : tjData?.youtube, prev: isMonthlyView ? null : tjPrev?.youtube, mtd: monthTjAgg.youtube },
+                        { title: 'Newsletter', icon: Mail, metrics: effectiveTjMetrics.newsletter, current: isMonthlyView ? monthTjAgg.newsletter : tjData?.email_newsletter, prev: isMonthlyView ? null : tjPrev?.email_newsletter, mtd: monthTjAgg.newsletter },
+                        { title: 'Video Pipeline', icon: Mic, metrics: effectiveTjMetrics.video, current: isMonthlyView ? monthTjAgg.video_pipeline : tjData?.video_pipeline, prev: isMonthlyView ? null : tjPrev?.video_pipeline, mtd: monthTjAgg.video_pipeline },
+                      ].map(channel => (
+                        <div key={channel.title} className="space-y-4">
+                          <div className="flex items-center gap-2 pb-2 border-b border-muted sticky top-0 bg-background z-20">
+                            <channel.icon className="w-4 h-4 text-gold" />
+                            <h4 className="text-xs font-black uppercase tracking-widest">{channel.title}</h4>
+                          </div>
+                          <TJGoalCards
+                            metrics={channel.metrics.filter(m => m.type !== 'textarea')}
+                            tjMonthlyTargets={tjMonthlyTargets}
+                            tjMtdTotals={channel.mtd}
+                          />
+                          <TJMetricTable
+                            metrics={channel.metrics.filter(m => m.type !== 'textarea')}
+                            currentData={channel.current}
+                            prevData={channel.prev}
+                            tjTargets={tjTargets}
+                            tjMonthlyTargets={tjMonthlyTargets}
+                            tjMtdTotals={channel.mtd}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <Card className="border border-dashed py-10 flex flex-col items-center justify-center bg-muted/5">
+                      <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">No data submitted for this week</p>
+                      <Button asChild variant="link" className="text-gold font-bold mt-2">
+                        <Link to="/tj-personal-brand">Go to TJ Brand Entry →</Link>
+                      </Button>
+                    </Card>
+                  )
                 )}
               </div>
 

@@ -147,6 +147,13 @@ export function SettingsTargetsPage() {
     () => TJ_TARGET_GROUPS.flatMap(group => group.metrics.map(metric => metric.id)),
     [TJ_TARGET_GROUPS]
   )
+  // A percentage-type TJ metric (standard or custom) must be averaged across
+  // a month's weeks, not summed — same principle as the per-client MTD
+  // aggregation a few lines below, just for TJ's own metric set.
+  const tjPercentageIds = useMemo(
+    () => new Set(TJ_TARGET_GROUPS.flatMap(group => group.metrics).filter(m => m.type === 'percentage').map(m => m.id)),
+    [TJ_TARGET_GROUPS]
+  )
 
   const period = targetType === 'weekly' ? selectedWeekStart : selectedMonth
   const monthOptions = useMemo(() => getMonthOptions(6), [])
@@ -392,13 +399,13 @@ export function SettingsTargetsPage() {
     }
   }
 
-  const loadTjTargets = async (weekStart: string) => {
+  const loadTjTargets = async (type: 'weekly' | 'monthly', p: string) => {
     const { data } = await supabase
       .from('targets')
       .select('metric_id, target_value')
       .is('client_id', null)
-      .eq('target_type', 'weekly')
-      .eq('period', weekStart)
+      .eq('target_type', type)
+      .eq('period', p)
       .in('metric_id', TJ_TARGET_METRIC_IDS)
 
     const map: Record<string, number> = {}
@@ -408,58 +415,81 @@ export function SettingsTargetsPage() {
     setTjTargetValues(map)
   }
 
-  const loadTjActuals = async (weekStart: string) => {
+  // Monday week-starts that begin inside the month, mirroring loadMTDActuals'
+  // month-to-weeks expansion below (kept UTC throughout for the same reason:
+  // a local-Date/getDay+toISOString mix lands on the wrong weekday in IST).
+  const weeksInMonth = (p: string): string[] => {
+    const [year, month] = p.split('-').map(Number)
+    const end = new Date(Date.UTC(year, month, 0))
+    const d = new Date(Date.UTC(year, month - 1, 1))
+    while (d.getUTCDay() !== 1) d.setUTCDate(d.getUTCDate() + 1)
+    const weeks: string[] = []
+    while (d <= end) {
+      weeks.push(d.toISOString().split('T')[0])
+      d.setUTCDate(d.getUTCDate() + 7)
+    }
+    return weeks
+  }
+
+  const loadTjActuals = async (type: 'weekly' | 'monthly', p: string) => {
+    const weekStarts = type === 'monthly' ? weeksInMonth(p) : [p]
     const { data } = await supabase
       .from('tj_weekly_data')
       .select('instagram, youtube, email_newsletter, video_pipeline')
-      .eq('week_start', weekStart)
-      .maybeSingle()
+      .in('week_start', weekStarts)
 
-    if (!data) {
-      setTjActuals({})
-      return
-    }
+    const sums: Record<string, number> = {}
+    const counts: Record<string, number> = {}
+    data?.forEach(row => {
+      const sources = [
+        row.instagram,
+        row.youtube,
+        row.email_newsletter,
+        row.video_pipeline,
+      ] as Array<Record<string, any> | null>
 
-    const sources = [
-      data.instagram,
-      data.youtube,
-      data.email_newsletter,
-      data.video_pipeline,
-    ] as Array<Record<string, any> | null>
+      TJ_TARGET_METRIC_IDS.forEach(metricId => {
+        const entry = sources
+          .map(source => source?.[metricId])
+          .find(value => value !== null && value !== undefined)
+        const rawValue = typeof entry === 'object' && entry !== null ? entry.value : entry
+        if (rawValue !== null && rawValue !== undefined && !isNaN(Number(rawValue))) {
+          sums[metricId] = (sums[metricId] ?? 0) + Number(rawValue)
+          counts[metricId] = (counts[metricId] ?? 0) + 1
+        }
+      })
+    })
+
     const actuals: Record<string, number> = {}
-
     TJ_TARGET_METRIC_IDS.forEach(metricId => {
-      const entry = sources
-        .map(source => source?.[metricId])
-        .find(value => value !== null && value !== undefined)
-      const rawValue = typeof entry === 'object' && entry !== null ? entry.value : entry
-      if (rawValue !== null && rawValue !== undefined && !isNaN(Number(rawValue))) {
-        actuals[metricId] = Number(rawValue)
-      }
+      if (sums[metricId] === undefined) return
+      actuals[metricId] = tjPercentageIds.has(metricId) ? sums[metricId] / counts[metricId] : sums[metricId]
     })
     setTjActuals(actuals)
   }
 
   useEffect(() => {
     if (activeSection !== 'tj') return
-    loadTjTargets(selectedWeekStart)
-    loadTjActuals(selectedWeekStart)
+    const tjPeriod = targetType === 'weekly' ? selectedWeekStart : selectedMonth
+    loadTjTargets(targetType, tjPeriod)
+    loadTjActuals(targetType, tjPeriod)
     // TJ_TARGET_METRIC_IDS starts as the static catalog and is replaced once
     // useEffectiveTjMetrics' async fetch resolves. Without it as a
     // dependency, opening the TJ tab before that fetch resolves loaded
     // targets/actuals filtered to the stale id list, silently omitting any
     // custom TJ metric until the week or tab was changed again.
-  }, [activeSection, selectedWeekStart, TJ_TARGET_METRIC_IDS])
+  }, [activeSection, targetType, selectedWeekStart, selectedMonth, TJ_TARGET_METRIC_IDS])
 
   const saveTjTargets = async () => {
     setTjSaving(true)
     try {
+      const tjPeriod = targetType === 'weekly' ? selectedWeekStart : selectedMonth
       const { error: deleteError } = await supabase
         .from('targets')
         .delete()
         .is('client_id', null)
-        .eq('target_type', 'weekly')
-        .eq('period', selectedWeekStart)
+        .eq('target_type', targetType)
+        .eq('period', tjPeriod)
         .in('metric_id', TJ_TARGET_METRIC_IDS)
       if (deleteError) throw deleteError
 
@@ -469,8 +499,8 @@ export function SettingsTargetsPage() {
         .map(([metricId, targetValue]) => ({
           client_id: null as string | null,
           metric_id: metricId,
-          target_type: 'weekly',
-          period: selectedWeekStart,
+          target_type: targetType,
+          period: tjPeriod,
           target_value: Number(targetValue),
         }))
 
@@ -593,17 +623,34 @@ export function SettingsTargetsPage() {
         <div className="space-y-6">
           <Card className="p-6 bg-muted/20 border-none shadow-none">
             <div className="flex flex-col md:flex-row gap-4 items-end">
+              <Tabs value={targetType} onValueChange={(v: any) => setTargetType(v)}>
+                <TabsList>
+                  <TabsTrigger value="weekly">Weekly</TabsTrigger>
+                  <TabsTrigger value="monthly">Monthly</TabsTrigger>
+                </TabsList>
+              </Tabs>
               <div className="space-y-2 min-w-[260px]">
-                <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Week</Label>
-                <Select value={selectedWeekStart} onValueChange={setSelectedWeekStart}>
-                  <SelectTrigger className="bg-background font-bold h-11"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {weekOptions.map(week => <SelectItem key={week.weekStart} value={week.weekStart}>{week.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+                  {targetType === 'weekly' ? 'Week' : 'Month'}
+                </Label>
+                {targetType === 'weekly' ? (
+                  <Select value={selectedWeekStart} onValueChange={setSelectedWeekStart}>
+                    <SelectTrigger className="bg-background font-bold h-11"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {weekOptions.map(week => <SelectItem key={week.weekStart} value={week.weekStart}>{week.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                    <SelectTrigger className="bg-background font-bold h-11"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {monthOptions.map(month => <SelectItem key={month.period} value={month.period}>{month.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <p className="text-xs text-muted-foreground pb-2">
-                Weekly targets and actuals for TJ's Instagram and YouTube channels.
+                {targetType === 'weekly' ? 'Weekly' : 'Monthly'} targets and actuals for TJ's Instagram, YouTube, Newsletter and Video Pipeline channels.
               </p>
             </div>
           </Card>
@@ -613,8 +660,12 @@ export function SettingsTargetsPage() {
               <thead>
                 <tr style={{ background: '#FFC947' }}>
                   <th style={{ padding: '12px 10px', textAlign: 'left', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>Metric</th>
-                  <th style={{ padding: '12px 10px', textAlign: 'right', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>This Week Target</th>
-                  <th style={{ padding: '12px 10px', textAlign: 'right', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>This Week Actual</th>
+                  <th style={{ padding: '12px 10px', textAlign: 'right', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    {targetType === 'weekly' ? 'This Week Target' : 'This Month Target'}
+                  </th>
+                  <th style={{ padding: '12px 10px', textAlign: 'right', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    {targetType === 'weekly' ? 'This Week Actual' : 'MTD Actual'}
+                  </th>
                   <th style={{ padding: '12px 10px', textAlign: 'right', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>Ach%</th>
                 </tr>
               </thead>
