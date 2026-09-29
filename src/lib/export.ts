@@ -3,7 +3,7 @@ import writeExcelFile from 'write-excel-file/browser'
 import { CONTENT_METRICS, LEADGEN_METRICS } from "@/data/metrics"
 import {
   TJ_INSTAGRAM_METRICS, TJ_YOUTUBE_METRICS, TJ_PODCAST_METRICS, TJ_VIDEO_METRICS,
-  MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_OTHER_METRICS,
+  MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS,
 } from "@/data/company_metrics"
 import { readNum, readText, readBool } from "@/utils/readMetric"
 import { buildWeekMetrics } from "@/utils/metricCalculations"
@@ -207,6 +207,7 @@ function buildMmSheet(rows: any[]) {
       base['[LI] Avg Impressions Per Post'] = mmPosts > 0 ? Math.round((mmTotal / mmPosts) * 100) / 100 : ''
       for (const m of MM_INSTAGRAM_METRICS)  base[`[IG] ${m.name}`]  = readField(ig, m.id)
       for (const m of MM_WEBSITE_METRICS)    base[`[Web] ${m.name}`] = readField(web, m.id)
+      for (const m of MM_SEO_METRICS)        base[`[SEO] ${m.name}`] = readField(web, m.id)
       for (const m of MM_OTHER_METRICS) {
         const isMedium = m.id === 'MMO06'
         const isQuora = m.id === 'MMO01'

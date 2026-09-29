@@ -9,9 +9,10 @@
 export interface CompanyMetric {
   id: string
   name: string
-  type: 'number' | 'percentage' | 'textarea' | 'auto'
+  type: 'number' | 'percentage' | 'textarea' | 'auto' | 'boolean'
   unit?: string
   hasTarget?: boolean
+  hasNote?: boolean
 }
 
 // --- TJ PERSONAL BRAND ---
@@ -110,6 +111,28 @@ export const MM_WEBSITE_METRICS: CompanyMetric[] = [
   { id: 'MMW04', name: 'Bounce Rate', type: 'percentage' },
   { id: 'MMW05', name: 'Blogs Published', type: 'number', hasTarget: true },
   { id: 'MMW06', name: 'Blog Traffic', type: 'number' },
+]
+
+// SEO — a separate section within the Website tab (same 'website' jsonb
+// column in mm_weekly_data as MM_WEBSITE_METRICS, just its own id prefix and
+// its own labeled group in the UI, so no schema change is needed for it).
+export const MM_SEO_METRICS: CompanyMetric[] = [
+  { id: 'MMS01', name: 'Organic Leads', type: 'number' },
+  { id: 'MMS02', name: 'Non-Brand Clicks', type: 'number' },
+  { id: 'MMS03', name: 'Non-Brand Impressions', type: 'number' },
+  { id: 'MMS04', name: 'Queries Ranking in Top 10', type: 'number' },
+  // "out of 8" / "out of 5" (MMS05, MMS10 below) are modeled as a plain
+  // number with hasTarget — the app's existing target system already shows
+  // "actual / target" everywhere, so the admin just sets the target to 8
+  // (or 5) in Settings > Targets rather than this needing a hardcoded
+  // denominator field of its own.
+  { id: 'MMS05', name: 'City Pages on Page 1', type: 'number', hasTarget: true },
+  { id: 'MMS06', name: 'Indexed Pages', type: 'number' },
+  { id: 'MMS07', name: 'Submitted Pages', type: 'number' },
+  { id: 'MMS08', name: 'Site Health Check', type: 'boolean', hasNote: true },
+  { id: 'MMS09', name: 'Schema Coverage', type: 'percentage' },
+  { id: 'MMS10', name: 'AI Referral Sessions', type: 'number' },
+  { id: 'MMS11', name: 'AI Citation Rate', type: 'number', hasTarget: true },
 ]
 
 export const MM_OTHER_METRICS: CompanyMetric[] = [

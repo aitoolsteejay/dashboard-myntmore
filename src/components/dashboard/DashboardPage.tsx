@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { AlertCircle, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Users, Target, Activity, Instagram, Youtube, Mail, Mic, ArrowRight, LayoutDashboard, Send, Handshake, IndianRupee, FileText, Star, Globe, Linkedin, ChevronDown, ChevronUp, MessageSquare, Trophy } from "lucide-react"
+import { AlertCircle, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Users, Target, Activity, Instagram, Youtube, Mail, Mic, ArrowRight, LayoutDashboard, Send, Handshake, IndianRupee, FileText, Star, Globe, Linkedin, ChevronDown, ChevronUp, MessageSquare, Trophy, Search } from "lucide-react"
 // Removed lib/notifications import
 import { Gift, Cake, Calendar, Bell, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -17,7 +17,7 @@ import { CampaignMonthTable } from "../monday/CampaignMonthTable"
 import { EditCampaignModal } from "../monday/EditCampaignModal"
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from "@/data/metrics"
 import { customMetricToMetric } from "@/hooks/useEffectiveMetrics"
-import { MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from "@/data/company_metrics"
+import { MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from "@/data/company_metrics"
 import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
 import { findTarget } from "@/utils/targets"
 import { RATE_DEPENDENCIES, computeVolumeWeightedRate } from "@/utils/rateAggregation"
@@ -953,10 +953,15 @@ export function DashboardPage() {
     const out: Record<string, number> = {}
     const counts: Record<string, number> = {}
     const percentageIds = new Set(metrics.filter(m => m.type === 'percentage').map(m => m.id))
+    // A boolean field's Number(true)/Number(false) both pass the isNaN guard
+    // below and would get silently summed as if it were a count — the same
+    // guard already applied to boolean client metrics elsewhere.
+    const booleanIds = new Set(metrics.filter(m => m.type === 'boolean').map(m => m.id))
     for (const row of rows) {
       const ch = row[channel]
       if (!ch) continue
       for (const [k, v] of Object.entries(ch)) {
+        if (booleanIds.has(k)) continue
         const n = typeof v === 'object' && v !== null && 'value' in (v as any)
           ? Number((v as any).value)
           : Number(v)
@@ -1053,7 +1058,7 @@ export function DashboardPage() {
   const monthMmAgg = {
     linkedin: aggregateMmLinkedInRows(mtdMmRows),
     instagram: aggregateChannelRows(mtdMmRows, 'instagram', MM_INSTAGRAM_METRICS),
-    website: aggregateChannelRows(mtdMmRows, 'website', MM_WEBSITE_METRICS),
+    website: aggregateChannelRows(mtdMmRows, 'website', [...MM_WEBSITE_METRICS, ...MM_SEO_METRICS]),
     quora: aggregateChannelRows(mtdMmRows, 'quora', MM_OTHER_METRICS),
     reddit: aggregateChannelRows(mtdMmRows, 'reddit', MM_OTHER_METRICS),
     ads: aggregateChannelRows(mtdMmRows, 'ads', MM_ADS_METRICS),
@@ -1301,6 +1306,22 @@ export function DashboardPage() {
                 const val = tjVal(currentData, m.id)
                 const prev = tjVal(prevData, m.id)
                 const high = mmLifetimeHighs[m.id]
+                // tjVal coerces a boolean field's stored true/false to 1/0 —
+                // a pass/fail metric has no meaningful "delta" or "lifetime
+                // high" the way a count does, so show Pass/Fail/- instead.
+                if (m.type === 'boolean') {
+                    return (
+                        <div key={m.id} className="space-y-1">
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase whitespace-nowrap">{m.name}</p>
+                            <p className={cn(
+                                "text-xl font-black",
+                                val === 1 ? "text-green-600" : val === 0 ? "text-red-600" : "text-muted-foreground"
+                            )}>
+                                {val === 1 ? 'Pass' : val === 0 ? 'Fail' : '-'}
+                            </p>
+                        </div>
+                    )
+                }
                 return (
                     <div key={m.id} className="space-y-1">
                         <p className="text-[10px] font-bold text-muted-foreground uppercase whitespace-nowrap">{m.name}</p>
@@ -2352,6 +2373,9 @@ export function DashboardPage() {
                             { id: 'MMW04', name: 'Bounce Rate', unit: '%', invertColor: true },
                             { id: 'MMW05', name: 'Blogs Published' },
                           ]} currentData={isMonthlyView ? monthMmAgg.website : mmData?.website} prevData={isMonthlyView ? null : prevMmData?.website}
+                        />
+                        <MMContentRow title="SEO" icon={Search} metrics={MM_SEO_METRICS}
+                          currentData={isMonthlyView ? monthMmAgg.website : mmData?.website} prevData={isMonthlyView ? null : prevMmData?.website}
                         />
                         <MMContentRow title="Other Channels" icon={MessageSquare} metrics={[
                             { id: 'MMO01', name: 'Quora Engagement' },

@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
-import { 
+import {
   History,
   Check,
   Save,
@@ -17,12 +19,14 @@ import {
   Instagram,
   Globe,
   PlusCircle,
-  TrendingUp
+  TrendingUp,
+  Search
 } from "lucide-react"
 import {
   MM_LINKEDIN_METRICS,
   MM_INSTAGRAM_METRICS,
   MM_WEBSITE_METRICS,
+  MM_SEO_METRICS,
   MM_OTHER_METRICS,
   MM_ADS_METRICS,
   CompanyMetric
@@ -112,7 +116,7 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
     }
   }
 
-  const updateMetric = (section: string, id: string, field: 'value' | 'target', value: any) => {
+  const updateMetric = (section: string, id: string, field: 'value' | 'target' | 'note', value: any) => {
     if (!selectedWeek) {
       toast.error('Please select a week first.')
       return
@@ -158,30 +162,52 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
       <Card key={metric.id} className="border-2 border-border/50">
         <CardContent className="p-4 space-y-3">
           <Label className="text-[10px] font-black uppercase text-muted-foreground">{metric.name}</Label>
-          <div className="relative">
-            {isLinkedInAuto ? (
-              <div className="flex h-12 items-center justify-end rounded-md border border-gold/20 bg-gold-soft px-3 text-2xl font-black">{autoValue.toLocaleString('en-IN')}</div>
-            ) : (
-            <Input 
-              type="number" 
-              value={data.value} 
-              onChange={e => updateMetric(section, metric.id, 'value', e.target.value)}
-              className="h-12 text-2xl font-black pr-8"
-            />
-            )}
-            {(metric.unit || metric.type === 'percentage') && <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">{metric.unit || '%'}</span>}
-          </div>
+          {metric.type === 'boolean' ? (
+            <div className="flex h-12 items-center justify-between rounded-md border border-border/50 px-3">
+              <span className="text-sm font-bold">{data.value === true ? 'Pass' : data.value === false ? 'Fail' : 'Not set'}</span>
+              <Switch
+                checked={data.value === true}
+                onCheckedChange={checked => updateMetric(section, metric.id, 'value', checked)}
+                className="data-[state=checked]:bg-gold"
+              />
+            </div>
+          ) : (
+            <div className="relative">
+              {isLinkedInAuto ? (
+                <div className="flex h-12 items-center justify-end rounded-md border border-gold/20 bg-gold-soft px-3 text-2xl font-black">{autoValue.toLocaleString('en-IN')}</div>
+              ) : (
+              <Input
+                type="number"
+                value={data.value}
+                onChange={e => updateMetric(section, metric.id, 'value', e.target.value)}
+                className="h-12 text-2xl font-black pr-8"
+              />
+              )}
+              {(metric.unit || metric.type === 'percentage') && <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">{metric.unit || '%'}</span>}
+            </div>
+          )}
           {metric.hasTarget && (
             <div className="flex gap-2 pt-2 border-t border-border/30">
               <div className="flex-1 space-y-1">
                 <Label className="text-[9px] uppercase font-bold opacity-50">Target</Label>
-                <Input 
-                  type="number" 
-                  value={data.target} 
+                <Input
+                  type="number"
+                  value={data.target}
                   onChange={e => updateMetric(section, metric.id, 'target', e.target.value)}
                   className="h-8 text-xs font-bold"
                 />
               </div>
+            </div>
+          )}
+          {metric.hasNote && (
+            <div className="space-y-1 pt-2 border-t border-border/30">
+              <Label className="text-[9px] uppercase font-bold opacity-50">Note (optional)</Label>
+              <Textarea
+                value={data.note || ''}
+                onChange={e => updateMetric(section, metric.id, 'note', e.target.value)}
+                placeholder="Add context..."
+                className="text-xs min-h-[60px]"
+              />
             </div>
           )}
         </CardContent>
@@ -254,9 +280,17 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
                     {MM_INSTAGRAM_METRICS.map(m => renderMetricCard('instagram', m))}
                 </div>
             </TabsContent>
-            <TabsContent value="website" className="mt-0">
+            <TabsContent value="website" className="mt-0 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {MM_WEBSITE_METRICS.map(m => renderMetricCard('website', m))}
+                </div>
+                <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                        <Search className="w-3.5 h-3.5" /> SEO
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {MM_SEO_METRICS.map(m => renderMetricCard('website', m))}
+                    </div>
                 </div>
             </TabsContent>
             <TabsContent value="other" className="mt-0 space-y-6">
