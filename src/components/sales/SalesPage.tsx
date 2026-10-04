@@ -120,7 +120,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
           jahnvi_outreach: { SO10: flat.SO10, SO11: flat.SO11, SO12: flat.SO12, SO13: flat.SO13, SO14: flat.SO14, SO15: flat.SO15, SO16: flat.SO16, SO17: flat.SO17 },
           shirin_outreach: { SO18: flat.SO18, SO19: flat.SO19, SO20: flat.SO20, SO21: flat.SO21, SO22: flat.SO22, SO23: flat.SO23, SO24: flat.SO24, SO25: flat.SO25, SO26: flat.SO26, SO27: flat.SO27, SO28: flat.SO28 },
           cold_email: { SO29: flat.SO29, SO30: flat.SO30, SO31: flat.SO31, SO32: flat.SO32, SO33: flat.SO33, SO34: flat.SO34, SO35: flat.SO35, SO50: flat.SO50, SO51: flat.SO51, SO53: flat.SO53, SO55: flat.SO55 },
-          meeting_tracker: { SO36: flat.SO36, SO37: flat.SO37, SO38: flat.SO38, SO39: flat.SO39, SO40: flat.SO40, SO41: flat.SO41, SO42: flat.SO42, SO43: flat.SO43, SO44: flat.SO44, SO45: flat.SO45, SO46: flat.SO46, SO47: flat.SO47, SO48: flat.SO48, SO49: flat.SO49 }
+          meeting_tracker: { SO36: flat.SO36, SO37: flat.SO37, SO38: flat.SO38, SO39: flat.SO39, SO56: flat.SO56, SO40: flat.SO40, SO41: flat.SO41, SO42: flat.SO42, SO43: flat.SO43, SO44: flat.SO44, SO45: flat.SO45, SO46: flat.SO46, SO47: flat.SO47, SO48: flat.SO48, SO49: flat.SO49 }
         })
       } else {
         setFormData({
@@ -238,7 +238,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
       SO54: getRate(d.SO53, d.SO51),
     }),
     meeting_tracker: d => {
-      const totalBooked = getSum(d.SO36, d.SO37, d.SO38, d.SO39)
+      const totalBooked = getSum(d.SO36, d.SO37, d.SO38, d.SO39, d.SO56)
       return {
         SO40: totalBooked,
         SO43: getRate(d.SO41, totalBooked),
@@ -647,9 +647,13 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
                       <Input type="number" value={formData.meeting_tracker.SO39 || ''} onChange={e => updateMetric('meeting_tracker', 'SO39', e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">SO56 - Booked via Website | AI</Label>
+                      <Input type="number" value={formData.meeting_tracker.SO56 || ''} onChange={e => updateMetric('meeting_tracker', 'SO56', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
                       <Label className="text-xs font-bold uppercase opacity-60">SO40 - Total Meetings Booked</Label>
                       <div className="h-10 bg-muted/50 rounded-md flex items-center px-3 font-bold text-lg">
-                        {getSum(formData.meeting_tracker.SO36, formData.meeting_tracker.SO37, formData.meeting_tracker.SO38, formData.meeting_tracker.SO39)}
+                        {getSum(formData.meeting_tracker.SO36, formData.meeting_tracker.SO37, formData.meeting_tracker.SO38, formData.meeting_tracker.SO39, formData.meeting_tracker.SO56)}
                       </div>
                     </div>
                     <div className="space-y-1.5">
@@ -663,7 +667,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
                     <div className="space-y-1.5">
                       <Label className="text-xs font-bold uppercase opacity-60">SO43 - Completion Rate</Label>
                       <div className="h-10 bg-muted/50 rounded-md flex items-center px-3 font-bold text-lg">
-                        {getRate(formData.meeting_tracker.SO41, getSum(formData.meeting_tracker.SO36, formData.meeting_tracker.SO37, formData.meeting_tracker.SO38, formData.meeting_tracker.SO39))}%
+                        {getRate(formData.meeting_tracker.SO41, getSum(formData.meeting_tracker.SO36, formData.meeting_tracker.SO37, formData.meeting_tracker.SO38, formData.meeting_tracker.SO39, formData.meeting_tracker.SO56))}%
                       </div>
                     </div>
                     <div className="space-y-1.5">
@@ -681,7 +685,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
                     <div className="space-y-1.5">
                       <Label className="text-xs font-bold uppercase opacity-60">SO47 - Conversion Rate</Label>
                       <div className="h-10 bg-muted/50 rounded-md flex items-center px-3 font-bold text-lg">
-                        {getRate(formData.meeting_tracker.SO46, getSum(formData.meeting_tracker.SO36, formData.meeting_tracker.SO37, formData.meeting_tracker.SO38, formData.meeting_tracker.SO39))}%
+                        {getRate(formData.meeting_tracker.SO46, getSum(formData.meeting_tracker.SO36, formData.meeting_tracker.SO37, formData.meeting_tracker.SO38, formData.meeting_tracker.SO39, formData.meeting_tracker.SO56))}%
                       </div>
                     </div>
                     <div className="space-y-1.5">
@@ -769,6 +773,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
                       <TableHead>Cold Email</TableHead>
                       <TableHead>Referral</TableHead>
                       <TableHead>Other</TableHead>
+                      <TableHead>Website | AI</TableHead>
                       <TableHead className="text-gold">Total Booked</TableHead>
                       <TableHead>Completed</TableHead>
                       <TableHead>No-Show</TableHead>
@@ -783,7 +788,8 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
                       const ce = readSalesNum(flat, 'SO37') ?? 0
                       const r = readSalesNum(flat, 'SO38') ?? 0
                       const o = readSalesNum(flat, 'SO39') ?? 0
-                      const booked = readSalesNum(flat, 'SO40') ?? (l + ce + r + o > 0 ? l + ce + r + o : 0)
+                      const w = readSalesNum(flat, 'SO56') ?? 0
+                      const booked = readSalesNum(flat, 'SO40') ?? (l + ce + r + o + w > 0 ? l + ce + r + o + w : 0)
 
                       return (
                       <TableRow key={h.id}>
@@ -792,6 +798,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
                         <TableCell className="font-medium">{ce}</TableCell>
                         <TableCell className="font-medium">{r}</TableCell>
                         <TableCell className="font-medium">{o}</TableCell>
+                        <TableCell className="font-medium">{w}</TableCell>
                         <TableCell className="font-black text-gold">{booked}</TableCell>
                         <TableCell className="font-medium">{readSalesNum(flat, 'SO41') ?? 0}</TableCell>
                         <TableCell className="font-medium">{readSalesNum(flat, 'SO42') ?? 0}</TableCell>
@@ -801,7 +808,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
                     )})}
                     {salesHistory.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center py-20 text-muted-foreground italic">No meeting history recorded.</TableCell>
+                        <TableCell colSpan={11} className="text-center py-20 text-muted-foreground italic">No meeting history recorded.</TableCell>
                       </TableRow>
                     )}
                   </TableBody>

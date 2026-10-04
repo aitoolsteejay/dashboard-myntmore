@@ -279,6 +279,7 @@ function buildSalesSheet(rows: any[]) {
     SO37: 'Meetings: Via Cold Email',
     SO38: 'Meetings: Via Referral',
     SO39: 'Meetings: Via Other',
+    SO56: 'Meetings: Via Website | AI',
     SO40: 'Meetings: Total Booked',
     SO41: 'Meetings: Completed',
     SO42: 'Meetings: No-Show / Rescheduled',

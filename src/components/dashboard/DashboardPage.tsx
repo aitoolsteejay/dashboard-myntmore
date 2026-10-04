@@ -2300,6 +2300,7 @@ export function DashboardPage() {
                                   { label: 'Via Cold Email', val: salesVal(mtS, 'meeting_tracker', 'SO37'), fmt: 'num' },
                                   { label: 'Via Referral', val: salesVal(mtS, 'meeting_tracker', 'SO38'), fmt: 'num' },
                                   { label: 'Via Other', val: salesVal(mtS, 'meeting_tracker', 'SO39'), fmt: 'num' },
+                                  { label: 'Via Website | AI', val: salesVal(mtS, 'meeting_tracker', 'SO56'), fmt: 'num' },
                                   { label: 'Total Booked', val: salesVal(mtS, 'meeting_tracker', 'SO40'), fmt: 'num' },
                                   { label: 'Completed', val: salesVal(mtS, 'meeting_tracker', 'SO41'), fmt: 'num' },
                                   { label: 'Completion Rate', val: so43, fmt: 'pct' },
