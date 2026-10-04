@@ -7,11 +7,10 @@ import { getTodayIST } from './dateUtils'
 
 const rateMetricName = (id: string) => ALL_METRICS.find(m => m.id === id)?.name ?? id
 
-// TRACKED_METRICS (below) already covers most raw fields that feed a rate
-// metric (L10/L11/L13/L15/L16/L19/L20/L24) — these three (L02/L03, feeding
-// L05; L25, feeding L26) are the only ones that aren't tracked on their own
-// and need summing separately for the monthly rate derivation.
-const RATE_RAW_ONLY_IDS = ['L02', 'L03', 'L25']
+// Cumulative counters (a running total, not a per-week flow): summing them
+// across a month's weeks is meaningless, so a month's value is the highest
+// weekly reading in that month instead.
+const CUMULATIVE_IDS = new Set(['C16', 'C32', 'C41'])
 
 // Custom metrics are always number/percentage/textarea (never 'auto'), so unlike
 // TRACKED_METRICS they need none of the special live-calc branches below — just
@@ -46,8 +45,9 @@ export async function backfillHighScores(clientId: string): Promise<void> {
   // recorded 0% is a meaningful, real week (unlike a volume metric, where 0
   // usually just means "no data entered") and must count toward the monthly
   // average — see the two uses below.
+  // Sliders (Happiness Index) are per-week scores, so they average like rates.
   const percentageIds = new Set(
-    [...ALL_METRICS, ...customMetrics].filter(m => m.type === 'percentage').map(m => m.id)
+    [...ALL_METRICS, ...customMetrics].filter(m => m.type === 'percentage' || m.type === 'slider').map(m => m.id)
   )
 
   // Track best single-week value and which week it was achieved
@@ -59,7 +59,9 @@ export async function backfillHighScores(clientId: string): Promise<void> {
   const addToMonth = (month: string, id: string, val: number) => {
     if (!monthSums[month]) monthSums[month] = {}
     if (!monthCounts[month]) monthCounts[month] = {}
-    monthSums[month][id] = (monthSums[month][id] ?? 0) + val
+    monthSums[month][id] = CUMULATIVE_IDS.has(id)
+      ? Math.max(monthSums[month][id] ?? 0, val)
+      : (monthSums[month][id] ?? 0) + val
     monthCounts[month][id] = (monthCounts[month][id] ?? 0) + 1
   }
 
@@ -114,15 +116,6 @@ export async function backfillHighScores(clientId: string): Promise<void> {
       if (rate !== null && rate > 0 && (!best[id] || rate > best[id].value)) {
         best[id] = { value: rate, week: weekStart, name: rateMetricName(id) }
       }
-    })
-
-    // Sum each rate's raw numerator/denominator into the monthly totals below
-    // (needed to derive monthly bests for L05/L18/L21/L26) — most of these
-    // ids are already summed via TRACKED_METRICS above; RATE_RAW_ONLY_IDS is
-    // just the ones (L02, L03, L25) that aren't tracked on their own.
-    RATE_RAW_ONLY_IDS.forEach(id => {
-      const val = readNum(lm, id)
-      if (val !== null && val > 0) addToMonth(month, id, val)
     })
   }
 
@@ -184,32 +177,16 @@ export async function backfillHighScores(clientId: string): Promise<void> {
   console.log(`✅ Backfilled ${upsertRows.length} true high score(s) for client ${clientId}`)
 }
 
+// Derived from the catalog, not a hand-maintained id list — a hardcoded list
+// silently never tracked any metric added after it was written (newsletter
+// fields, InMail counts, Meetings Attended, ...). Every number/percentage/
+// slider metric is tracked; C09 and C26 are 'auto' but need special handling
+// below, and the 'auto' rate metrics come from RATE_DEPENDENCIES. Booleans and
+// text have no meaningful "high".
 const TRACKED_METRICS = [
-  { id: 'C03', name: 'Posts Drafted', category: 'content' },
-  { id: 'C06', name: 'Text + Image Posts Posted', category: 'content' },
-  { id: 'C07', name: 'Carousels Posted', category: 'content' },
-  { id: 'C08', name: 'Videos Posted', category: 'content' },
-  { id: 'C09', name: 'Total Posts Posted', category: 'content' },
-  { id: 'C36', name: 'In-Network Share', category: 'content' },
-  { id: 'C37', name: 'Out-of-Network Share', category: 'content' },
-  { id: 'C10', name: 'Total Impressions', category: 'content' },
-  { id: 'C11', name: 'Likes', category: 'content' },
-  { id: 'C12', name: 'Comments', category: 'content' },
-  { id: 'C13', name: 'Engagement Total', category: 'content' },
-  { id: 'C14', name: 'Profile Views', category: 'content' },
-  { id: 'C15', name: 'New Followers', category: 'content' },
-  { id: 'C17', name: 'Engagement on Other Profiles', category: 'content' },
-  { id: 'C26', name: 'Avg Impressions Per Post', category: 'content' },
-  { id: 'C27', name: 'Video Views', category: 'content' },
-  { id: 'L10', name: 'Connection Requests Sent', category: 'leadgen' },
-  { id: 'L11', name: 'Accepted Invitations', category: 'leadgen' },
-  { id: 'L13', name: 'Answered Messages', category: 'leadgen' },
-  { id: 'L15', name: 'Positive Replies', category: 'leadgen' },
-  { id: 'L16', name: 'Negative Replies', category: 'leadgen' },
-  { id: 'L19', name: 'Existing Conn Messages Sent', category: 'leadgen' },
-  { id: 'L20', name: 'Existing Conn Answered', category: 'leadgen' },
-  { id: 'L24', name: 'Meetings Booked', category: 'leadgen' },
-]
+  ...ALL_METRICS.filter(m => m.type === 'number' || m.type === 'percentage' || m.type === 'slider'),
+  ...ALL_METRICS.filter(m => m.id === 'C09' || m.id === 'C26'),
+].map(m => ({ id: m.id, name: m.name, category: m.category }))
 
 export async function detectAndUpdateHighScores(
   clientId: string,

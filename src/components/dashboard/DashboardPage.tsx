@@ -17,9 +17,10 @@ import { CampaignMonthTable } from "../monday/CampaignMonthTable"
 import { EditCampaignModal } from "../monday/EditCampaignModal"
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from "@/data/metrics"
 import { customMetricToMetric } from "@/hooks/useEffectiveMetrics"
-import { MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from "@/data/company_metrics"
+import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from "@/data/company_metrics"
 import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
 import { findTarget } from "@/utils/targets"
+import { applySalesRates } from "@/utils/salesRates"
 import { RATE_DEPENDENCIES, computeVolumeWeightedRate } from "@/utils/rateAggregation"
 import { mv, mt, fmt, delta, deltaColor, tjVal, salesVal, sv, readMetric, formatMetricValue, formatDashboardValue } from "@/utils/dataUtils"
 
@@ -30,6 +31,8 @@ import { buildWeekMetrics, formatMetricDisplay, formatPct } from "@/utils/metric
 import { backfillHighScores } from "@/utils/highScores"
 import { fetchTJLifetimeHighs, TJLifetimeHighs } from "@/utils/tjHighScores"
 import { fetchMMLifetimeHighs, MMLifetimeHighs } from "@/utils/mmHighScores"
+import { fetchSalesLifetimeHighs, SalesLifetimeHighs } from "@/utils/salesHighScores"
+import { SALES_SECTIONS } from "@/data/sales_metrics"
 import { formatWeekDate, getTodayIST } from "@/utils/dateUtils"
 import { sortAlphabetically } from "@/utils/sort"
 import { useWorkspace } from "@/lib/workspace"
@@ -138,7 +141,7 @@ export function DashboardPage() {
   const [tjLifetimeHighs, setTjLifetimeHighs] = useState<TJLifetimeHighs>({})
   const effectiveTjMetrics = useEffectiveTjMetrics()
   const [mmLifetimeHighs, setMmLifetimeHighs] = useState<MMLifetimeHighs>({})
-  const [expandedMMRows, setExpandedMMRows] = useState<Set<string>>(new Set())
+  const [salesLifetimeHighs, setSalesLifetimeHighs] = useState<SalesLifetimeHighs>({})
   const [salesData, setSalesData] = useState<SalesWeeklyData | null>(null)
   const [salesPrev, setSalesPrev] = useState<SalesWeeklyData | null>(null)
   const [mmData, setMmData] = useState<MmWeeklyData | null>(null)
@@ -989,7 +992,9 @@ export function DashboardPage() {
         if (!isNaN(n)) out[k] = (out[k] ?? 0) + n
       }
     }
-    return out
+    // Weekly rate fields (acceptance/reply/completion/conversion %) were being
+    // summed above like counts — recompute them from the summed raw fields.
+    return applySalesRates(out)
   }
 
   // These sections render under a "(Month to Date)" title in Monthly View —
@@ -1137,13 +1142,15 @@ export function DashboardPage() {
   // adapted for TJ's differently-shaped data (tj_weekly_data channels, not
   // weekly_data content/leadgen; tjVal not buildWeekMetrics; tjLifetimeHighs
   // for both Best Ever Week and Best Ever Month instead of a high_scores row).
-  const TJMetricTable = ({
+  const CompanyMetricTable = ({
     metrics,
     currentData,
     prevData,
     tjTargets,
     tjMonthlyTargets,
     tjMtdTotals,
+    highs,
+    targetSource,
   }: {
     metrics: any[]
     currentData: any
@@ -1151,6 +1158,11 @@ export function DashboardPage() {
     tjTargets: any[]
     tjMonthlyTargets: any[]
     tjMtdTotals: Record<string, number>
+    highs: Record<string, { value: number; week: string; monthValue: number | null; month: string | null }>
+    // MM Company Content keeps its weekly target inline in each field's
+    // {value, target} object instead of the targets table — when given, the
+    // weekly target is read from here rather than via findTarget().
+    targetSource?: any
   }) => {
     const [stickyHeader, setStickyHeader] = React.useState(false)
     return (
@@ -1187,9 +1199,12 @@ export function DashboardPage() {
               const unit = m.unit ?? (m.type === 'percentage' ? '%' : undefined)
               const current = tjVal(currentData, m.id)
               const prev = tjVal(prevData, m.id)
-              const target = findTarget(tjTargets, m.id, displayWeek)
+              const inlineTarget = targetSource !== undefined ? Number(targetSource?.[m.id]?.target) : NaN
+              const target = targetSource !== undefined
+                ? (inlineTarget > 0 ? inlineTarget : null)
+                : findTarget(tjTargets, m.id, displayWeek)
               const monthlyTarget = findTarget(tjMonthlyTargets, m.id, displayWeek.slice(0, 7))
-              const hs = tjLifetimeHighs[m.id]
+              const hs = highs[m.id]
               const bestEver = hs?.value ?? null
               const bestEverMonth = hs?.monthValue ?? null
               const isNewHigh = current !== null && current > 0 && bestEver !== null && current > bestEver
@@ -1214,6 +1229,22 @@ export function DashboardPage() {
               if (monthlyTarget && mtdVal !== null) moAchNum = Math.round((mtdVal / Number(monthlyTarget)) * 100)
               const moAch = monthlyTarget !== null ? gFmt(monthlyTarget, { unit }) : '-'
 
+              if (m.type === 'boolean') {
+                // tjVal coerces a stored true/false to 1/0; a pass/fail field
+                // has no target, delta or best-ever, so the other columns stay blank.
+                const passFail = (v: number | null) => v === 1 ? 'Pass' : v === 0 ? 'Fail' : '-'
+                return (
+                  <TableRow key={m.id} className="h-8">
+                    <TableCell className="py-1 text-xs font-medium">{m.name}</TableCell>
+                    <TableCell className={cn("py-1 text-center text-xs font-bold", current === 1 ? "text-green-600" : current === 0 ? "text-red-600" : "")}>{passFail(current)}</TableCell>
+                    <TableCell className="py-1 text-center text-xs text-muted-foreground">{passFail(prev)}</TableCell>
+                    <TableCell className="py-1 text-center text-xs text-muted-foreground">-</TableCell>
+                    <TableCell className="py-1 text-center text-xs text-muted-foreground">-</TableCell>
+                    <TableCell className="py-1 text-center text-xs text-muted-foreground">-</TableCell>
+                    <TableCell className="py-1 text-center text-xs text-muted-foreground">-</TableCell>
+                  </TableRow>
+                )
+              }
               return (
                 <TableRow key={m.id} className="h-8">
                   <TableCell className="py-1 text-xs font-medium">{m.name}</TableCell>
@@ -1264,88 +1295,6 @@ export function DashboardPage() {
             })}
           </TableBody>
         </Table>
-      </div>
-    )
-  }
-
-  const SalesOutreachCard = ({ title, metrics, currentData }: { title: string, metrics: any[], currentData: any }) => (
-    <div className="space-y-3 p-4 bg-muted/10 rounded-lg border border-border/50 flex-1 min-w-[300px]">
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{title}</p>
-        <div className="flex flex-wrap gap-x-6 gap-y-2">
-            {metrics.map((m: any) => (
-                <div key={m.id} className="flex items-baseline gap-2">
-                    <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap">{m.name}:</span>
-                    <span className="text-sm font-black">{gFmt(tjVal(currentData, m.id), { unit: m.unit })}</span>
-                </div>
-            ))}
-        </div>
-    </div>
-  )
-
-  const MMContentRow = ({ title, icon: Icon, metrics, currentData, prevData }: { title: string, icon: any, metrics: any[], currentData: any, prevData: any }) => {
-    const isExpanded = expandedMMRows.has(title)
-    const toggle = () => {
-      const next = new Set(expandedMMRows)
-      next.has(title) ? next.delete(title) : next.add(title)
-      setExpandedMMRows(next)
-    }
-
-    return (
-      <div className="space-y-3 p-4">
-        <button
-          onClick={toggle}
-          className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground cursor-pointer select-none"
-        >
-          <span className="flex items-center gap-2">
-            <Icon className="w-3 h-3" /> {title}
-          </span>
-          {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-        </button>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-6">
-            {metrics.map((m: any) => {
-                const val = tjVal(currentData, m.id)
-                const prev = tjVal(prevData, m.id)
-                const high = mmLifetimeHighs[m.id]
-                // tjVal coerces a boolean field's stored true/false to 1/0 —
-                // a pass/fail metric has no meaningful "delta" or "lifetime
-                // high" the way a count does, so show Pass/Fail/- instead.
-                if (m.type === 'boolean') {
-                    return (
-                        <div key={m.id} className="space-y-1">
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase whitespace-nowrap">{m.name}</p>
-                            <p className={cn(
-                                "text-xl font-black",
-                                val === 1 ? "text-green-600" : val === 0 ? "text-red-600" : "text-muted-foreground"
-                            )}>
-                                {val === 1 ? 'Pass' : val === 0 ? 'Fail' : '-'}
-                            </p>
-                        </div>
-                    )
-                }
-                return (
-                    <div key={m.id} className="space-y-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase whitespace-nowrap">{m.name}</p>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-xl font-black">{gFmt(val, { unit: m.unit })}</p>
-                            <Delta current={val} previous={prev} unit={m.unit} invertColor={m.invertColor} />
-                        </div>
-                        {isExpanded && (
-                            <div className="flex items-center gap-1 text-[10px] text-gold font-bold pt-1 border-t border-border/30">
-                                <Trophy className="w-2.5 h-2.5" />
-                                {high ? (
-                                    <span>
-                                        {gFmt(high.value, { unit: m.unit })}
-                                        <span className="opacity-60 font-normal ml-1">· {formatWeekDate(high.week)}</span>
-                                    </span>
-                                ) : (
-                                    <span className="text-muted-foreground italic font-normal">No data yet</span>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )
-            })}
-        </div>
       </div>
     )
   }
@@ -1488,6 +1437,10 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (session) fetchMMLifetimeHighs().then(setMmLifetimeHighs)
+  }, [session])
+
+  useEffect(() => {
+    if (session) fetchSalesLifetimeHighs().then(setSalesLifetimeHighs)
   }, [session])
 
   useEffect(() => {
@@ -1637,6 +1590,36 @@ export function DashboardPage() {
   }).length
   const completionPct = clients.length ? Math.round((submittedClientCount / clients.length) * 100) : 0
   const overdueActionables = actionables.filter(item => item.due_date && item.due_date < getTodayIST()).length
+
+  // One title bar + monthly goal cards + the standard 7-column table — the
+  // shared layout every company-wide (non-client) section now uses, matching
+  // the per-client Content/Lead Gen metric tables.
+  const renderCompanyBlock = ({ key, title, icon: Icon, metrics, current, prev, mtd, highs, targetSource }: {
+    key: string; title: string; icon: any; metrics: any[]; current: any; prev: any
+    mtd: Record<string, number>; highs: Record<string, any>; targetSource?: any
+  }) => (
+    <div key={key} className="space-y-4">
+      <div className="flex items-center gap-2 pb-2 border-b border-muted sticky top-0 bg-background z-20">
+        <Icon className="w-4 h-4 text-gold" />
+        <h4 className="text-xs font-black uppercase tracking-widest">{title}</h4>
+      </div>
+      <TJGoalCards
+        metrics={metrics.filter(m => m.type !== 'textarea')}
+        tjMonthlyTargets={tjMonthlyTargets}
+        tjMtdTotals={mtd}
+      />
+      <CompanyMetricTable
+        metrics={metrics.filter(m => m.type !== 'textarea')}
+        currentData={current}
+        prevData={prev}
+        tjTargets={tjTargets}
+        tjMonthlyTargets={tjMonthlyTargets}
+        tjMtdTotals={mtd}
+        highs={highs}
+        targetSource={targetSource}
+      />
+    </div>
+  )
 
   return (
     <div className="flex flex-1 flex-col">
@@ -2194,13 +2177,14 @@ export function DashboardPage() {
                             tjMonthlyTargets={tjMonthlyTargets}
                             tjMtdTotals={channel.mtd}
                           />
-                          <TJMetricTable
+                          <CompanyMetricTable
                             metrics={channel.metrics.filter(m => m.type !== 'textarea')}
                             currentData={channel.current}
                             prevData={channel.prev}
                             tjTargets={tjTargets}
                             tjMonthlyTargets={tjMonthlyTargets}
                             tjMtdTotals={channel.mtd}
+                            highs={tjLifetimeHighs}
                           />
                         </div>
                       ))}
@@ -2220,119 +2204,27 @@ export function DashboardPage() {
               <div className="space-y-4">
                 <SectionHeader title={`Sales & Outreach${isMonthlyView ? ' (Month to Date)' : ''}`} id="sales" icon={TrendingUp} />
                 {!collapsedSections.has('sales') && (
-                  <div className="space-y-4">
-                    {(isMonthlyView ? monthSalesRows.length > 0 : !!salesData) ? (
-                      <>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <SalesOutreachCard
-                            title="TJ Outreach"
-                            metrics={[
-                              { id: 'SO02', name: 'Sent' },
-                              { id: 'SO03', name: 'Accepted' },
-                              { id: 'SO05', name: 'Answered' },
-                              { id: 'SO07', name: 'Hot Leads' },
-                              { id: 'SO08', name: 'Meetings' },
-                            ]}
-                            currentData={isMonthlyView ? monthSalesAgg.tj_outreach : salesData?.tj_outreach}
-                          />
-                          <SalesOutreachCard
-                            title="Jahnvi Outreach"
-                            metrics={[
-                              { id: 'SO11', name: 'Sent' },
-                              { id: 'SO12', name: 'Accepted' },
-                              { id: 'SO14', name: 'Answered' },
-                              { id: 'SO16', name: 'Hot Leads' },
-                              { id: 'SO17', name: 'Meetings' },
-                            ]}
-                            currentData={isMonthlyView ? monthSalesAgg.jahnvi_outreach : salesData?.jahnvi_outreach}
-                          />
-                          <SalesOutreachCard
-                            title="Shirin Outreach"
-                            metrics={[
-                              { id: 'SO20', name: 'Sent' },
-                              { id: 'SO21', name: 'Accepted' },
-                              { id: 'SO23', name: 'Answered' },
-                              { id: 'SO25', name: 'Hot Leads' },
-                              { id: 'SO26', name: 'Meetings' },
-                            ]}
-                            currentData={isMonthlyView ? monthSalesAgg.shirin_outreach : salesData?.shirin_outreach}
-                          />
-                        </div>
-                        {(() => {
-                          const ceS = isMonthlyView ? { cold_email: monthSalesAgg.cold_email } : salesData
-                          const so50 = salesVal(ceS, 'cold_email', 'SO50')
-                          const so51 = salesVal(ceS, 'cold_email', 'SO51')
-                          const so53 = salesVal(ceS, 'cold_email', 'SO53')
-                          const so55 = salesVal(ceS, 'cold_email', 'SO55')
-                          const replyRate = so50 && so50 > 0 && so51 !== null ? Math.round((so51 / so50) * 1000) / 10 : null
-                          const posReplyRate = so51 && so51 > 0 && so53 !== null ? Math.round((so53 / so51) * 1000) / 10 : null
-                          return (
-                            <Card className="border shadow-sm p-6 bg-card">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4 border-b pb-2">Cold Emailing</p>
-                              <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-6">
-                                {[
-                                  { label: 'Emails Sent', val: so50, fmt: 'num' },
-                                  { label: 'Replies', val: so51, fmt: 'num' },
-                                  { label: 'Reply Rate', val: replyRate, fmt: 'pct' },
-                                  { label: 'Positive Replies', val: so53, fmt: 'num' },
-                                  { label: 'Positive Reply Rate', val: posReplyRate, fmt: 'pct' },
-                                  { label: 'OOO Replies', val: so55, fmt: 'num' },
-                                ].map((m, i) => (
-                                  <div key={i} className="space-y-1">
-                                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{m.label}</p>
-                                    <p className="text-lg font-black">{m.val === null ? '-' : m.fmt === 'pct' ? `${m.val}%` : fmt(m.val)}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </Card>
-                          )
-                        })()}
-                        {(() => {
-                          const mtS = isMonthlyView ? { meeting_tracker: monthSalesAgg.meeting_tracker } : salesData
-                          const so43 = salesVal(mtS, 'meeting_tracker', 'SO43')
-                          const so47 = salesVal(mtS, 'meeting_tracker', 'SO47')
-                          return (
-                            <Card className="border shadow-sm p-6 bg-card">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4 border-b pb-2">Meeting Tracker</p>
-                              <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-6">
-                                {[
-                                  { label: 'Via LinkedIn', val: salesVal(mtS, 'meeting_tracker', 'SO36'), fmt: 'num' },
-                                  { label: 'Via Cold Email', val: salesVal(mtS, 'meeting_tracker', 'SO37'), fmt: 'num' },
-                                  { label: 'Via Referral', val: salesVal(mtS, 'meeting_tracker', 'SO38'), fmt: 'num' },
-                                  { label: 'Via Other', val: salesVal(mtS, 'meeting_tracker', 'SO39'), fmt: 'num' },
-                                  { label: 'Via Website | AI', val: salesVal(mtS, 'meeting_tracker', 'SO56'), fmt: 'num' },
-                                  { label: 'Total Booked', val: salesVal(mtS, 'meeting_tracker', 'SO40'), fmt: 'num' },
-                                  { label: 'Completed', val: salesVal(mtS, 'meeting_tracker', 'SO41'), fmt: 'num' },
-                                  { label: 'Completion Rate', val: so43, fmt: 'pct' },
-                                  { label: 'No-Shows', val: salesVal(mtS, 'meeting_tracker', 'SO42'), fmt: 'num' },
-                                  { label: 'Proposals', val: salesVal(mtS, 'meeting_tracker', 'SO44'), fmt: 'num' },
-                                  { label: 'Follow-ups', val: salesVal(mtS, 'meeting_tracker', 'SO45'), fmt: 'num' },
-                                  { label: 'Conversions', val: salesVal(mtS, 'meeting_tracker', 'SO46'), fmt: 'num' },
-                                  { label: 'Conversion Rate', val: so47, fmt: 'pct' },
-                                  { label: 'Avg Deal Size', val: salesVal(mtS, 'meeting_tracker', 'SO48'), fmt: 'inr' },
-                                  { label: 'Revenue Closed', val: salesVal(mtS, 'meeting_tracker', 'SO49'), fmt: 'inr' },
-                                ].map((m, i) => (
-                                  <div key={i} className="space-y-1">
-                                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{m.label}</p>
-                                    <p className="text-lg font-black">
-                                      {m.val === null ? '-' : m.fmt === 'pct' ? `${m.val}%` : m.fmt === 'inr' ? fmt(m.val, '₹') : fmt(m.val)}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </Card>
-                          )
-                        })()}
-                      </>
-                    ) : (
-                      <Card className="border border-dashed py-10 flex flex-col items-center justify-center bg-muted/5">
-                        <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">No sales data submitted for this week</p>
-                        <Button asChild variant="link" className="text-gold font-bold mt-2">
-                          <Link to="/sales">Go to Sales Entry →</Link>
-                        </Button>
-                      </Card>
-                    )}
-                  </div>
+                  (isMonthlyView ? monthSalesRows.length > 0 : !!salesData) ? (
+                    <div className="grid grid-cols-1 gap-8">
+                      {SALES_SECTIONS.map(section => renderCompanyBlock({
+                        key: section.title,
+                        title: section.title,
+                        icon: section.key === 'meeting_tracker' ? Handshake : section.key === 'cold_email' ? Mail : Send,
+                        metrics: section.metrics,
+                        current: isMonthlyView ? monthSalesAgg[section.key] : (salesData as any)?.[section.key],
+                        prev: isMonthlyView ? null : (salesPrev as any)?.[section.key],
+                        mtd: monthSalesAgg[section.key],
+                        highs: salesLifetimeHighs,
+                      }))}
+                    </div>
+                  ) : (
+                    <Card className="border border-dashed py-10 flex flex-col items-center justify-center bg-muted/5">
+                      <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">No sales data submitted for this week</p>
+                      <Button asChild variant="link" className="text-gold font-bold mt-2">
+                        <Link to="/sales">Go to Sales Entry →</Link>
+                      </Button>
+                    </Card>
+                  )
                 )}
               </div>
 
@@ -2340,71 +2232,37 @@ export function DashboardPage() {
               <div className="space-y-4">
                 <SectionHeader title={`MM Company Content${isMonthlyView ? ' (Month to Date)' : ''}`} id="mm" icon={Globe} />
                 {!collapsedSections.has('mm') && (
-                  <Card className="border shadow-sm divide-y">
-                    {(isMonthlyView ? monthMmRows.length > 0 : !!mmData) ? (
-                      <>
-                        <MMContentRow title="LinkedIn Presence" icon={Linkedin} metrics={[
-                            { id: 'MML01', name: 'Posts' },
-                            { id: 'MML02', name: 'Total Impressions' },
-                            { id: 'MML12', name: 'Avg Impressions / Post' },
-                            { id: 'MML03', name: 'Reactions' },
-                            { id: 'MML04', name: 'Comments' },
-                            { id: 'MML05', name: 'New Followers' },
-                            { id: 'MML06', name: 'Total Followers' },
-                            { id: 'MML13', name: 'Invite to Follow' },
-                            { id: 'MML07', name: 'Page Views' },
-                            { id: 'MML08', name: 'Articles Published' },
-                            { id: 'MML09', name: 'Article Impressions' },
-                          ]} currentData={isMonthlyView ? monthMmAgg.linkedin : withLinkedInImpressionTotals(mmData?.linkedin)} prevData={isMonthlyView ? null : withLinkedInImpressionTotals(prevMmData?.linkedin)}
-                        />
-                        <MMContentRow title="Instagram Presence" icon={Instagram} metrics={[
-                            { id: 'MMI01', name: 'Posts' },
-                            { id: 'MMI02', name: 'Stories' },
-                            { id: 'MMI03', name: 'Reels' },
-                            { id: 'MMI04', name: 'Impressions' },
-                            { id: 'MMI07', name: 'New Followers' },
-                            { id: 'MMI08', name: 'Total Followers' },
-                            { id: 'MMI09', name: 'ORM Replies' },
-                          ]} currentData={isMonthlyView ? monthMmAgg.instagram : mmData?.instagram} prevData={isMonthlyView ? null : prevMmData?.instagram}
-                        />
-                        <MMContentRow title="Website Analytics" icon={Globe} metrics={[
-                            { id: 'MMW01', name: 'Active Users' },
-                            { id: 'MMW02', name: 'New Users' },
-                            { id: 'MMW03', name: 'Avg Session', unit: 's' },
-                            { id: 'MMW04', name: 'Bounce Rate', unit: '%', invertColor: true },
-                            { id: 'MMW05', name: 'Blogs Published' },
-                          ]} currentData={isMonthlyView ? monthMmAgg.website : mmData?.website} prevData={isMonthlyView ? null : prevMmData?.website}
-                        />
-                        <MMContentRow title="SEO" icon={Search} metrics={MM_SEO_METRICS}
-                          currentData={isMonthlyView ? monthMmAgg.website : mmData?.website} prevData={isMonthlyView ? null : prevMmData?.website}
-                        />
-                        <MMContentRow title="Other Channels" icon={MessageSquare} metrics={[
-                            { id: 'MMO01', name: 'Quora Engagement' },
-                            { id: 'MMO05', name: 'Reddit Engagement' },
-                            { id: 'MMO06', name: 'Medium Blogs Published' },
-                          ]} currentData={isMonthlyView ? { ...monthMmAgg.quora, ...monthMmAgg.reddit } : { ...asDashboardRecord(mmData?.quora), ...asDashboardRecord(mmData?.reddit) }} prevData={isMonthlyView ? null : { ...asDashboardRecord(prevMmData?.quora), ...asDashboardRecord(prevMmData?.reddit) }}
-                        />
-                        <MMContentRow title="Ads Performance" icon={TrendingUp} metrics={[
-                            { id: 'MMA01', name: 'Google Clicks' },
-                            { id: 'MMA03', name: 'Google CTR', unit: '%' },
-                            { id: 'MMA04', name: 'Google Cost', unit: '₹' },
-                            { id: 'MMA09', name: 'Google Cost/Lead', unit: '₹' },
-                            { id: 'MMA11', name: 'Google Website Visits' },
-                            { id: 'MMA06', name: 'Meta Cost', unit: '₹' },
-                            { id: 'MMA10', name: 'Meta Cost/Lead', unit: '₹' },
-                            { id: 'MMA12', name: 'Meta Lead Form Filled' },
-                          ]} currentData={isMonthlyView ? monthMmAgg.ads : (mmData as any)?.ads} prevData={isMonthlyView ? null : (prevMmData as any)?.ads}
-                        />
-                      </>
-                    ) : (
-                      <div className="py-12 flex flex-col items-center justify-center bg-muted/5">
-                        <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">No company content data submitted for this week</p>
-                        <Button asChild variant="link" className="text-gold font-bold mt-2">
-                          <Link to="/mm-content">Go to MM Content Entry →</Link>
-                        </Button>
-                      </div>
-                    )}
-                  </Card>
+                  (isMonthlyView ? monthMmRows.length > 0 : !!mmData) ? (
+                    <div className="grid grid-cols-1 gap-8">
+                      {[
+                        { title: 'LinkedIn Presence', icon: Linkedin, metrics: MM_LINKEDIN_METRICS, raw: asDashboardRecord(mmData?.linkedin), rawPrev: asDashboardRecord(prevMmData?.linkedin), mtd: monthMmAgg.linkedin, derive: true },
+                        { title: 'Instagram Presence', icon: Instagram, metrics: MM_INSTAGRAM_METRICS, raw: asDashboardRecord(mmData?.instagram), rawPrev: asDashboardRecord(prevMmData?.instagram), mtd: monthMmAgg.instagram },
+                        { title: 'Website Analytics', icon: Globe, metrics: MM_WEBSITE_METRICS, raw: asDashboardRecord(mmData?.website), rawPrev: asDashboardRecord(prevMmData?.website), mtd: monthMmAgg.website },
+                        { title: 'SEO', icon: Search, metrics: MM_SEO_METRICS, raw: asDashboardRecord(mmData?.website), rawPrev: asDashboardRecord(prevMmData?.website), mtd: monthMmAgg.website },
+                        { title: 'Other Channels', icon: MessageSquare, metrics: MM_OTHER_METRICS, raw: { ...asDashboardRecord(mmData?.quora), ...asDashboardRecord(mmData?.reddit) }, rawPrev: { ...asDashboardRecord(prevMmData?.quora), ...asDashboardRecord(prevMmData?.reddit) }, mtd: { ...monthMmAgg.quora, ...monthMmAgg.reddit } },
+                        { title: 'Ads Performance', icon: TrendingUp, metrics: MM_ADS_METRICS, raw: asDashboardRecord((mmData as any)?.ads), rawPrev: asDashboardRecord((prevMmData as any)?.ads), mtd: monthMmAgg.ads },
+                      ].map(ch => renderCompanyBlock({
+                        key: ch.title,
+                        title: ch.title,
+                        icon: ch.icon,
+                        metrics: ch.metrics,
+                        // LinkedIn's total impressions/average are derived at read time
+                        // (legacy weeks stored a split), so show the derived values.
+                        current: isMonthlyView ? ch.mtd : (ch.derive ? withLinkedInImpressionTotals(ch.raw) : ch.raw),
+                        prev: isMonthlyView ? null : (ch.derive ? withLinkedInImpressionTotals(ch.rawPrev) : ch.rawPrev),
+                        mtd: ch.mtd,
+                        highs: mmLifetimeHighs,
+                        targetSource: isMonthlyView ? undefined : ch.raw,
+                      }))}
+                    </div>
+                  ) : (
+                    <Card className="border border-dashed py-12 flex flex-col items-center justify-center bg-muted/5">
+                      <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">No company content data submitted for this week</p>
+                      <Button asChild variant="link" className="text-gold font-bold mt-2">
+                        <Link to="/mm-content">Go to MM Content Entry →</Link>
+                      </Button>
+                    </Card>
+                  )
                 )}
               </div>
 

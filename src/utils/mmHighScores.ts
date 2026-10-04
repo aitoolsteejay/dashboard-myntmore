@@ -1,22 +1,23 @@
 import { supabase } from '@/integrations/supabase/client'
 import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from '@/data/company_metrics'
+import { computeLifetimeHighs, type LifetimeHighs, type RatePair } from './lifetimeHighs'
 
 // The JSON columns in mm_weekly_data that hold {metricId: {value, target}} maps —
-// used to scan every week's history for each metric's all-time high. There's no
-// separate highscores table for MM's own metrics (unlike per-client metrics, which
-// use `high_scores`), so this is computed on the fly instead of stored.
+// scanned across every week's history. No highscores table exists for MM (unlike
+// per-client metrics), so this is computed on the fly.
 const MM_METRIC_COLUMNS = ['linkedin', 'instagram', 'website', 'quora', 'reddit', 'ads'] as const
 
-// A boolean field's Number(true)/Number(false) both pass the isNaN guard
-// below and would register a fake numeric "high" (e.g. Site Health Check's
-// Pass registering as a lifetime-high value of 1) — the same guard already
-// applied to aggregateChannelRows in DashboardPage.tsx.
-const MM_BOOLEAN_IDS = new Set(
-  [...MM_LINKEDIN_METRICS, ...MM_INSTAGRAM_METRICS, ...MM_WEBSITE_METRICS, ...MM_SEO_METRICS, ...MM_OTHER_METRICS, ...MM_ADS_METRICS]
-    .filter(m => m.type === 'boolean').map(m => m.id)
-)
+export type MMLifetimeHighs = LifetimeHighs
 
-export type MMLifetimeHighs = Record<string, { value: number; week: string }>
+const ALL_MM_METRICS = [...MM_LINKEDIN_METRICS, ...MM_INSTAGRAM_METRICS, ...MM_WEBSITE_METRICS, ...MM_SEO_METRICS, ...MM_OTHER_METRICS, ...MM_ADS_METRICS]
+
+// A boolean field's Number(true) would register a fake numeric "high" of 1.
+const MM_BOOLEAN_IDS = new Set(ALL_MM_METRICS.filter(m => m.type === 'boolean').map(m => m.id))
+const MM_PERCENTAGE_IDS = new Set(ALL_MM_METRICS.filter(m => m.type === 'percentage').map(m => m.id))
+
+// Average Impressions Per Post is a ratio — a month's value is month
+// impressions / month posts, not a sum or average of weekly ratios.
+const RATE_PAIRS: Record<string, RatePair> = { MML12: ['MML02', 'MML01', 1] }
 
 export async function fetchMMLifetimeHighs(): Promise<MMLifetimeHighs> {
   const { data } = await supabase
@@ -24,45 +25,32 @@ export async function fetchMMLifetimeHighs(): Promise<MMLifetimeHighs> {
     .select(`week_start, ${MM_METRIC_COLUMNS.join(', ')}`)
   if (!data) return {}
 
-  const highs: MMLifetimeHighs = {}
-  for (const row of data as any[]) {
-    for (const column of MM_METRIC_COLUMNS) {
-      const metrics = row[column] as Record<string, { value?: unknown }> | null
-      if (!metrics) continue
-      for (const [metricId, field] of Object.entries(metrics)) {
-        if (MM_BOOLEAN_IDS.has(metricId)) continue
-        // Number('') is 0, not NaN — a cleared/blank field would otherwise
-        // register as a real "0" high instead of being skipped as no data.
-        if (field?.value === null || field?.value === undefined || field?.value === '') continue
-        const n = Number(field.value)
-        if (isNaN(n)) continue
-        if (!highs[metricId] || n > highs[metricId].value) {
-          highs[metricId] = { value: n, week: row.week_start }
-        }
-      }
-    }
-
+  // Legacy weeks tracked Total Impressions as an In-Network + Out-of-Network
+  // split (MML10/MML11) with no stored MML02 — derive a per-week total (and
+  // average per post) first, so those weeks still count toward the highs.
+  const rows = (data as any[]).map(row => {
     const linkedin = row.linkedin as Record<string, { value?: unknown }> | null
-    if (linkedin) {
-      const read = (id: string) => {
-        const value = linkedin[id]?.value
-        if (value === null || value === undefined || value === '') return null
-        const number = Number(value)
-        return Number.isFinite(number) ? number : null
-      }
-      const inNetwork = read('MML10')
-      const outOfNetwork = read('MML11')
-      const total = inNetwork !== null || outOfNetwork !== null
-        ? (inNetwork ?? 0) + (outOfNetwork ?? 0)
-        : read('MML02')
-      const posts = read('MML01')
-      const average = posts && posts > 0 && total !== null ? Math.round((total / posts) * 100) / 100 : null
-      for (const [metricId, value] of [['MML02', total], ['MML12', average]] as const) {
-        if (value !== null && (!highs[metricId] || value > highs[metricId].value)) {
-          highs[metricId] = { value, week: row.week_start }
-        }
-      }
+    if (!linkedin) return row
+    const read = (id: string) => {
+      const value = linkedin[id]?.value
+      if (value === null || value === undefined || value === '') return null
+      const number = Number(value)
+      return Number.isFinite(number) ? number : null
     }
-  }
-  return highs
+    const inNetwork = read('MML10')
+    const outOfNetwork = read('MML11')
+    const total = inNetwork !== null || outOfNetwork !== null ? (inNetwork ?? 0) + (outOfNetwork ?? 0) : read('MML02')
+    const posts = read('MML01')
+    const average = posts && posts > 0 && total !== null ? Math.round((total / posts) * 100) / 100 : null
+    const patched: Record<string, unknown> = { ...linkedin }
+    if (total !== null) patched.MML02 = { value: total }
+    if (average !== null) patched.MML12 = { value: average }
+    return { ...row, linkedin: patched }
+  })
+
+  return computeLifetimeHighs(rows, MM_METRIC_COLUMNS, {
+    averagedIds: MM_PERCENTAGE_IDS,
+    excludeIds: MM_BOOLEAN_IDS,
+    ratePairs: RATE_PAIRS,
+  })
 }
