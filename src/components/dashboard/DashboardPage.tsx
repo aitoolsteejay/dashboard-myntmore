@@ -141,6 +141,8 @@ export function DashboardPage() {
   const [tjLifetimeHighs, setTjLifetimeHighs] = useState<TJLifetimeHighs>({})
   const effectiveTjMetrics = useEffectiveTjMetrics()
   const [mmLifetimeHighs, setMmLifetimeHighs] = useState<MMLifetimeHighs>({})
+  // Individual sub-sections (a channel, Content Metrics, ...) the user has folded away
+  const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set())
   const [salesLifetimeHighs, setSalesLifetimeHighs] = useState<SalesLifetimeHighs>({})
   const [salesData, setSalesData] = useState<SalesWeeklyData | null>(null)
   const [salesPrev, setSalesPrev] = useState<SalesWeeklyData | null>(null)
@@ -330,6 +332,32 @@ export function DashboardPage() {
     if (next.has(id)) next.delete(id)
     else next.add(id)
     setCollapsedSections(next)
+  }
+
+  const toggleBlock = (id: string) => {
+    setCollapsedBlocks(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // Title bar of one sub-section; click anywhere on it to fold/unfold the section's body.
+  const BlockHeader = ({ id, title, icon: Icon }: { id: string, title: string, icon: any }) => {
+    const collapsed = collapsedBlocks.has(id)
+    return (
+      <button
+        type="button"
+        onClick={() => toggleBlock(id)}
+        aria-expanded={!collapsed}
+        className="flex w-full items-center gap-2 pb-2 border-b border-muted sticky top-0 bg-background z-20 text-left cursor-pointer select-none"
+      >
+        <Icon className="w-4 h-4 text-gold" />
+        <h4 className="text-xs font-black uppercase tracking-widest">{title}</h4>
+        {collapsed ? <ChevronDown className="w-4 h-4 ml-auto text-muted-foreground" /> : <ChevronUp className="w-4 h-4 ml-auto text-muted-foreground" />}
+      </button>
+    )
   }
 
   const SectionHeader = ({ title, id, icon: Icon }: { title: string, id: string, icon: any }) => (
@@ -1599,25 +1627,26 @@ export function DashboardPage() {
     mtd: Record<string, number>; highs: Record<string, any>; targetSource?: any
   }) => (
     <div key={key} className="space-y-4">
-      <div className="flex items-center gap-2 pb-2 border-b border-muted sticky top-0 bg-background z-20">
-        <Icon className="w-4 h-4 text-gold" />
-        <h4 className="text-xs font-black uppercase tracking-widest">{title}</h4>
-      </div>
-      <TJGoalCards
-        metrics={metrics.filter(m => m.type !== 'textarea')}
-        tjMonthlyTargets={tjMonthlyTargets}
-        tjMtdTotals={mtd}
-      />
-      <CompanyMetricTable
-        metrics={metrics.filter(m => m.type !== 'textarea')}
-        currentData={current}
-        prevData={prev}
-        tjTargets={tjTargets}
-        tjMonthlyTargets={tjMonthlyTargets}
-        tjMtdTotals={mtd}
-        highs={highs}
-        targetSource={targetSource}
-      />
+      <BlockHeader id={key} title={title} icon={Icon} />
+      {!collapsedBlocks.has(key) && (
+        <>
+          <TJGoalCards
+            metrics={metrics.filter(m => m.type !== 'textarea')}
+            tjMonthlyTargets={tjMonthlyTargets}
+            tjMtdTotals={mtd}
+          />
+          <CompanyMetricTable
+            metrics={metrics.filter(m => m.type !== 'textarea')}
+            currentData={current}
+            prevData={prev}
+            tjTargets={tjTargets}
+            tjMonthlyTargets={tjMonthlyTargets}
+            tjMtdTotals={mtd}
+            highs={highs}
+            targetSource={targetSource}
+          />
+        </>
+      )}
     </div>
   )
 
@@ -1994,10 +2023,8 @@ export function DashboardPage() {
                                 <div className="grid grid-cols-1 gap-8">
                                   {/* Content Metrics */}
                                   {isServiceEnabled(client.id, 'content') && <div className="space-y-4">
-                                    <div className="flex items-center gap-2 pb-2 border-b border-muted sticky top-0 bg-background z-20">
-                                      <FileText className="w-4 h-4 text-gold" />
-                                      <h4 className="text-xs font-black uppercase tracking-widest">Content Metrics</h4>
-                                    </div>
+                                    <BlockHeader id={`${client.id}:content`} title="Content Metrics" icon={FileText} />
+                                    {!collapsedBlocks.has(`${client.id}:content`) && <>
                                     <MonthlyGoalCards
                                       metrics={activeMetricsFor(client.id, 'content')}
                                       category="content_metrics"
@@ -2014,14 +2041,13 @@ export function DashboardPage() {
                                       clientMtdTotals={clientMtdTotals}
                                       clientHighScores={highScores.filter(h => h.client_id === client.id)}
                                     />
+                                    </>}
                                   </div>}
 
                                   {/* Lead Gen Metrics */}
                                   {isServiceEnabled(client.id, 'leadgen') && <div className="space-y-4">
-                                    <div className="flex items-center gap-2 pb-2 border-b border-muted sticky top-0 bg-background z-20">
-                                      <Users className="w-4 h-4 text-gold" />
-                                      <h4 className="text-xs font-black uppercase tracking-widest">Lead Gen Metrics</h4>
-                                    </div>
+                                    <BlockHeader id={`${client.id}:leadgen`} title="Lead Gen Metrics" icon={Users} />
+                                    {!collapsedBlocks.has(`${client.id}:leadgen`) && <>
                                     <MonthlyGoalCards
                                       metrics={activeMetricsFor(client.id, 'leadgen')}
                                       category="leadgen_metrics"
@@ -2038,6 +2064,7 @@ export function DashboardPage() {
                                       clientMtdTotals={clientMtdTotals}
                                       clientHighScores={highScores.filter(h => h.client_id === client.id)}
                                     />
+                                    </>}
                                   </div>}
                                 </div>
                                 
@@ -2166,28 +2193,16 @@ export function DashboardPage() {
                         { title: 'YouTube', icon: Youtube, metrics: effectiveTjMetrics.youtube, current: isMonthlyView ? monthTjAgg.youtube : tjData?.youtube, prev: isMonthlyView ? null : tjPrev?.youtube, mtd: monthTjAgg.youtube },
                         { title: 'Newsletter', icon: Mail, metrics: effectiveTjMetrics.newsletter, current: isMonthlyView ? monthTjAgg.newsletter : tjData?.email_newsletter, prev: isMonthlyView ? null : tjPrev?.email_newsletter, mtd: monthTjAgg.newsletter },
                         { title: 'Video Pipeline', icon: Mic, metrics: effectiveTjMetrics.video, current: isMonthlyView ? monthTjAgg.video_pipeline : tjData?.video_pipeline, prev: isMonthlyView ? null : tjPrev?.video_pipeline, mtd: monthTjAgg.video_pipeline },
-                      ].map(channel => (
-                        <div key={channel.title} className="space-y-4">
-                          <div className="flex items-center gap-2 pb-2 border-b border-muted sticky top-0 bg-background z-20">
-                            <channel.icon className="w-4 h-4 text-gold" />
-                            <h4 className="text-xs font-black uppercase tracking-widest">{channel.title}</h4>
-                          </div>
-                          <TJGoalCards
-                            metrics={channel.metrics.filter(m => m.type !== 'textarea')}
-                            tjMonthlyTargets={tjMonthlyTargets}
-                            tjMtdTotals={channel.mtd}
-                          />
-                          <CompanyMetricTable
-                            metrics={channel.metrics.filter(m => m.type !== 'textarea')}
-                            currentData={channel.current}
-                            prevData={channel.prev}
-                            tjTargets={tjTargets}
-                            tjMonthlyTargets={tjMonthlyTargets}
-                            tjMtdTotals={channel.mtd}
-                            highs={tjLifetimeHighs}
-                          />
-                        </div>
-                      ))}
+                      ].map(channel => renderCompanyBlock({
+                        key: `tj:${channel.title}`,
+                        title: channel.title,
+                        icon: channel.icon,
+                        metrics: channel.metrics,
+                        current: channel.current,
+                        prev: channel.prev,
+                        mtd: channel.mtd,
+                        highs: tjLifetimeHighs,
+                      }))}
                     </div>
                   ) : (
                     <Card className="border border-dashed py-10 flex flex-col items-center justify-center bg-muted/5">
