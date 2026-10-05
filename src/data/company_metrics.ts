@@ -50,7 +50,7 @@ export const TJ_PODCAST_METRICS: CompanyMetric[] = [
   { id: 'TJP10', name: 'Open Rate', type: 'percentage' },
   { id: 'TJP11', name: 'Click Rate', type: 'percentage' },
   { id: 'TJP12', name: 'CTOR (Click-to-Open Rate)', type: 'percentage' },
-  { id: 'TJP13', name: 'Unsubscribe Rate', type: 'percentage' },
+  { id: 'TJP13', name: 'Unsubscribe Rate', type: 'number' },
 ]
 
 export const MM_ADS_METRICS: CompanyMetric[] = [
