@@ -1,3 +1,4 @@
+import { CUMULATIVE_METRIC_IDS } from '@/data/metricSemantics'
 import { jsPDF } from 'jspdf'
 import { supabase } from '@/integrations/supabase/client'
 import { buildWeekMetrics } from '@/utils/metricCalculations'
@@ -76,7 +77,7 @@ function aggregateWeeks(rows: any[], extraMetrics: Metric[] = []): MetricMap {
     .map(row => buildWeekMetrics(row, extraMetrics))
     .filter(Boolean) as Record<string, any>[]
   const total: MetricMap = {}
-  const latest = new Set(['C16', 'C32'])
+  const latest = CUMULATIVE_METRIC_IDS
   // Any percentage-type metric (standard or custom) is a per-week rate and
   // should be averaged across weeks, not summed — a hardcoded id allowlist
   // here (previously just C34-C37) silently summed every custom percentage
@@ -144,7 +145,7 @@ export async function generateEomReport({ client, month, logoUrl, download = tru
     supabase.from('campaign_weekly_data').select('campaign_id, client_id, week_start, conn_requests_sent, accepted, answered, positive_replies, negative_replies, hot_leads, meetings_booked, existing_conn_sent, existing_conn_replied, notes')
       .eq('client_id', client.id).gte('week_start', current.start).lte('week_start', current.end).order('week_start'),
     (supabase as any).from('aha_moments').select('client_id, title, description, created_at').eq('client_id', client.id)
-      .gte('created_at', `${current.start}T00:00:00Z`).lte('created_at', `${current.end}T23:59:59Z`).order('created_at'),
+      .gte('created_at', `${current.start}T00:00:00+05:30`).lte('created_at', `${current.end}T23:59:59+05:30`).order('created_at'),
     supabase.from('custom_metrics').select('*').eq('client_id', client.id).eq('archived', false).order('sort_order', { ascending: true }),
   ])
   if (weeksError) throw weeksError

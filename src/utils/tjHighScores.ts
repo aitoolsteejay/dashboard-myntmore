@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client'
 import { TJ_INSTAGRAM_METRICS, TJ_YOUTUBE_METRICS, TJ_PODCAST_METRICS, TJ_VIDEO_METRICS } from '@/data/company_metrics'
+import { CUMULATIVE_METRIC_IDS, AVERAGED_NUMBER_IDS } from '@/data/metricSemantics'
 import { computeLifetimeHighs, type HighEntry, type LifetimeHighs } from './lifetimeHighs'
 
 // The JSON columns in tj_weekly_data that hold {metricId: {value, target}} maps —
@@ -31,5 +32,8 @@ export async function fetchTJLifetimeHighs(): Promise<TJLifetimeHighs> {
     ...(customMetrics ?? []).filter(m => m.type === 'percentage').map(m => m.metric_key),
   ])
 
-  return computeLifetimeHighs(data as any[], TJ_METRIC_COLUMNS, { averagedIds: percentageIds })
+  return computeLifetimeHighs(data as any[], TJ_METRIC_COLUMNS, {
+    averagedIds: new Set([...percentageIds, ...AVERAGED_NUMBER_IDS]),
+    cumulativeIds: CUMULATIVE_METRIC_IDS,
+  })
 }

@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client'
 import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from '@/data/company_metrics'
+import { CUMULATIVE_METRIC_IDS, AVERAGED_NUMBER_IDS } from '@/data/metricSemantics'
 import { computeLifetimeHighs, type LifetimeHighs, type RatePair } from './lifetimeHighs'
 
 // The JSON columns in mm_weekly_data that hold {metricId: {value, target}} maps —
@@ -49,7 +50,8 @@ export async function fetchMMLifetimeHighs(): Promise<MMLifetimeHighs> {
   })
 
   return computeLifetimeHighs(rows, MM_METRIC_COLUMNS, {
-    averagedIds: MM_PERCENTAGE_IDS,
+    averagedIds: new Set([...MM_PERCENTAGE_IDS, ...AVERAGED_NUMBER_IDS]),
+    cumulativeIds: CUMULATIVE_METRIC_IDS,
     excludeIds: MM_BOOLEAN_IDS,
     ratePairs: RATE_PAIRS,
   })

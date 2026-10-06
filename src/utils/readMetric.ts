@@ -192,3 +192,19 @@ export function readSalesNum(
   const n = Number(val)
   return isNaN(n) ? null : n
 }
+
+// C09 (Total Posts Posted) is an 'auto' field (C06+C07+C08) that data entry
+// never persists, so a reader that only looks at a stored C09 always sees 0.
+// Prefer a stored value (legacy rows) and otherwise derive it.
+export function readTotalPosts(contentMetrics: Record<string, any> | null | undefined): number {
+  const stored = readNum(contentMetrics, 'C09')
+  if (stored !== null) return stored
+  return (readNum(contentMetrics, 'C06') ?? 0) + (readNum(contentMetrics, 'C07') ?? 0) + (readNum(contentMetrics, 'C08') ?? 0)
+}
+
+// Same story for L12 (Acceptance Rate = L11/L10, never persisted).
+export function readAcceptanceRate(leadgenMetrics: Record<string, any> | null | undefined): number {
+  const stored = readNum(leadgenMetrics, 'L12')
+  if (stored !== null) return stored
+  return calcRateCapped(readNum(leadgenMetrics, 'L11'), readNum(leadgenMetrics, 'L10')) ?? 0
+}

@@ -20,9 +20,12 @@ export type RatePair = [string, string, 100 | 1]
 
 export interface LifetimeHighOptions {
   // Per-week rates/scores: a month's value is the average across its weeks.
-  averagedIds?: Set<string>
+  averagedIds?: ReadonlySet<string>
+  // Running totals/snapshots: a month's value is the highest weekly reading,
+  // not the sum.
+  cumulativeIds?: ReadonlySet<string>
   // Never tracked (e.g. booleans — Number(true) would register a fake "1").
-  excludeIds?: Set<string>
+  excludeIds?: ReadonlySet<string>
   // Derived from the month's summed raw fields instead of summed/averaged
   // (a true rate can't be summed, and averaging weekly rates overweights
   // low-volume weeks).
@@ -35,6 +38,7 @@ function readScalar(field: unknown): number | null {
     : field
   // Number('') is 0, not NaN — a cleared field must read as "no data".
   if (raw === null || raw === undefined || raw === '' || typeof raw === 'boolean') return null
+  if (typeof raw === 'string' && raw.trim() === '') return null
   const n = Number(raw)
   return Number.isFinite(n) ? n : null
 }
@@ -42,7 +46,7 @@ function readScalar(field: unknown): number | null {
 export function computeLifetimeHighs(
   rows: any[],
   columns: readonly string[],
-  { averagedIds = new Set(), excludeIds = new Set(), ratePairs = {} }: LifetimeHighOptions = {},
+  { averagedIds = new Set(), cumulativeIds = new Set(), excludeIds = new Set(), ratePairs = {} }: LifetimeHighOptions = {},
 ): LifetimeHighs {
   const weeklyBest: Record<string, { value: number; week: string }> = {}
   const monthSums: Record<string, Record<string, number>> = {}
@@ -57,12 +61,16 @@ export function computeLifetimeHighs(
         if (excludeIds.has(metricId)) continue
         const n = readScalar(field)
         if (n === null) continue
-        if (!weeklyBest[metricId] || n > weeklyBest[metricId].value) {
+        // A best of 0 is not a record (matches the per-client path, which
+        // requires > 0) — it would just show "Best ever 0" with a date.
+        if (n > 0 && (!weeklyBest[metricId] || n > weeklyBest[metricId].value)) {
           weeklyBest[metricId] = { value: n, week: row.week_start }
         }
         monthSums[month] = monthSums[month] ?? {}
         monthCounts[month] = monthCounts[month] ?? {}
-        monthSums[month][metricId] = (monthSums[month][metricId] ?? 0) + n
+        monthSums[month][metricId] = cumulativeIds.has(metricId)
+          ? Math.max(monthSums[month][metricId] ?? 0, n)
+          : (monthSums[month][metricId] ?? 0) + n
         monthCounts[month][metricId] = (monthCounts[month][metricId] ?? 0) + 1
       }
     }
@@ -91,6 +99,8 @@ export function computeLifetimeHighs(
 
   const highs: LifetimeHighs = {}
   for (const id of new Set([...Object.keys(weeklyBest), ...Object.keys(monthlyBest)])) {
+    // A metric that has only ever been 0 has no record to show.
+    if (!weeklyBest[id] && !(monthlyBest[id]?.value > 0)) continue
     highs[id] = {
       value: weeklyBest[id]?.value ?? 0,
       week: weeklyBest[id]?.week ?? '',

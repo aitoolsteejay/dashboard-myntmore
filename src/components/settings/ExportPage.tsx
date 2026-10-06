@@ -1,3 +1,4 @@
+import { getTodayIST } from '@/utils/dateUtils'
 import React, { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -33,7 +34,7 @@ type ExportMode = 'lifetime' | 'weekly'
 
 export function ExportPage() {
   const weekOptions = useMemo(() => getWeekOptions(12), [])
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayIST()
 
   // ── Lifetime export state ──────────────────────────────────────
   const [upToDate, setUpToDate] = useState(today)

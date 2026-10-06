@@ -1,3 +1,4 @@
+import { nowAsIST } from '@/utils/dateUtils'
 import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from "@/integrations/supabase/client"
 import { ALL_METRICS } from "@/data/metrics"
@@ -48,7 +49,7 @@ function getMondaysBetween(from: string, to: string): string[] {
 }
 
 function getNWeeksBack(n: number): { from: string; to: string } {
-  const today = new Date()
+  const today = nowAsIST()
   const dow = today.getUTCDay()
   const monday = new Date(today)
   monday.setUTCDate(today.getUTCDate() - (dow === 0 ? 6 : dow - 1))
@@ -59,7 +60,7 @@ function getNWeeksBack(n: number): { from: string; to: string } {
 }
 
 function getMonthRange(offset: number): { from: string; to: string } {
-  const d = new Date()
+  const d = nowAsIST()
   d.setUTCDate(1)
   d.setUTCMonth(d.getUTCMonth() + offset)
   const year = d.getUTCFullYear(), month = d.getUTCMonth()
@@ -147,7 +148,7 @@ export function ReportsPage() {
   const [generatingEom, setGeneratingEom] = useState(false)
 
   const eomMonths = useMemo(() => Array.from({ length: 18 }, (_, offset) => {
-    const date = new Date()
+    const date = nowAsIST()
     date.setUTCDate(1)
     date.setUTCMonth(date.getUTCMonth() - offset)
     return {
@@ -204,7 +205,9 @@ export function ReportsPage() {
       supabase.from('targets').select('*')
         .in('client_id', selectedClientIds)
         .eq('target_type', 'weekly')
-        .in('period', weekList),
+        // Targets aren't re-entered every week — fetch everything up to the last
+        // week so getTarget's most-recent fallback can see an earlier-set one.
+        .lte('period', weekList[weekList.length - 1]),
     ]).then(([{ data: wd }, { data: tg }]) => {
       setWeeklyData(wd || [])
       setTargets(tg || [])

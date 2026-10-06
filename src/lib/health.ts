@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client"
-import { readLinkedInImpressions } from "@/utils/readMetric"
+import { readLinkedInImpressions, readTotalPosts, readAcceptanceRate } from "@/utils/readMetric"
 import { findTarget } from "@/utils/targets"
 
 export function calculateHealthScore(
@@ -30,12 +30,12 @@ export function calculateHealthScore(
   const leadgenActive = (id: string) =>
     leadgenEnabled && (options.activeLeadgenMetrics == null || options.activeLeadgenMetrics.includes(id))
 
-  const acceptanceRate = get(leadgenMetrics, 'L12')
+  const acceptanceRate = readAcceptanceRate(leadgenMetrics)
   const positiveReplies = get(leadgenMetrics, 'L15')
   const positiveTarget = target('L15')
   const meetings = get(leadgenMetrics, 'L24')
   const meetingsTarget = target('L24')
-  const posts = get(contentMetrics, 'C09')
+  const posts = readTotalPosts(contentMetrics)
   const postsTarget = target('C09')
   const impressions = readLinkedInImpressions(contentMetrics) ?? 0
   const impressionsTarget = target('C10')
@@ -194,7 +194,7 @@ export async function calculateStreaks(clientId: string, weekStart: string) {
 
     let postsStreak = 0
     for (const week of weeklyData ?? []) {
-        const postsActual = (week.content_metrics as any)?.C09?.value ?? 0
+        const postsActual = readTotalPosts(week.content_metrics as any)
         // Targets are stored with period = week_start (YYYY-MM-DD); most weeks
         // have no row of their own, so fall back to the most recently set one.
         const target = findTarget(weeklyTargets ?? [], 'C09', week.week_start) ?? 0

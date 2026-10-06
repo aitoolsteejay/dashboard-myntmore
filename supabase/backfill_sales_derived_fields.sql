@@ -73,16 +73,16 @@ where cold_email is not null;
 update myntmore.sales_weekly_data
 set meeting_tracker = meeting_tracker || jsonb_build_object(
   'SO40', myntmore.safe_num(meeting_tracker->'SO36') + myntmore.safe_num(meeting_tracker->'SO37')
-        + myntmore.safe_num(meeting_tracker->'SO38') + myntmore.safe_num(meeting_tracker->'SO39'),
+        + myntmore.safe_num(meeting_tracker->'SO38') + myntmore.safe_num(meeting_tracker->'SO39') + myntmore.safe_num(meeting_tracker->'SO56'),
   'SO43', myntmore.safe_rate(
             meeting_tracker->'SO41',
             to_jsonb(myntmore.safe_num(meeting_tracker->'SO36') + myntmore.safe_num(meeting_tracker->'SO37')
-                    + myntmore.safe_num(meeting_tracker->'SO38') + myntmore.safe_num(meeting_tracker->'SO39'))
+                    + myntmore.safe_num(meeting_tracker->'SO38') + myntmore.safe_num(meeting_tracker->'SO39') + myntmore.safe_num(meeting_tracker->'SO56'))
           ),
   'SO47', myntmore.safe_rate(
             meeting_tracker->'SO46',
             to_jsonb(myntmore.safe_num(meeting_tracker->'SO36') + myntmore.safe_num(meeting_tracker->'SO37')
-                    + myntmore.safe_num(meeting_tracker->'SO38') + myntmore.safe_num(meeting_tracker->'SO39'))
+                    + myntmore.safe_num(meeting_tracker->'SO38') + myntmore.safe_num(meeting_tracker->'SO39') + myntmore.safe_num(meeting_tracker->'SO56'))
           ),
   'SO49', myntmore.safe_num(meeting_tracker->'SO46') * myntmore.safe_num(meeting_tracker->'SO48')
 )

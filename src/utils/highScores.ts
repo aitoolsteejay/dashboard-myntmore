@@ -4,13 +4,9 @@ import { customMetricToMetric } from '@/hooks/useEffectiveMetrics'
 import { ALL_METRICS } from '@/data/metrics'
 import { RATE_DEPENDENCIES } from './rateAggregation'
 import { getTodayIST } from './dateUtils'
+import { CUMULATIVE_METRIC_IDS, LOWER_IS_BETTER_METRIC_IDS } from '@/data/metricSemantics'
 
 const rateMetricName = (id: string) => ALL_METRICS.find(m => m.id === id)?.name ?? id
-
-// Cumulative counters (a running total, not a per-week flow): summing them
-// across a month's weeks is meaningless, so a month's value is the highest
-// weekly reading in that month instead.
-const CUMULATIVE_IDS = new Set(['C16', 'C32', 'C41'])
 
 // Custom metrics are always number/percentage/textarea (never 'auto'), so unlike
 // TRACKED_METRICS they need none of the special live-calc branches below — just
@@ -59,7 +55,7 @@ export async function backfillHighScores(clientId: string): Promise<void> {
   const addToMonth = (month: string, id: string, val: number) => {
     if (!monthSums[month]) monthSums[month] = {}
     if (!monthCounts[month]) monthCounts[month] = {}
-    monthSums[month][id] = CUMULATIVE_IDS.has(id)
+    monthSums[month][id] = CUMULATIVE_METRIC_IDS.has(id)
       ? Math.max(monthSums[month][id] ?? 0, val)
       : (monthSums[month][id] ?? 0) + val
     monthCounts[month][id] = (monthCounts[month][id] ?? 0) + 1
@@ -135,6 +131,11 @@ export async function backfillHighScores(clientId: string): Promise<void> {
   const bestMonth: Record<string, { value: number; month: string }> = {}
   for (const [month, sums] of Object.entries(monthSums)) {
     for (const [id, value] of Object.entries(sums)) {
+      // An averaged metric is "valid" after a single week (one week's score
+      // is a perfectly good-looking average), so — like the rates below — the
+      // still-in-progress month must not set a Best Month for it; volume
+      // metrics are naturally short and can't unfairly win.
+      if (month === currentMonth && percentageIds.has(id)) continue
       const monthlyValue = percentageIds.has(id)
         ? value / (monthCounts[month]?.[id] ?? 1)
         : value
@@ -143,6 +144,13 @@ export async function backfillHighScores(clientId: string): Promise<void> {
       }
     }
     if (month === currentMonth) continue
+    // C26 (Avg Impressions Per Post) is a ratio: month impressions / month
+    // posts. It was skipped in the weekly sums above, so it never got a
+    // Best Month at all.
+    if ((sums.C09 ?? 0) > 0 && sums.C10 !== undefined) {
+      const c26 = Math.round((sums.C10 / sums.C09) * 100) / 100
+      if (!bestMonth.C26 || c26 > bestMonth.C26.value) bestMonth.C26 = { value: c26, month }
+    }
     // Every id in RATE_DEPENDENCIES (not just L12/L14/L17), or L05/L18/L21/L26
     // silently never got a "best month" record at all.
     Object.entries(RATE_DEPENDENCIES).forEach(([id, [numId, denId]]) => {
@@ -260,7 +268,9 @@ export async function detectAndUpdateHighScores(
         previous_high: current?.lifetime_high ?? null,
         updated_at: new Date().toISOString()
       })
-      newRecords.push(name)
+      // Still stored as the record, but a higher Negative Replies / Bounce
+      // Rate / cost is not something to celebrate.
+      if (!LOWER_IS_BETTER_METRIC_IDS.has(metricId)) newRecords.push(name)
     }
   }
 
@@ -278,4 +288,24 @@ export async function detectAndUpdateHighScores(
   }
 
   return newRecords
+}
+
+// PostgREST caps a plain select at 1000 rows. With ~50+ tracked metrics per
+// client the high_scores table passes that at roughly 18 clients, and the
+// rows beyond the cap are silently dropped — so read it in pages.
+export async function fetchAllHighScores(): Promise<any[]> {
+  const pageSize = 1000
+  const all: any[] = []
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('high_scores')
+      .select('*')
+      .order('client_id', { ascending: true })
+      .order('metric_id', { ascending: true })
+      .range(from, from + pageSize - 1)
+    if (error) throw error
+    all.push(...(data ?? []))
+    if (!data || data.length < pageSize) break
+  }
+  return all
 }

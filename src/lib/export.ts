@@ -5,7 +5,7 @@ import {
   TJ_INSTAGRAM_METRICS, TJ_YOUTUBE_METRICS, TJ_PODCAST_METRICS, TJ_VIDEO_METRICS,
   MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS,
 } from "@/data/company_metrics"
-import { readNum, readText, readBool } from "@/utils/readMetric"
+import { readNum, readText, readBool, readTotalPosts } from "@/utils/readMetric"
 import { buildWeekMetrics } from "@/utils/metricCalculations"
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -548,7 +548,7 @@ export async function generateWeeklySummary(weekStart: string) {
     const deltaText = delta > 0 ? `↑${delta}` : delta < 0 ? `↓${Math.abs(delta)}` : `→0`
     const meetings = (data?.leadgen_metrics as any)?.L24?.value ?? 0
     const positiveReplies = (data?.leadgen_metrics as any)?.L15?.value ?? 0
-    const posts = (data?.content_metrics as any)?.C09?.value ?? 0
+    const posts = readTotalPosts(data?.content_metrics as any)
     text += `${client.name.split(' ')[0].padEnd(12)} | Score: ${score.toString().padEnd(3)} (${deltaText.padEnd(3)}) | Mtg: ${meetings.toString().padEnd(2)} | Pos Replies: ${positiveReplies.toString().padEnd(2)} | Posts: ${posts}/5 ${posts >= 5 ? '✓' : ''}\n`
   })
 

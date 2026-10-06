@@ -13,13 +13,15 @@ export interface SalesSection {
 }
 
 const n = (id: string, name: string, extra: Partial<CompanyMetric> = {}): CompanyMetric => ({ id, name, type: 'number', ...extra })
+// Free-text fields on the entry page (who was targeted) — not numbers.
+const t = (id: string, name: string): CompanyMetric => ({ id, name, type: 'textarea' })
 const p = (id: string, name: string): CompanyMetric => ({ id, name, type: 'percentage' })
 
 export const SALES_SECTIONS: SalesSection[] = [
   {
     key: 'tj_outreach', title: 'TJ Outreach',
     metrics: [
-      n('SO01', 'ICP Targeted This Week'), n('SO02', 'Conn Requests Sent'), n('SO03', 'Accepted Invitations'),
+      t('SO01', 'ICP Targeted This Week'), n('SO02', 'Conn Requests Sent'), n('SO03', 'Accepted Invitations'),
       p('SO04', 'Acceptance Rate'), n('SO05', 'Answered Messages'), p('SO06', 'Response Rate'),
       n('SO07', 'Hot Leads'), n('SO08', 'Negative Replies'), n('SO09', 'Meetings Booked'),
     ],
@@ -27,7 +29,7 @@ export const SALES_SECTIONS: SalesSection[] = [
   {
     key: 'jahnvi_outreach', title: 'Jahnvi Outreach',
     metrics: [
-      n('SO10', 'ICP Targeted This Week'), n('SO11', 'Conn Requests Sent'), n('SO12', 'Accepted Invitations'),
+      t('SO10', 'ICP Targeted This Week'), n('SO11', 'Conn Requests Sent'), n('SO12', 'Accepted Invitations'),
       p('SO13', 'Acceptance Rate'), n('SO14', 'Answered Messages'), p('SO15', 'Response Rate'),
       n('SO16', 'Hot Leads'), n('SO17', 'Negative Replies'),
     ],
@@ -35,7 +37,7 @@ export const SALES_SECTIONS: SalesSection[] = [
   {
     key: 'shirin_outreach', title: 'Shirin Outreach',
     metrics: [
-      n('SO18', 'InMail ICP Targeted'), n('SO19', 'InMails Sent'), n('SO20', 'InMails Accepted'),
+      t('SO18', 'InMail ICP Targeted'), n('SO19', 'InMails Sent'), n('SO20', 'InMails Accepted'),
       p('SO21', 'InMail Acceptance Rate'), n('SO22', 'LinkedIn Conn Requests Sent'), n('SO23', 'LinkedIn Accepted'),
       p('SO24', 'LinkedIn Acceptance Rate'), n('SO25', 'Answered Messages'), p('SO26', 'Response Rate'),
       n('SO27', 'Hot Leads'), n('SO28', 'Negative Replies'),

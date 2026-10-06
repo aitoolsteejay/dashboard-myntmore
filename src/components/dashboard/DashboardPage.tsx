@@ -20,6 +20,7 @@ import { customMetricToMetric } from "@/hooks/useEffectiveMetrics"
 import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from "@/data/company_metrics"
 import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
 import { findTarget } from "@/utils/targets"
+import { CUMULATIVE_METRIC_IDS, AVERAGED_NUMBER_IDS, LOWER_IS_BETTER_METRIC_IDS } from "@/data/metricSemantics"
 import { applySalesRates } from "@/utils/salesRates"
 import { RATE_DEPENDENCIES, computeVolumeWeightedRate } from "@/utils/rateAggregation"
 import { mv, mt, fmt, delta, deltaColor, tjVal, salesVal, sv, readMetric, formatMetricValue, formatDashboardValue } from "@/utils/dataUtils"
@@ -28,7 +29,7 @@ import { fmt as gFmt, fmtDelta, Delta, fmtPct, fmtPctDelta } from "@/utils/forma
 import { calcRateCapped, readNum } from "@/utils/readMetric"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { buildWeekMetrics, formatMetricDisplay, formatPct } from "@/utils/metricCalculations"
-import { backfillHighScores } from "@/utils/highScores"
+import { backfillHighScores, fetchAllHighScores } from "@/utils/highScores"
 import { fetchTJLifetimeHighs, TJLifetimeHighs } from "@/utils/tjHighScores"
 import { fetchMMLifetimeHighs, MMLifetimeHighs } from "@/utils/mmHighScores"
 import { fetchSalesLifetimeHighs, SalesLifetimeHighs } from "@/utils/salesHighScores"
@@ -143,6 +144,16 @@ export function DashboardPage() {
   const [mmLifetimeHighs, setMmLifetimeHighs] = useState<MMLifetimeHighs>({})
   // Individual sub-sections (a channel, Content Metrics, ...) the user has folded away
   const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set())
+  // Tables the user has frozen. Kept here, not in each table: the tables are
+  // declared inside this component, so React remounts them on every render
+  // and any state they own would reset.
+  const [frozenTables, setFrozenTables] = useState<Set<string>>(new Set())
+  const toggleFrozen = (id: string) => setFrozenTables(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
   const [salesLifetimeHighs, setSalesLifetimeHighs] = useState<SalesLifetimeHighs>({})
   const [salesData, setSalesData] = useState<SalesWeeklyData | null>(null)
   const [salesPrev, setSalesPrev] = useState<SalesWeeklyData | null>(null)
@@ -455,8 +466,10 @@ export function DashboardPage() {
     clientTargets,
     clientMonthlyTargets,
     clientMtdTotals,
-    clientHighScores
+    clientHighScores,
+    tableId
   }: {
+    tableId: string,
     metrics: any[],
     currentData: any,
     prevData: any,
@@ -474,7 +487,7 @@ export function DashboardPage() {
     const currentBuilt = buildWeekMetrics(currentData, extraMetrics)
     const prevBuilt = buildWeekMetrics(prevData, extraMetrics)
     const [expandedTextareas, setExpandedTextareas] = React.useState<Set<string>>(new Set())
-    const [stickyHeader, setStickyHeader] = React.useState(false)
+    const stickyHeader = frozenTables.has(tableId)
     return (
     <div>
       <div className="flex items-center gap-3 px-1 py-1.5 text-[10px] font-semibold text-muted-foreground border-b mb-1">
@@ -486,7 +499,7 @@ export function DashboardPage() {
         <span className="flex items-center gap-1 ml-2"><span className="text-yellow-500">★</span><span>New high</span></span>
         <span className="flex items-center gap-1"><span style={{ color: '#B8860B' }} className="font-bold">■</span><span style={{ color: '#B8860B' }}>Best ever</span></span>
         <button
-          onClick={() => setStickyHeader(h => !h)}
+          onClick={() => toggleFrozen(tableId)}
           className={`ml-auto flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border transition-colors ${stickyHeader ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:border-primary hover:text-primary'}`}
         >
           {stickyHeader ? '📌 Unfreeze' : '📌 Freeze'}
@@ -514,7 +527,13 @@ export function DashboardPage() {
             const bestEver = hs?.lifetime_high ?? null
             const bestEverMonth = hs?.lifetime_high_month ?? null
             const currentNum = current !== null && !isNaN(Number(current)) ? Number(current) : null
-            const isNewHigh = currentNum !== null && currentNum > 0 && bestEver !== null && currentNum > Number(bestEver)
+            // The high_scores row already includes the displayed week once saved, so
+            // "greater than the record" can never be true — a new high is this
+            // week BEING the record week.
+            const isNewHigh = currentNum !== null && currentNum > 0 && bestEver !== null
+              && hs?.achieved_week === displayWeek
+              && Math.abs(currentNum - Number(bestEver)) < 0.001
+              && !LOWER_IS_BETTER_METRIC_IDS.has(m.id)
 
             let achNum: number | null = null
             if (target && currentNum !== null) {
@@ -630,7 +649,7 @@ export function DashboardPage() {
         if (m.type === 'boolean' || m.type === 'textarea') return
         const val = readMetric(week, m.category === 'content' ? 'content_metrics' : 'leadgen_metrics', m.id)
         if (val !== null && !isNaN(Number(val))) {
-          monthlyTotals[m.id] = (monthlyTotals[m.id] ?? 0) + Number(val)
+          monthlyTotals[m.id] = CUMULATIVE_METRIC_IDS.has(m.id) ? Number(val) : (monthlyTotals[m.id] ?? 0) + Number(val)
           monthlyCounts[m.id] = (monthlyCounts[m.id] ?? 0) + 1
         }
       })
@@ -759,7 +778,7 @@ export function DashboardPage() {
             ? (built.L22 ?? mv(row, 'leadgen_metrics', 'L23'))
             : built[metric.id]
           if (value !== null && value !== undefined && !isNaN(Number(value))) {
-            totals[clientId][metric.id] = (totals[clientId][metric.id] ?? 0) + Number(value)
+            totals[clientId][metric.id] = CUMULATIVE_METRIC_IDS.has(metric.id) ? Number(value) : (totals[clientId][metric.id] ?? 0) + Number(value)
             counts[clientId][metric.id] = (counts[clientId][metric.id] ?? 0) + 1
           }
         })
@@ -983,12 +1002,20 @@ export function DashboardPage() {
   const aggregateChannelRows = (rows: any[], channel: string, metrics: any[] = []) => {
     const out: Record<string, number> = {}
     const counts: Record<string, number> = {}
-    const percentageIds = new Set(metrics.filter(m => m.type === 'percentage').map(m => m.id))
+    // Percentages and per-week-average numbers (cost per lead, session
+    // length) average across weeks instead of summing.
+    const percentageIds = new Set([
+      ...metrics.filter(m => m.type === 'percentage').map(m => m.id),
+      ...AVERAGED_NUMBER_IDS,
+    ])
     // A boolean field's Number(true)/Number(false) both pass the isNaN guard
     // below and would get silently summed as if it were a count — the same
     // guard already applied to boolean client metrics elsewhere.
     const booleanIds = new Set(metrics.filter(m => m.type === 'boolean').map(m => m.id))
-    for (const row of rows) {
+    // Ascending by week so a running total (followers, subscribers) ends up
+    // as the LATEST week's reading rather than a sum of every week's.
+    const orderedRows = [...rows].sort((a, b) => String(a.week_start).localeCompare(String(b.week_start)))
+    for (const row of orderedRows) {
       const ch = row[channel]
       if (!ch) continue
       for (const [k, v] of Object.entries(ch)) {
@@ -997,7 +1024,7 @@ export function DashboardPage() {
           ? Number((v as any).value)
           : Number(v)
         if (!isNaN(n)) {
-          out[k] = (out[k] ?? 0) + n
+          out[k] = CUMULATIVE_METRIC_IDS.has(k) ? n : (out[k] ?? 0) + n
           counts[k] = (counts[k] ?? 0) + 1
         }
       }
@@ -1018,6 +1045,17 @@ export function DashboardPage() {
           ? Number((v as any).value)
           : Number(v)
         if (!isNaN(n)) out[k] = (out[k] ?? 0) + n
+      }
+      // Weeks saved before SO40/SO49 were persisted have the raw inputs but no
+      // stored total — derive them per week so the month's totals (and the rate
+      // denominators recomputed below) don't undercount.
+      if (section === 'meeting_tracker') {
+        const num = (id: string) => { const v = Number((sec as any)[id]); return isNaN(v) ? 0 : v }
+        const has = (id: string) => (sec as any)[id] !== undefined && (sec as any)[id] !== null && (sec as any)[id] !== ''
+        if (!has('SO40') && ['SO36', 'SO37', 'SO38', 'SO39', 'SO56'].some(has)) {
+          out.SO40 = (out.SO40 ?? 0) + ['SO36', 'SO37', 'SO38', 'SO39', 'SO56'].reduce((sum, id) => sum + num(id), 0)
+        }
+        if (!has('SO49') && (has('SO46') || has('SO48'))) out.SO49 = (out.SO49 ?? 0) + num('SO46') * num('SO48')
       }
     }
     // Weekly rate fields (acceptance/reply/completion/conversion %) were being
@@ -1179,7 +1217,9 @@ export function DashboardPage() {
     tjMtdTotals,
     highs,
     targetSource,
+    tableId,
   }: {
+    tableId: string
     metrics: any[]
     currentData: any
     prevData: any
@@ -1192,7 +1232,7 @@ export function DashboardPage() {
     // weekly target is read from here rather than via findTarget().
     targetSource?: any
   }) => {
-    const [stickyHeader, setStickyHeader] = React.useState(false)
+    const stickyHeader = frozenTables.has(tableId)
     return (
       <div>
         <div className="flex items-center gap-3 px-1 py-1.5 text-[10px] font-semibold text-muted-foreground border-b mb-1">
@@ -1204,7 +1244,7 @@ export function DashboardPage() {
           <span className="flex items-center gap-1 ml-2"><span className="text-yellow-500">★</span><span>New high</span></span>
           <span className="flex items-center gap-1"><span style={{ color: '#B8860B' }} className="font-bold">■</span><span style={{ color: '#B8860B' }}>Best ever</span></span>
           <button
-            onClick={() => setStickyHeader(h => !h)}
+            onClick={() => toggleFrozen(tableId)}
             className={`ml-auto flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border transition-colors ${stickyHeader ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:border-primary hover:text-primary'}`}
           >
             {stickyHeader ? '📌 Unfreeze' : '📌 Freeze'}
@@ -1228,14 +1268,22 @@ export function DashboardPage() {
               const current = tjVal(currentData, m.id)
               const prev = tjVal(prevData, m.id)
               const inlineTarget = targetSource !== undefined ? Number(targetSource?.[m.id]?.target) : NaN
-              const target = targetSource !== undefined
+              // In Monthly View `current` is a month-to-date total, so comparing it to a
+              // WEEKLY target (e.g. ~4x too high) is wrong — leave the weekly column blank.
+              const target = isMonthlyView ? null : targetSource !== undefined
                 ? (inlineTarget > 0 ? inlineTarget : null)
                 : findTarget(tjTargets, m.id, displayWeek)
               const monthlyTarget = findTarget(tjMonthlyTargets, m.id, displayWeek.slice(0, 7))
               const hs = highs[m.id]
               const bestEver = hs?.value ?? null
               const bestEverMonth = hs?.monthValue ?? null
-              const isNewHigh = current !== null && current > 0 && bestEver !== null && current > bestEver
+              // highs already include the displayed week, so "> record" is never true;
+              // a new high is this week being the record week. In Monthly View
+              // `current` is a month-to-date total, which is not comparable to a
+              // single-week record, so no star there.
+              const isNewHigh = !isMonthlyView && current !== null && current > 0 && bestEver !== null
+                && hs?.week === displayWeek
+                && !LOWER_IS_BETTER_METRIC_IDS.has(m.id)
 
               let achNum: number | null = null
               if (target && current !== null) achNum = Math.round((current / Number(target)) * 100)
@@ -1363,7 +1411,7 @@ export function DashboardPage() {
         // most recently set target for a metric via findTarget() when the current one is missing.
         supabase.from('targets').select('*').lte('period', weekStart).eq('target_type', 'weekly'),
         supabase.from('targets').select('*').lte('period', weekStart.slice(0, 7)).eq('target_type', 'monthly'),
-        supabase.from('high_scores').select('*'),
+        fetchAllHighScores().then(data => ({ data, error: null })),
         supabase.from('weekly_data').select('week_start, week_label, content_metrics, leadgen_metrics, client_id, content_submitted_at, leadgen_submitted_at')
           .gte('week_start', weekStart.slice(0, 7) + '-01')
           .lte('week_start', monthEnd)
@@ -1443,7 +1491,7 @@ export function DashboardPage() {
         (clientsData || []).map((c: any) => backfillHighScores(c.id))
       ).then(async () => {
         // Re-fetch high scores after backfill so UI reflects corrected values
-        const { data: refreshed } = await supabase.from('high_scores').select('*')
+        const refreshed = await fetchAllHighScores()
         if (refreshed) setHighScores(refreshed)
       }).catch(error => {
         console.error('High-score refresh failed:', error)
@@ -1644,6 +1692,7 @@ export function DashboardPage() {
             tjMtdTotals={mtd}
             highs={highs}
             targetSource={targetSource}
+            tableId={key}
           />
         </>
       )}
@@ -1846,7 +1895,9 @@ export function DashboardPage() {
                           const col = m.category === 'content' ? cm : lm
                           const v = readNum(col, m.id)
                           if (v !== null) {
-                            clientMtdTotals[m.id] = (clientMtdTotals[m.id] ?? 0) + v
+                            // A running total (followers, subscribers) is the LATEST
+                            // week's reading, not a sum — rows are ascending by week.
+                            clientMtdTotals[m.id] = CUMULATIVE_METRIC_IDS.has(m.id) ? v : (clientMtdTotals[m.id] ?? 0) + v
                             clientMtdCounts[m.id] = (clientMtdCounts[m.id] ?? 0) + 1
                           }
                         })
@@ -2032,6 +2083,7 @@ export function DashboardPage() {
                                       clientMtdTotals={clientMtdTotals}
                                     />
                                     <MetricTable
+                                      tableId={`${client.id}:content`}
                                       metrics={activeMetricsFor(client.id, 'content').filter(m => m.group !== 'Qualitative')}
                                       currentData={currentData}
                                       prevData={prevData}
@@ -2055,6 +2107,7 @@ export function DashboardPage() {
                                       clientMtdTotals={clientMtdTotals}
                                     />
                                     <MetricTable
+                                      tableId={`${client.id}:leadgen`}
                                       metrics={activeMetricsFor(client.id, 'leadgen').filter(m => m.group !== 'Qualitative')}
                                       currentData={currentData}
                                       prevData={prevData}

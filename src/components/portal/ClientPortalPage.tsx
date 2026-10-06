@@ -1,3 +1,5 @@
+import { CUMULATIVE_METRIC_IDS } from '@/data/metricSemantics'
+import { nowAsIST } from '@/utils/dateUtils'
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { supabase } from '@/integrations/supabase/client'
@@ -48,7 +50,7 @@ function getMondaysBetween(from: string, to: string): string[] {
 }
 
 function getNWeeksBack(n: number): { from: string; to: string } {
-  const today = new Date()
+  const today = nowAsIST()
   const dow = today.getUTCDay()
   const monday = new Date(today)
   monday.setUTCDate(today.getUTCDate() - (dow === 0 ? 6 : dow - 1))
@@ -59,7 +61,7 @@ function getNWeeksBack(n: number): { from: string; to: string } {
 }
 
 function getMonthRange(offset: number): { from: string; to: string } {
-  const d = new Date()
+  const d = nowAsIST()
   d.setUTCDate(1)
   d.setUTCMonth(d.getUTCMonth() + offset)
   const year = d.getUTCFullYear(), month = d.getUTCMonth()
@@ -151,14 +153,16 @@ function formatVal(val: any): string {
 }
 
 function Delta({ curr, prev }: { curr: any; prev: any }) {
+  // A real 0 (5 posts -> 0) is data, not "missing" — only null/blank is.
+  const missing = (v: any) => v === null || v === undefined || v === ''
   const c = Number(curr), p = Number(prev)
-  if (isNaN(c) || isNaN(p) || !curr || !prev) return <span className="text-muted-foreground">-</span>
+  if (missing(curr) || missing(prev) || isNaN(c) || isNaN(p)) return <span className="text-muted-foreground">-</span>
   const diff = c - p
   if (diff === 0) return <span className="text-muted-foreground flex items-center gap-0.5"><Minus className="w-3 h-3" />0</span>
-  const pct = Math.abs(Math.round((diff / p) * 100))
+  const pctText = p === 0 ? '' : ` (${Math.abs(Math.round((diff / p) * 100))}%)`
   return diff > 0
-    ? <span className="text-green-600 font-bold flex items-center gap-0.5"><ArrowUpRight className="w-3 h-3" />+{formatVal(diff)} <span className="text-xs font-normal opacity-70">({pct}%)</span></span>
-    : <span className="text-red-500 font-bold flex items-center gap-0.5"><ArrowDownRight className="w-3 h-3" />{formatVal(diff)} <span className="text-xs font-normal opacity-70">({pct}%)</span></span>
+    ? <span className="text-green-600 font-bold flex items-center gap-0.5"><ArrowUpRight className="w-3 h-3" />+{formatVal(diff)}<span className="text-xs font-normal opacity-70">{pctText}</span></span>
+    : <span className="text-red-500 font-bold flex items-center gap-0.5"><ArrowDownRight className="w-3 h-3" />{formatVal(diff)}<span className="text-xs font-normal opacity-70">{pctText}</span></span>
 }
 
 function aggregatePeriodMetrics(rows: any[], extraMetrics: Metric[] = []): Record<string, any> | null {
@@ -171,7 +175,7 @@ function aggregatePeriodMetrics(rows: any[], extraMetrics: Metric[] = []): Recor
   if (!builtRows.length) return null
 
   const totals: Record<string, any> = {}
-  const latestValueMetrics = new Set(['C16', 'C32'])
+  const latestValueMetrics = CUMULATIVE_METRIC_IDS
 
   for (const metric of [...ALL_METRICS, ...extraMetrics]) {
     if (metric.type === 'auto' || metric.type === 'textarea' || metric.type === 'boolean') continue
@@ -226,7 +230,7 @@ export function ClientPortalPage() {
   const [mtdData, setMtdData] = useState<any[]>([])
   const [previousMonthData, setPreviousMonthData] = useState<any[]>([])
   const monthOptions = useMemo(() => Array.from({ length: 12 }, (_, offset) => {
-    const date = new Date()
+    const date = nowAsIST()
     date.setUTCDate(1)
     date.setUTCMonth(date.getUTCMonth() - offset)
     return {
@@ -299,7 +303,8 @@ export function ClientPortalPage() {
       supabase.from('targets').select('*')
         .eq('client_id', clientRecord.id)
         .eq('target_type', 'weekly')
-        .in('period', reportWeekList),
+        // Targets aren't re-entered every week — include earlier-set ones.
+        .lte('period', reportWeekList[reportWeekList.length - 1]),
     ]).then(([{ data: wd }, { data: tg }]) => {
       setReportWeeklyData(assertClientRows(wd, clientRecord.id, 'report metrics'))
       setReportTargets(assertClientRows(tg, clientRecord.id, 'report targets'))

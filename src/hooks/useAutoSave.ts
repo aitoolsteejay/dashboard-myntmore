@@ -156,7 +156,18 @@ export function useAutoSave(options: AutoSaveOptions) {
   }, [enqueueSave])
 
   const triggerSave = useCallback((data: Record<string, any>) => {
-    const request = { data, cols: { ...matchColumnsRef.current } }
+    const cols = { ...matchColumnsRef.current }
+    // A new edit used to simply replace the pending request, so editing two
+    // different sections/columns inside the debounce window (e.g. TJ's
+    // Instagram then YouTube) silently dropped the first edit. For a plain
+    // column-patch table (no custom saveFn doing its own patch merging),
+    // fold the still-pending columns into this request when it targets the
+    // same row — the newer value of any column wins.
+    const pending = pendingRef.current
+    const merged = pending && !callbacksRef.current.saveFn && scopeKey(pending.cols) === scopeKey(cols)
+      ? { ...pending.data, ...data }
+      : data
+    const request = { data: merged, cols }
     pendingRef.current = request
     setSaveStatus('pending')
 

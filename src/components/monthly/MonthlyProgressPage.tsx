@@ -11,13 +11,13 @@ import { ChevronLeft, ChevronRight, ChevronDown, Target, TrendingUp, AlertTriang
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { sortAlphabetically } from '@/utils/sort'
-import { getTodayIST } from '@/utils/dateUtils'
+import { getTodayIST, nowAsIST } from '@/utils/dateUtils'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function getMonthOptions(count = 12) {
   return Array.from({ length: count }, (_, i) => {
-    const d = new Date()
+    const d = nowAsIST() // IST "now", so month 0 agrees with isCurrentMonth below
     d.setUTCDate(1)
     d.setUTCMonth(d.getUTCMonth() - i)
     return {

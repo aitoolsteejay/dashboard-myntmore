@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client'
 import { SALES_SECTIONS } from '@/data/sales_metrics'
 import { SALES_RATE_DEPENDENCIES } from './salesRates'
+import { CUMULATIVE_METRIC_IDS, AVERAGED_NUMBER_IDS } from '@/data/metricSemantics'
 import { computeLifetimeHighs, type LifetimeHighs, type RatePair } from './lifetimeHighs'
 
 const SALES_COLUMNS = ['tj_outreach', 'jahnvi_outreach', 'shirin_outreach', 'cold_email', 'meeting_tracker'] as const
@@ -22,5 +23,5 @@ export async function fetchSalesLifetimeHighs(): Promise<SalesLifetimeHighs> {
   const percentageIds = new Set(
     SALES_SECTIONS.flatMap(s => s.metrics).filter(m => m.type === 'percentage').map(m => m.id)
   )
-  return computeLifetimeHighs(data as any[], SALES_COLUMNS, { averagedIds: percentageIds, ratePairs: RATE_PAIRS })
+  return computeLifetimeHighs(data as any[], SALES_COLUMNS, { averagedIds: percentageIds, cumulativeIds: CUMULATIVE_METRIC_IDS, ratePairs: RATE_PAIRS })
 }

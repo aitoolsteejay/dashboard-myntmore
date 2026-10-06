@@ -1,3 +1,4 @@
+import { fetchAllHighScores } from '@/utils/highScores'
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CalendarDays, Loader2, Medal, Search, Trophy, Users } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
@@ -69,7 +70,10 @@ export function HighScoresPage() {
     let active = true
     Promise.all([
       supabase.from('clients').select('id, name, company').order('name'),
-      supabase.from('high_scores').select('*').order('updated_at', { ascending: false }),
+      fetchAllHighScores().then(data => ({
+        data: data.sort((a, b) => String(b.updated_at ?? '').localeCompare(String(a.updated_at ?? ''))),
+        error: null,
+      })),
       supabase.from('custom_metrics').select('*').eq('archived', false),
     ]).then(([clientResult, scoreResult, customResult]) => {
       if (!active) return

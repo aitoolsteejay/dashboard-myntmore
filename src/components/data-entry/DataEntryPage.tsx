@@ -1,3 +1,4 @@
+import { getTodayIST } from '@/utils/dateUtils'
 import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from "@/integrations/supabase/client"
 import { useAuth } from "@/lib/auth"
@@ -158,7 +159,7 @@ function LeadGenCampaignEntry({
         localCampaignDataRef.current = localCampaignData
     }, [localCampaignData])
     const [showNewCampaignForm, setShowNewCampaignForm] = useState(false)
-    const [newCampaign, setNewCampaign] = useState({ name: '', icp_description: '', message_narrative: '', started_date: new Date().toISOString().split('T')[0] })
+    const [newCampaign, setNewCampaign] = useState({ name: '', icp_description: '', message_narrative: '', started_date: getTodayIST() })
     const [saveStatus, setSaveStatus] = useState<Record<string, 'saving' | 'saved' | 'error'>>({})
     const [leadGenMode, setLeadGenMode] = useState<'campaigns' | 'legacy'>('campaigns')
     const [calibrateOpen, setCalibrateOpen] = useState(false)
@@ -587,7 +588,7 @@ function LeadGenCampaignEntry({
             setCampaigns(sortAlphabetically([...campaigns, data], campaign => campaign.name))
             setLocalCampaignData({ ...localCampaignData, [data.id]: { conn_requests_sent: '', accepted: '', answered: '', positive_replies: '', negative_replies: '', hot_leads: '', meetings_booked: '', existing_conn_sent: '', existing_conn_replied: '', notes: '' } })
             setShowNewCampaignForm(false)
-            setNewCampaign({ name: '', icp_description: '', message_narrative: '', started_date: new Date().toISOString().split('T')[0] })
+            setNewCampaign({ name: '', icp_description: '', message_narrative: '', started_date: getTodayIST() })
         } catch (error: any) {
             toast.error(error.message)
         }

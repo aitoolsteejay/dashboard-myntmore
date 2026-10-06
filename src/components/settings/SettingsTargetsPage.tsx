@@ -369,12 +369,13 @@ export function SettingsTargetsPage() {
     setSalesSaving(true)
     try {
       // Delete existing, then insert fresh (avoids null upsert issues)
-      await supabase.from('targets')
+      const { error: deleteError } = await supabase.from('targets')
         .delete()
         .is('client_id', null)
         .eq('target_type', 'weekly')
         .eq('period', selectedWeekStart)
         .in('metric_id', SALES_TARGET_METRIC_IDS)
+      if (deleteError) throw deleteError
 
       const rows = Object.entries(salesTargetValues)
         .filter(([id]) => SALES_TARGET_METRIC_IDS.includes(id))

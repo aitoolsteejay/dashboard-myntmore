@@ -1,3 +1,4 @@
+import { getTodayIST } from '@/utils/dateUtils'
 import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from "@/integrations/supabase/client"
 import { useAuth } from "@/lib/auth"
@@ -55,7 +56,10 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
   const { triggerSave, flushPendingSave, retrySave, saveStatus, lastSaved } = useAutoSave({
     table: 'sales_weekly_data',
     matchColumns: { week_start: selectedWeek },
-    debounceMs: 1500
+    debounceMs: 1500,
+    // The Dashboard / Meeting History tabs read salesHistory, which was only
+    // fetched on week change — so they showed stale numbers after an edit.
+    onSaveSuccess: () => { void fetchSalesHistory() },
   })
   const [formData, setFormData] = useState<any>({
     tj_outreach: {},
@@ -164,19 +168,26 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
   }
 
   const handleSaveLead = async () => {
+    if (!leadForm.lead_name.trim() || !leadForm.company.trim()) {
+      toast.error('Lead name and company are required.')
+      return
+    }
     const weighted = (leadForm.deal_value * leadForm.probability) / 100
+    // owner_id is a uuid column — an unassigned lead is '' in the form, which
+    // Postgres rejects, so those leads could never be edited.
+    const payload = { ...leadForm, owner_id: leadForm.owner_id || null, weighted_value: weighted }
     try {
       if (editingLead) {
         const { error } = await supabase
           .from('hot_leads')
-          .update({ ...leadForm, weighted_value: weighted })
+          .update(payload)
           .eq('id', editingLead.id)
         if (error) throw error
         toast.success("Lead updated")
       } else {
         const { error } = await supabase
           .from('hot_leads')
-          .insert({ ...leadForm, weighted_value: weighted })
+          .insert(payload)
         if (error) throw error
         toast.success("Lead added")
       }
@@ -286,12 +297,12 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
 
   const renderDashboard = () => {
     // Calc MTD totals
-    const currentMonth = new Date().toISOString().substring(0, 7)
+    const currentMonth = getTodayIST().slice(0, 7)
     const mtdData = salesHistory.filter(h => h.week_start.startsWith(currentMonth))
     
     const totalMeetings = mtdData.reduce((acc, h) => {
       const flat = { ...(h.tj_outreach as Record<string, unknown> ?? {}), ...(h.jahnvi_outreach as Record<string, unknown> ?? {}), ...(h.shirin_outreach as Record<string, unknown> ?? {}), ...(h.cold_email as Record<string, unknown> ?? {}), ...(h.meeting_tracker as Record<string, unknown> ?? {}) }
-      return acc + (readSalesNum(flat, 'SO40') ?? 0)
+      return acc + (readSalesNum(flat, 'SO40') ?? ['SO36', 'SO37', 'SO38', 'SO39', 'SO56'].reduce((sum, id) => sum + (readSalesNum(flat, id) ?? 0), 0))
     }, 0)
     
     const totalHotLeads = mtdData.reduce((acc, h) => {
