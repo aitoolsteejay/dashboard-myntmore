@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Link } from "@tanstack/react-router"
 import { useAuth } from "@/lib/auth"
 import { syncClientNotifications, dismissClientNotification } from "@/lib/notifications"
@@ -188,6 +188,9 @@ export function DashboardPage() {
   }>>({})
   // Every client's own custom metrics, bulk-fetched once (not N+1 per client).
   const [customMetricsByClient, setCustomMetricsByClient] = useState<Record<string, Metric[]>>({})
+  // A week switch can leave an older, slower request in flight. Its response
+  // must never replace the data for the newly selected week.
+  const dashboardRequestRef = useRef(0)
 
   // Moved up from further down in this component so monthTjAgg/monthSalesAgg/
   // monthMmAgg (below) can scope their "(Month to Date)" totals to the
@@ -1376,6 +1379,7 @@ export function DashboardPage() {
   }
 
   const loadAllDashboardData = async (weekStart: string) => {
+    const requestId = ++dashboardRequestRef.current
     setLoading(true)
     try {
       const prevDate = new Date(weekStart)
@@ -1453,6 +1457,8 @@ export function DashboardPage() {
         { data: customMetricsRes },
       ] = dashboardResults
 
+      if (requestId !== dashboardRequestRef.current) return
+
       setClients(sortAlphabetically(clientsData || [], client => client.name))
       setAlerts(alertsData || [])
       setWeeklyData(weeklyDataRes || [])
@@ -1503,7 +1509,7 @@ export function DashboardPage() {
     } catch (error: any) {
       toast.error(error.message)
     } finally {
-      setLoading(false)
+      if (requestId === dashboardRequestRef.current) setLoading(false)
     }
   }
 
