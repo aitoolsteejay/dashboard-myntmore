@@ -2320,7 +2320,10 @@ export function DashboardPage() {
                         prev: isMonthlyView ? null : (ch.derive ? withLinkedInImpressionTotals(ch.rawPrev) : ch.rawPrev),
                         mtd: ch.mtd,
                         highs: mmLifetimeHighs,
-                        targetSource: isMonthlyView ? undefined : ch.raw,
+                        // MM targets now use the shared targets table (weekly + monthly),
+                        // just like TJ and Sales. Keep legacy inline values as a fallback
+                        // only when no configured target exists.
+                        targetSource: undefined,
                       }))}
                     </div>
                   ) : (

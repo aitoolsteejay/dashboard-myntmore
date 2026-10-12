@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { sortAlphabetically } from "@/utils/sort"
 import { CompanyMetric } from "@/data/company_metrics"
 import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
+import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from "@/data/company_metrics"
 
 interface TargetRowProps {
   metric: Metric
@@ -116,7 +117,7 @@ const SALES_TARGET_METRIC_IDS = ['SO50', 'SO51', 'SO53', 'SO55'] // only non-aut
 
 export function SettingsTargetsPage() {
   const { user } = useAuth()
-  const [activeSection, setActiveSection] = useState<'client' | 'sales' | 'tj'>('client')
+  const [activeSection, setActiveSection] = useState<'client' | 'sales' | 'tj' | 'mm'>('client')
   const [selectedClientId, setSelectedClientId] = useState<string>('')
   const [targetType, setTargetType] = useState<'weekly' | 'monthly'>('weekly')
   const [selectedWeekStart, setSelectedWeekStart] = useState(getPreviousWeekStart())
@@ -133,6 +134,9 @@ export function SettingsTargetsPage() {
   const [tjTargetValues, setTjTargetValues] = useState<Record<string, number>>({})
   const [tjActuals, setTjActuals] = useState<Record<string, number>>({})
   const [tjSaving, setTjSaving] = useState(false)
+  const [mmTargetValues, setMmTargetValues] = useState<Record<string, number>>({})
+  const [mmActuals, setMmActuals] = useState<Record<string, number>>({})
+  const [mmSaving, setMmSaving] = useState(false)
   const [clients, setClients] = useState<any[]>([])
   const [customMetrics, setCustomMetrics] = useState<Metric[]>([])
 
@@ -327,43 +331,33 @@ export function SettingsTargetsPage() {
   }
 
   // Load sales targets (client_id IS NULL)
-  const loadSalesTargets = async (weekStart: string) => {
+  const loadSalesTargets = async (type: 'weekly' | 'monthly', p: string) => {
     const { data } = await supabase
       .from('targets')
       .select('metric_id, target_value')
       .is('client_id', null)
-      .eq('target_type', 'weekly')
-      .eq('period', weekStart)
+      .eq('target_type', type)
+      .eq('period', p)
       .in('metric_id', SALES_TARGET_METRIC_IDS)
     const map: Record<string, number> = {}
     data?.forEach(t => { if (t.target_value !== null) map[t.metric_id] = t.target_value })
     setSalesTargetValues(map)
   }
 
-  const loadSalesActuals = async (weekStart: string) => {
-    const { data } = await supabase
-      .from('sales_weekly_data')
-      .select('cold_email')
-      .eq('week_start', weekStart)
-      .maybeSingle()
-    if (data?.cold_email) {
-      const ce = data.cold_email as Record<string, any>
-      const actuals: Record<string, number> = {}
-      SALES_TARGET_METRIC_IDS.forEach(id => {
-        const v = ce[id]
-        if (v !== null && v !== undefined && !isNaN(Number(v))) actuals[id] = Number(v)
-      })
-      setSalesActuals(actuals)
-    } else {
-      setSalesActuals({})
-    }
+  const loadSalesActuals = async (type: 'weekly' | 'monthly', p: string) => {
+    const starts = type === 'weekly' ? [p] : weeksInMonth(p)
+    const { data } = await supabase.from('sales_weekly_data').select('cold_email').in('week_start', starts)
+    const sums: Record<string, number> = {}, counts: Record<string, number> = {}
+    ;(data || []).forEach(row => SALES_TARGET_METRIC_IDS.forEach(id => { const v = (row.cold_email as any)?.[id]; if (v !== null && v !== undefined && !isNaN(Number(v))) { sums[id] = (sums[id] || 0) + Number(v); counts[id] = (counts[id] || 0) + 1 } }))
+    setSalesActuals(Object.fromEntries(Object.keys(sums).map(id => [id, type === 'monthly' && (id === 'SO52' || id === 'SO54') ? sums[id] / counts[id] : sums[id]])))
   }
 
   useEffect(() => {
     if (activeSection !== 'sales') return
-    loadSalesTargets(selectedWeekStart)
-    loadSalesActuals(selectedWeekStart)
-  }, [activeSection, selectedWeekStart])
+    const p = targetType === 'weekly' ? selectedWeekStart : selectedMonth
+    loadSalesTargets(targetType, p)
+    loadSalesActuals(targetType, p)
+  }, [activeSection, selectedWeekStart, selectedMonth, targetType])
 
   const saveSalesTargets = async () => {
     setSalesSaving(true)
@@ -372,8 +366,8 @@ export function SettingsTargetsPage() {
       const { error: deleteError } = await supabase.from('targets')
         .delete()
         .is('client_id', null)
-        .eq('target_type', 'weekly')
-        .eq('period', selectedWeekStart)
+        .eq('target_type', targetType)
+        .eq('period', targetType === 'weekly' ? selectedWeekStart : selectedMonth)
         .in('metric_id', SALES_TARGET_METRIC_IDS)
       if (deleteError) throw deleteError
 
@@ -383,8 +377,8 @@ export function SettingsTargetsPage() {
         .map(([metricId, targetValue]) => ({
           client_id: null as string | null,
           metric_id: metricId,
-          target_type: 'weekly',
-          period: selectedWeekStart,
+          target_type: targetType,
+          period: targetType === 'weekly' ? selectedWeekStart : selectedMonth,
           target_value: Number(targetValue),
         }))
 
@@ -430,6 +424,31 @@ export function SettingsTargetsPage() {
       d.setUTCDate(d.getUTCDate() + 7)
     }
     return weeks
+  }
+
+  const MM_TARGET_GROUPS = useMemo(() => [
+    { title: 'LinkedIn', metrics: MM_LINKEDIN_METRICS.filter(m => m.hasTarget) },
+    { title: 'Instagram', metrics: MM_INSTAGRAM_METRICS.filter(m => m.hasTarget) },
+    { title: 'Website', metrics: MM_WEBSITE_METRICS.filter(m => m.hasTarget) },
+    { title: 'SEO', metrics: MM_SEO_METRICS.filter(m => m.hasTarget) },
+    { title: 'Other Channels', metrics: MM_OTHER_METRICS.filter(m => m.hasTarget) },
+    { title: 'Ads', metrics: MM_ADS_METRICS.filter(m => m.hasTarget) },
+  ], [])
+  const MM_TARGET_METRIC_IDS = useMemo(() => MM_TARGET_GROUPS.flatMap(g => g.metrics.map(m => m.id)), [MM_TARGET_GROUPS])
+  const loadMmTargets = async (type: 'weekly' | 'monthly', p: string) => {
+    const { data } = await supabase.from('targets').select('metric_id,target_value').is('client_id', null).eq('target_type', type).eq('period', p).in('metric_id', MM_TARGET_METRIC_IDS)
+    setMmTargetValues(Object.fromEntries((data || []).filter(r => r.target_value !== null).map(r => [r.metric_id, Number(r.target_value)])))
+  }
+  const loadMmActuals = async (type: 'weekly' | 'monthly', p: string) => {
+    const { data } = await supabase.from('mm_weekly_data').select('linkedin,instagram,website,quora,reddit,ads').in('week_start', type === 'weekly' ? [p] : weeksInMonth(p))
+    const sums: Record<string, number> = {}, counts: Record<string, number> = {}
+    ;(data || []).forEach(row => MM_TARGET_GROUPS.forEach(g => g.metrics.forEach(m => { const columns = g.title === 'LinkedIn' ? ['linkedin'] : g.title === 'Instagram' ? ['instagram'] : g.title === 'Website' || g.title === 'SEO' ? ['website'] : g.title === 'Other Channels' ? ['quora','reddit'] : ['ads']; const raw = columns.map(c => (row as any)[c]?.[m.id]?.value).find(v => v !== undefined && v !== null); if (raw !== undefined && !isNaN(Number(raw))) { sums[m.id] = (sums[m.id] || 0) + Number(raw); counts[m.id] = (counts[m.id] || 0) + 1 } })))
+    setMmActuals(Object.fromEntries(Object.keys(sums).map(id => [id, type === 'monthly' && MM_TARGET_GROUPS.flatMap(g => g.metrics).find(m => m.id === id)?.type === 'percentage' ? sums[id] / counts[id] : sums[id]])))
+  }
+  useEffect(() => { if (activeSection !== 'mm') return; const p = targetType === 'weekly' ? selectedWeekStart : selectedMonth; loadMmTargets(targetType, p); loadMmActuals(targetType, p) }, [activeSection, targetType, selectedWeekStart, selectedMonth, MM_TARGET_METRIC_IDS])
+  const saveMmTargets = async () => {
+    setMmSaving(true); const p = targetType === 'weekly' ? selectedWeekStart : selectedMonth
+    try { const { error: de } = await supabase.from('targets').delete().is('client_id', null).eq('target_type', targetType).eq('period', p).in('metric_id', MM_TARGET_METRIC_IDS); if (de) throw de; const rows = Object.entries(mmTargetValues).filter(([id]) => MM_TARGET_METRIC_IDS.includes(id)).map(([metric_id, target_value]) => ({ client_id: null as string | null, metric_id, target_type: targetType, period: p, target_value: Number(target_value) })); if (rows.length) { const { error } = await supabase.from('targets').insert(rows); if (error) throw error }; toast.success('MM Company Content targets saved.') } catch (e: any) { toast.error('Save failed: ' + e.message) } finally { setMmSaving(false) }
   }
 
   const loadTjActuals = async (type: 'weekly' | 'monthly', p: string) => {
@@ -617,6 +636,7 @@ export function SettingsTargetsPage() {
             onClick={() => setActiveSection('tj')}
             className={`px-4 py-1.5 rounded text-xs font-black uppercase tracking-wider transition-all ${activeSection === 'tj' ? 'bg-gold text-black shadow' : 'text-muted-foreground hover:text-foreground'}`}
           >TJ Personal Channels</button>
+          <button onClick={() => setActiveSection('mm')} className={`px-4 py-1.5 rounded text-xs font-black uppercase tracking-wider transition-all ${activeSection === 'mm' ? 'bg-gold text-black shadow' : 'text-muted-foreground hover:text-foreground'}`}>MM Company Content</button>
         </div>
       </div>
 
@@ -624,6 +644,7 @@ export function SettingsTargetsPage() {
         <div className="space-y-6">
           <Card className="p-6 bg-muted/20 border-none shadow-none">
             <div className="flex flex-col md:flex-row gap-4 items-end">
+              <Tabs value={targetType} onValueChange={(v: any) => setTargetType(v)}><TabsList><TabsTrigger value="weekly">Weekly</TabsTrigger><TabsTrigger value="monthly">Monthly</TabsTrigger></TabsList></Tabs>
               <Tabs value={targetType} onValueChange={(v: any) => setTargetType(v)}>
                 <TabsList>
                   <TabsTrigger value="weekly">Weekly</TabsTrigger>
@@ -706,13 +727,13 @@ export function SettingsTargetsPage() {
           <Card className="p-6 bg-muted/20 border-none shadow-none">
             <div className="flex flex-col md:flex-row gap-4 items-end">
               <div className="space-y-2 min-w-[260px]">
-                <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Week</Label>
-                <Select value={selectedWeekStart} onValueChange={setSelectedWeekStart}>
+                <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{targetType === 'weekly' ? 'Week' : 'Month'}</Label>
+                {targetType === 'weekly' ? <Select value={selectedWeekStart} onValueChange={setSelectedWeekStart}>
                   <SelectTrigger className="bg-background font-bold h-11"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {weekOptions.map(w => <SelectItem key={w.weekStart} value={w.weekStart}>{w.label}</SelectItem>)}
                   </SelectContent>
-                </Select>
+                </Select> : <Select value={selectedMonth} onValueChange={setSelectedMonth}><SelectTrigger className="bg-background font-bold h-11"><SelectValue /></SelectTrigger><SelectContent>{monthOptions.map(m => <SelectItem key={m.period} value={m.period}>{m.label}</SelectItem>)}</SelectContent></Select>}
               </div>
               <p className="text-xs text-muted-foreground pb-2">
                 These are internal weekly targets for the Cold Emailing section of Sales & Outreach.
@@ -777,6 +798,8 @@ export function SettingsTargetsPage() {
           </div>
         </div>
       )}
+
+      {activeSection === 'mm' && <div className="space-y-6"><Card className="p-6 bg-muted/20 border-none shadow-none"><div className="flex gap-4 items-end"><Tabs value={targetType} onValueChange={(v: any) => setTargetType(v)}><TabsList><TabsTrigger value="weekly">Weekly</TabsTrigger><TabsTrigger value="monthly">Monthly</TabsTrigger></TabsList></Tabs><div className="min-w-[260px]"><Label>Period</Label>{targetType === 'weekly' ? <Select value={selectedWeekStart} onValueChange={setSelectedWeekStart}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{weekOptions.map(w => <SelectItem key={w.weekStart} value={w.weekStart}>{w.label}</SelectItem>)}</SelectContent></Select> : <Select value={selectedMonth} onValueChange={setSelectedMonth}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{monthOptions.map(m => <SelectItem key={m.period} value={m.period}>{m.label}</SelectItem>)}</SelectContent></Select>}</div></div></Card><div className="border rounded-xl overflow-hidden bg-white shadow-sm"><table style={{width:'100%',borderCollapse:'collapse'}}><thead><tr style={{background:'#FFC947'}}><th style={{padding:12,textAlign:'left'}}>METRIC</th><th style={{padding:12,textAlign:'right'}}>TARGET</th><th style={{padding:12,textAlign:'right'}}>ACTUAL</th><th style={{padding:12,textAlign:'right'}}>ACH%</th></tr></thead><tbody>{MM_TARGET_GROUPS.map(g => <React.Fragment key={g.title}><tr><th colSpan={4} style={{textAlign:'left',padding:10,background:'#F9F9F9'}}>{g.title}</th></tr>{g.metrics.map(m => renderInternalTargetRow(m, mmTargetValues, mmActuals, setMmTargetValues))}</React.Fragment>)}</tbody></table><div style={{padding:16,textAlign:'right'}}><button onClick={saveMmTargets} disabled={mmSaving} style={{background:'#FFC947',border:0,borderRadius:8,padding:'10px 28px',fontWeight:800}}>{mmSaving ? 'Saving...' : 'Save MM Targets'}</button></div></div></div>}
 
       {activeSection === 'client' && <><Card className="p-6 bg-muted/20 border-none shadow-none">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
