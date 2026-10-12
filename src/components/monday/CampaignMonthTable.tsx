@@ -41,6 +41,25 @@ export function CampaignMonthTable({ campaign, monthWeeks, onEdit, onWeekSaved, 
     return fmt(v)
   }
 
+  // Campaign totals use the complete campaign history, not only the weeks
+  // currently visible in the month table. Counts are summed; rate rows are
+  // intentionally averaged across weeks that contain a valid rate.
+  const allWeeks = (campaign.allWeeks ?? Object.values(campaign.byWeek ?? {})) as any[]
+  const getTotalVal = (row: typeof ROWS[number]): string => {
+    if (row.calc) {
+      const rates = allWeeks
+        .map(week => row.key === '_acc'
+          ? calcRateCapped(week.accepted, week.conn_requests_sent)
+          : calcRateCapped(week.answered, week.accepted))
+        .filter((rate): rate is number => rate !== null)
+      return rates.length ? fmtRate(rates.reduce((sum, rate) => sum + rate, 0) / rates.length) : '-'
+    }
+    const values = allWeeks
+      .map(week => Number(week?.[row.key]))
+      .filter(value => Number.isFinite(value))
+    return values.length ? fmt(values.reduce((sum, value) => sum + value, 0)) : '-'
+  }
+
   return (
     <>
       <div style={{ border: '1px solid #E5E5E5', borderRadius: '8px', overflow: 'hidden', marginBottom: '10px' }}>
@@ -146,6 +165,13 @@ export function CampaignMonthTable({ campaign, monthWeeks, onEdit, onWeekSaved, 
                       )}
                     </th>
                   ))}
+                  <th style={{
+                    padding: '6px 10px', textAlign: 'center', fontSize: '11px',
+                    fontWeight: '800', color: '#8A6500', background: '#FFF8E6',
+                    borderLeft: '1px solid #F3D37A', whiteSpace: 'nowrap',
+                  }}>
+                    Total Campaign Analytics
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -167,6 +193,13 @@ export function CampaignMonthTable({ campaign, monthWeeks, onEdit, onWeekSaved, 
                         </td>
                       )
                     })}
+                    <td style={{
+                      padding: '8px', textAlign: 'center', fontSize: '13px',
+                      fontWeight: '800', color: getTotalVal(row) === '-' ? '#DDD' : row.calc ? '#666' : row.key === 'hot_leads' ? '#D97706' : '#000',
+                      background: '#FFFDF5', borderLeft: '1px solid #F3D37A', whiteSpace: 'nowrap',
+                    }}>
+                      {getTotalVal(row)}
+                    </td>
                   </tr>
                 ))}
               </tbody>

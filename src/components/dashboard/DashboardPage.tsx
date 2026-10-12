@@ -2588,8 +2588,9 @@ function AhaMomentsAdmin({ clientId }: { clientId: string }) {
 
 function DashboardCampaignsSection({ clientId, displayWeek, onEditCampaign }: { clientId: string, displayWeek: string, onEditCampaign: (c: any) => void }) {
   const [activeCampaigns, setActiveCampaigns] = useState<any[]>([])
+  const [pausedCampaigns, setPausedCampaigns] = useState<any[]>([])
   const [completedCampaigns, setCompletedCampaigns] = useState<any[]>([])
-  const [campaignTab, setCampaignTab] = useState<'active' | 'completed'>('active')
+  const [campaignTab, setCampaignTab] = useState<'active' | 'paused' | 'completed'>('active')
   const monthWeeks = getWeeksInSameMonth(displayWeek)
 
   const enrich = async (data: any[]) => {
@@ -2599,11 +2600,12 @@ function DashboardCampaignsSection({ clientId, displayWeek, onEditCampaign }: { 
       .select('*')
       .eq('client_id', clientId)
       .in('campaign_id', data.map(c => c.id))
-      .in('week_start', weekStarts)
+    const visibleWeekSet = new Set(weekStarts)
     return data.map(c => {
       const byWeek: Record<string, any> = {}
-      cdata?.filter(r => r.campaign_id === c.id).forEach(r => { byWeek[r.week_start] = r })
-      return { ...c, byWeek }
+      const allWeeks = cdata?.filter(r => r.campaign_id === c.id) ?? []
+      allWeeks.filter(r => visibleWeekSet.has(r.week_start)).forEach(r => { byWeek[r.week_start] = r })
+      return { ...c, byWeek, allWeeks }
     })
   }
 
@@ -2616,23 +2618,26 @@ function DashboardCampaignsSection({ clientId, displayWeek, onEditCampaign }: { 
 
     if (!allData) return
 
-    const active = allData.filter(c => c.status !== 'completed')
+    const active = allData.filter(c => c.status === 'active')
+    const paused = allData.filter(c => c.status === 'paused')
     const completed = allData.filter(c => c.status === 'completed')
 
-    const [enrichedActive, enrichedCompleted] = await Promise.all([
+    const [enrichedActive, enrichedPaused, enrichedCompleted] = await Promise.all([
       active.length ? enrich(active) : Promise.resolve([]),
+      paused.length ? enrich(paused) : Promise.resolve([]),
       completed.length ? enrich(completed) : Promise.resolve([]),
     ])
 
     setActiveCampaigns(enrichedActive)
+    setPausedCampaigns(enrichedPaused)
     setCompletedCampaigns(enrichedCompleted)
   }
 
   useEffect(() => { load() }, [clientId, displayWeek])
 
-  if (activeCampaigns.length === 0 && completedCampaigns.length === 0) return null
+  if (activeCampaigns.length === 0 && pausedCampaigns.length === 0 && completedCampaigns.length === 0) return null
 
-  const displayed = campaignTab === 'active' ? activeCampaigns : completedCampaigns
+  const displayed = campaignTab === 'active' ? activeCampaigns : campaignTab === 'paused' ? pausedCampaigns : completedCampaigns
 
   return (
     <div className="mt-8 border-t pt-8">
@@ -2661,6 +2666,16 @@ function DashboardCampaignsSection({ clientId, displayWeek, onEditCampaign }: { 
             }`}
           >
             Completed {completedCampaigns.length > 0 && `(${completedCampaigns.length})`}
+          </button>
+          <button
+            onClick={() => setCampaignTab('paused')}
+            className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${
+              campaignTab === 'paused'
+                ? 'bg-gold text-black border-gold'
+                : 'bg-background border-border text-muted-foreground hover:border-gold hover:text-foreground'
+            }`}
+          >
+            Paused {pausedCampaigns.length > 0 && `(${pausedCampaigns.length})`}
           </button>
         </div>
       </div>
