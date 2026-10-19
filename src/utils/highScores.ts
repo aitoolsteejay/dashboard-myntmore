@@ -163,16 +163,35 @@ export async function backfillHighScores(clientId: string): Promise<void> {
 
   if (Object.keys(best).length === 0) return
 
-  const upsertRows = Object.entries(best).map(([id, { value, week, name }]) => ({
-    client_id: clientId,
-    metric_id: id,
-    metric_name: name,
-    lifetime_high: value,
-    achieved_week: week,
-    lifetime_high_month: bestMonth[id]?.value ?? null,
-    achieved_month: bestMonth[id]?.month ?? null,
-    updated_at: new Date().toISOString(),
-  }))
+  // A stored record is never LOWERED here. Records can be higher than anything in
+  // weekly_data on purpose — e.g. imported from the old CEO scorecard spreadsheet,
+  // which covers history from before the app — and recomputing purely from the
+  // rows we have would erase them on the next dashboard load. (Trade-off: a record
+  // set by a week that is later edited down no longer corrects itself.)
+  const { data: existing, error: existingError } = await supabase
+    .from('high_scores')
+    .select('metric_id, lifetime_high, achieved_week, lifetime_high_month, achieved_month')
+    .eq('client_id', clientId)
+  if (existingError) throw existingError
+  const existingById: Record<string, any> = {}
+  ;(existing ?? []).forEach(row => { existingById[row.metric_id] = row })
+
+  const upsertRows = Object.entries(best).map(([id, { value, week, name }]) => {
+    const ex = existingById[id]
+    const monthValue = bestMonth[id]?.value ?? null
+    const keepWeek = ex?.lifetime_high != null && Number(ex.lifetime_high) > value
+    const keepMonth = ex?.lifetime_high_month != null && (monthValue === null || Number(ex.lifetime_high_month) > monthValue)
+    return {
+      client_id: clientId,
+      metric_id: id,
+      metric_name: name,
+      lifetime_high: keepWeek ? Number(ex.lifetime_high) : value,
+      achieved_week: keepWeek ? ex.achieved_week : week,
+      lifetime_high_month: keepMonth ? Number(ex.lifetime_high_month) : monthValue,
+      achieved_month: keepMonth ? ex.achieved_month : (bestMonth[id]?.month ?? null),
+      updated_at: new Date().toISOString(),
+    }
+  })
 
   // Never delete the existing records before their replacements are safely
   // persisted. A failed insert previously left the client's entire high-score
