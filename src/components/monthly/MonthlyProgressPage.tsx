@@ -11,6 +11,7 @@ import { ChevronLeft, ChevronRight, ChevronDown, Target, TrendingUp, AlertTriang
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { sortAlphabetically } from '@/utils/sort'
+import { CUMULATIVE_METRIC_IDS } from '@/data/metricSemantics'
 import { getTodayIST, nowAsIST } from '@/utils/dateUtils'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -317,7 +318,8 @@ export function MonthlyProgressPage() {
         }
 
         weeklyActuals[metric.id][ws] = val
-        if (val !== null) { total = (total ?? 0) + val; count++ }
+        // A running total (followers, subscribers) is the latest week's reading, not a sum.
+        if (val !== null) { total = CUMULATIVE_METRIC_IDS.has(metric.id) ? val : (total ?? 0) + val; count++ }
       }
 
       metricActuals[metric.id] = total !== null && isRate ? total / count : total

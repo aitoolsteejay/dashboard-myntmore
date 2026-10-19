@@ -32,7 +32,7 @@ import {
   CompanyMetric
 } from "@/data/company_metrics"
 import { BackButton } from "@/components/ui/BackButton"
-import { getWeekOptions } from "@/utils/weekUtils"
+import { getWeekOptions, getWeekEnd, getWeekLabel } from "@/utils/weekUtils"
 import { useWorkspace } from "@/lib/workspace"
 import { useAutoSave } from "@/hooks/useAutoSave"
 import { SaveIndicator } from "@/components/ui/SaveIndicator"
@@ -141,8 +141,8 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
       const weekInfo = weekOptions.find(w => w.weekStart === selectedWeek)
 
       triggerSave({
-        week_end: weekInfo?.weekEnd || '',
-        week_label: weekInfo?.label || '',
+        week_end: weekInfo?.weekEnd || getWeekEnd(selectedWeek),
+        week_label: weekInfo?.label || getWeekLabel(selectedWeek),
         [section]: updatedSection,
         submitted_by: user?.id
       })

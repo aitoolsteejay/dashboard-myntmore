@@ -326,7 +326,7 @@ export function ClientsPage() {
                         style={{ width: `${client.health?.health_score || 0}%` }}
                     />
                 </div>
-                {client.health?.previous_score !== undefined && (
+                {client.health?.previous_score != null && (
                     <div className={cn(
                         "text-[10px] font-bold flex items-center gap-1",
                         (client.health.health_score - client.health.previous_score) > 0 ? "text-status-on" : (client.health.health_score - client.health.previous_score) < 0 ? "text-status-off" : "text-muted-foreground"

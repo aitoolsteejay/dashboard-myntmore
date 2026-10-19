@@ -13,6 +13,7 @@ import { sortAlphabetically } from "@/utils/sort"
 import { CompanyMetric } from "@/data/company_metrics"
 import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
 import { CUMULATIVE_METRIC_IDS, AVERAGED_NUMBER_IDS } from "@/data/metricSemantics"
+import { nowAsIST } from "@/utils/dateUtils"
 import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from "@/data/company_metrics"
 
 interface TargetRowProps {
@@ -96,7 +97,7 @@ function getMonthOptions(count = 6) {
   // since `period` is what actually gets written to the targets table,
   // targets could be saved under the wrong month while the UI showed the
   // right one.
-  const now = new Date()
+  const now = nowAsIST() // IST wall clock, not UTC
   return Array.from({ length: count }, (_, i) => {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
     return {
@@ -165,7 +166,7 @@ export function SettingsTargetsPage() {
 
   const weekOptions = useMemo(() => {
     // All weeks of current month (including future) + last 8 past weeks, deduped
-    const now = new Date()
+    const now = nowAsIST() // IST wall clock, not UTC
     const year = now.getUTCFullYear()
     const month = now.getUTCMonth()
     const firstDay = new Date(Date.UTC(year, month, 1))
@@ -271,19 +272,27 @@ export function SettingsTargetsPage() {
 
     const { data: weeklyRows } = await supabase
       .from('weekly_data')
-      .select('content_metrics, leadgen_metrics')
+      .select('week_start, content_metrics, leadgen_metrics')
       .eq('client_id', clientId)
       .in('week_start', weekStarts)
+      .order('week_start', { ascending: true })
 
     const actuals: Record<string, number> = {}
+    const counts: Record<string, number> = {}
     weeklyRows?.forEach(row => {
       [...ALL_METRICS, ...customMetrics].filter(m => m.hasTarget).forEach(metric => {
         const col = metric.category === 'content' ? 'content_metrics' : 'leadgen_metrics'
         const val = (row[col] as any)?.[metric.id]?.value
-        if (val !== null && val !== undefined && !isNaN(Number(val))) {
-          actuals[metric.id] = (actuals[metric.id] ?? 0) + Number(val)
+        if (val !== null && val !== undefined && val !== '' && !isNaN(Number(val))) {
+          // Running totals (subscribers) are the latest week's reading; they are not sums.
+          actuals[metric.id] = CUMULATIVE_METRIC_IDS.has(metric.id) ? Number(val) : (actuals[metric.id] ?? 0) + Number(val)
+          counts[metric.id] = (counts[metric.id] ?? 0) + 1
         }
       })
+    })
+    // Percentages (open rate...) are per-week rates: average them, never sum.
+    ;[...ALL_METRICS, ...customMetrics].forEach(metric => {
+      if (metric.type === 'percentage' && counts[metric.id]) actuals[metric.id] = actuals[metric.id] / counts[metric.id]
     })
 
     setMTDActuals(actuals)

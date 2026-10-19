@@ -35,7 +35,7 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { cn } from "@/lib/utils"
 import { BackButton } from "@/components/ui/BackButton"
-import { getWeekOptions } from "@/utils/weekUtils"
+import { getWeekOptions, getWeekEnd, getWeekLabel } from "@/utils/weekUtils"
 import { useWorkspace } from "@/lib/workspace"
 import { readSalesNum } from "@/utils/readMetric"
 import { useAutoSave } from "@/hooks/useAutoSave"
@@ -273,8 +273,8 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
 
       triggerSave({
         [section]: updatedSection,
-        week_end: weekInfo?.weekEnd || '',
-        week_label: weekInfo?.label || '',
+        week_end: weekInfo?.weekEnd || getWeekEnd(selectedWeek),
+        week_label: weekInfo?.label || getWeekLabel(selectedWeek),
         submitted_by: user?.id
       })
 

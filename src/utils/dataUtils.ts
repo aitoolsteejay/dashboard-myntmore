@@ -1,6 +1,7 @@
 // src/utils/dataUtils.ts
 
 import { buildWeekMetrics, formatMetricDisplay } from './metricCalculations'
+import { ALL_METRICS } from '@/data/metrics'
 
 export function readVal(metricsJson: any, metricId: string): any {
   if (!metricsJson) return null
@@ -112,7 +113,8 @@ export function formatMetricValue(val: any, metricId: string): string {
   // Percentage metrics
   const pctMetrics = ['L12','L14','L17','L18','L21','L26','L30','L34','L05', 'C05'] // Added C05 just in case, but user specified some L codes. Wait, let's stick to user's list.
   const userPctMetrics = ['L12','L14','L17','L18','L21','L26','L30','L34','L05','C36','C37']
-  if (userPctMetrics.includes(metricId)) {
+  // Any percentage-type metric in the catalog (e.g. Newsletter Open Rate), not just the hardcoded ids above.
+  if (userPctMetrics.includes(metricId) || ALL_METRICS.find(m => m.id === metricId)?.type === 'percentage') {
     return Number(val).toFixed(1) + '%'
   }
   

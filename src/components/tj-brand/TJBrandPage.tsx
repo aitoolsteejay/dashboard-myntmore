@@ -23,7 +23,7 @@ import {
 import { CompanyMetric } from "@/data/company_metrics"
 import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
 import { BackButton } from "@/components/ui/BackButton"
-import { getWeekOptions } from "@/utils/weekUtils"
+import { getWeekOptions, getWeekEnd, getWeekLabel } from "@/utils/weekUtils"
 import { useWorkspace } from "@/lib/workspace"
 import { formatWeekDate } from "@/utils/dateUtils"
 import { useAutoSave } from "@/hooks/useAutoSave"
@@ -192,8 +192,8 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
             : { video_pipeline: updated.video_pipeline }
 
       triggerSave({
-        week_end: weekInfo?.weekEnd || '',
-        week_label: weekInfo?.label || '',
+        week_end: weekInfo?.weekEnd || getWeekEnd(selectedWeek),
+        week_label: weekInfo?.label || getWeekLabel(selectedWeek),
         ...channelPayload,
         submitted_by: user?.id
       })

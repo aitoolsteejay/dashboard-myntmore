@@ -187,12 +187,14 @@ UPDATE myntmore.weekly_data SET content_metrics = myntmore.merge_import('{"C41":
 
 -- Weeks that had no row yet:
 
-INSERT INTO myntmore.weekly_data AS w (client_id, week_start, week_end, week_label, content_metrics, leadgen_metrics)
-  VALUES ('b1bd1619-3e3a-4aeb-ad83-8d1306bc809f', '2025-03-31', '2025-04-06', '31 Mar – 6 Apr 2025', '{"C41":{"value":1313},"C44":{"value":24},"C43":{"value":415}}'::jsonb, '{}'::jsonb)
-  ON CONFLICT (client_id, week_start) DO UPDATE SET content_metrics = myntmore.merge_import(EXCLUDED.content_metrics, w.content_metrics);
+INSERT INTO myntmore.weekly_data AS w (client_id, week_start, week_end, week_label, content_metrics, leadgen_metrics, content_submitted_at)
+  VALUES ('b1bd1619-3e3a-4aeb-ad83-8d1306bc809f', '2025-03-31', '2025-04-06', '31 Mar – 6 Apr 2025', '{"C41":{"value":1313},"C44":{"value":24},"C43":{"value":415}}'::jsonb, '{}'::jsonb, '2026-04-01T00:00:00Z')
+  ON CONFLICT (client_id, week_start) DO UPDATE SET content_metrics = myntmore.merge_import(EXCLUDED.content_metrics, w.content_metrics),
+    content_submitted_at = COALESCE(w.content_submitted_at, EXCLUDED.content_submitted_at);
 
-INSERT INTO myntmore.weekly_data AS w (client_id, week_start, week_end, week_label, content_metrics, leadgen_metrics)
-  VALUES ('b1bd1619-3e3a-4aeb-ad83-8d1306bc809f', '2025-06-30', '2025-07-06', '30 Jun – 6 Jul 2025', '{"C41":{"value":1435},"C44":{"value":21},"C43":{"value":218}}'::jsonb, '{}'::jsonb)
-  ON CONFLICT (client_id, week_start) DO UPDATE SET content_metrics = myntmore.merge_import(EXCLUDED.content_metrics, w.content_metrics);
+INSERT INTO myntmore.weekly_data AS w (client_id, week_start, week_end, week_label, content_metrics, leadgen_metrics, content_submitted_at)
+  VALUES ('b1bd1619-3e3a-4aeb-ad83-8d1306bc809f', '2025-06-30', '2025-07-06', '30 Jun – 6 Jul 2025', '{"C41":{"value":1435},"C44":{"value":21},"C43":{"value":218}}'::jsonb, '{}'::jsonb, '2026-04-01T00:00:00Z')
+  ON CONFLICT (client_id, week_start) DO UPDATE SET content_metrics = myntmore.merge_import(EXCLUDED.content_metrics, w.content_metrics),
+    content_submitted_at = COALESCE(w.content_submitted_at, EXCLUDED.content_submitted_at);
 
 COMMIT;

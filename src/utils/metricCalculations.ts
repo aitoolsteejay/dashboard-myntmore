@@ -150,7 +150,10 @@ export function buildWeekMetrics(weekRow: any, extraMetrics: Metric[] = []) {
   })
 
   const C09 = result.C09
-  const C10 = readLinkedInImpressions(cm)
+  // Same submitted gate as every other content metric: draft impressions must not show up
+  // in the portal / reports while the rest of the week reads as blank.
+  const contentHidden = !!weekRow.client_id && !weekRow.content_submitted_at
+  const C10 = contentHidden ? null : readLinkedInImpressions(cm)
   const L02 = result.L02
   const L03 = result.L03
   const L10 = result.L10

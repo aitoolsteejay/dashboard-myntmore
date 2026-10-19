@@ -188,8 +188,13 @@ export function MetricFieldsTab() {
   const handleToggle = async (clientId: string, metricId: string, category: 'content' | 'leadgen') => {
     const settings = settingsMap[clientId]
     const field = category === 'content' ? 'active_content_metrics' : 'active_leadgen_metrics'
-    const allMetricIds = (category === 'content' ? CONTENT_METRICS : LEADGEN_METRICS).map(m => m.id)
-    // null means all active — initialise from full list before mutating
+    // null means all active — custom metrics are filtered by the same allowlist, so they
+    // must be part of the starting list or the first toggle silently deactivates them.
+    const allMetricIds = [
+      ...(category === 'content' ? CONTENT_METRICS : LEADGEN_METRICS),
+      ...(customMetricsMap[clientId] ?? []).filter(m => m.category === category),
+    ].map(m => m.id)
+    // initialise from the full list before mutating
     const current = settings?.[field] ?? allMetricIds
     const updated = current.includes(metricId)
       ? current.filter((m: string) => m !== metricId)

@@ -1,3 +1,4 @@
+import { periodTotal } from '@/data/metricSemantics'
 import { nowAsIST } from '@/utils/dateUtils'
 import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from "@/integrations/supabase/client"
@@ -321,12 +322,13 @@ export function ReportsPage() {
                     const values = weekList.map(w => getCellValue(clientId, w, m.id))
                     const numVals = values.filter(v => v !== null) as number[]
                     const isRate = !!RATE_DEPENDENCIES[m.id]
-                    const total = numVals.length > 0 ? numVals.reduce((a, b) => a + b, 0) : null
+                    const total = numVals.length > 0 ? periodTotal(m.id, numVals) : null
+                    const weekSum = numVals.reduce((a, b) => a + b, 0)
                     // Rate metrics recompute one volume-weighted value from summed raw
                     // fields (see getVolumeWeightedRate) instead of averaging weekly rates.
                     const avg = isRate
                       ? getVolumeWeightedRate(clientId, weekList, m.id)
-                      : total !== null && numVals.length > 0 ? total / numVals.length : null
+                      : numVals.length > 0 ? weekSum / numVals.length : null
                     const tgt = getTarget(clientId, m.id) // fallback target for Total/Avg columns
 
                     return (
@@ -472,8 +474,9 @@ export function ReportsPage() {
                 const numVals = values.filter(v => v !== null) as number[]
                 if (numVals.length === 0) return null
                 const isRate = !!RATE_DEPENDENCIES[m.id]
-                const total = numVals.reduce((a, b) => a + b, 0)
-                const avg = isRate ? (getVolumeWeightedRate(clientId, weekList, m.id) ?? total / numVals.length) : total / numVals.length
+                const total = periodTotal(m.id, numVals)
+                const weekSum = numVals.reduce((a, b) => a + b, 0)
+                const avg = isRate ? (getVolumeWeightedRate(clientId, weekList, m.id) ?? weekSum / numVals.length) : weekSum / numVals.length
                 const best = Math.max(...numVals)
                 const bestWeekIdx = values.findIndex(v => v === best)
                 const bestWeek = bestWeekIdx >= 0 ? fmtWeekShort(weekList[bestWeekIdx]) : '-'

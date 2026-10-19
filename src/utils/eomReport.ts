@@ -91,7 +91,12 @@ function aggregateWeeks(rows: any[], extraMetrics: Metric[] = []): MetricMap {
   const ids = new Set(builtRows.flatMap(row => Object.keys(row)))
 
   ids.forEach(id => {
-    const values = builtRows.map(row => Number(row[id])).filter(Number.isFinite)
+    // Number(null) is 0 — a blank/unsubmitted week must not count as a real 0.
+    const values = builtRows
+      .map(row => row[id])
+      .filter(v => v !== null && v !== undefined && v !== '')
+      .map(Number)
+      .filter(Number.isFinite)
     if (!values.length) return
     // None of these business metrics are ever legitimately negative -- clamp so
     // a stray data-entry mistake can't surface as an impossible number here.

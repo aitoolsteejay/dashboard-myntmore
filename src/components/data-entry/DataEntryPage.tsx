@@ -436,7 +436,7 @@ function LeadGenCampaignEntry({
         // Use the per-campaign selected week for inactive campaigns, otherwise the global selected week
         const effectiveWeek = inactiveCampaignWeekMap[campaignId] || selectedWeek
         const weekInfo = weekOptions.find(w => w.weekStart === effectiveWeek)
-          || { weekEnd: '', label: effectiveWeek }
+          || { weekEnd: getWeekEnd(effectiveWeek), label: getWeekLabel(effectiveWeek) }
         const clientId = selectedClientId
         const dataSnapshot = { ...data }
         const queueKey = `${clientId}:${campaignId}:${effectiveWeek}`
@@ -2058,11 +2058,15 @@ export function DataEntryPage() {
   const toggleCampaignStatus = async (campaignId: string, currentStatus: string) => {
     if (!selectedClientId) return
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
-    await supabase
+    const { error } = await supabase
       .from('campaigns')
       .update({ status: newStatus })
       .eq('id', campaignId)
       .eq('client_id', selectedClientId)
+    if (error) {
+      toast.error(`Could not change campaign status: ${error.message}`)
+      return
+    }
     await fetchData()
   }
 
@@ -2077,23 +2081,30 @@ export function DataEntryPage() {
     // rollup totals (client dashboard, portal, EOM report) — read them before
     // deleting so those totals can be resynced afterward, or they'd keep
     // silently counting this campaign's numbers forever.
-    const { data: affectedWeeks } = await supabase
+    const { data: affectedWeeks, error: affectedError } = await supabase
       .from('campaign_weekly_data')
       .select('week_start')
       .eq('campaign_id', campaignId)
       .eq('client_id', selectedClientId)
+    if (affectedError) { toast.error(`Could not delete campaign: ${affectedError.message}`); return }
 
-    await supabase
+    const { error: weeklyDeleteError } = await supabase
       .from('campaign_weekly_data')
       .delete()
       .eq('campaign_id', campaignId)
       .eq('client_id', selectedClientId)
+    if (weeklyDeleteError) { toast.error(`Could not delete campaign data: ${weeklyDeleteError.message}`); return }
 
-    await supabase
+    const { error: campaignDeleteError } = await supabase
       .from('campaigns')
       .delete()
       .eq('id', campaignId)
       .eq('client_id', selectedClientId)
+    if (campaignDeleteError) {
+      toast.error(`Campaign data was removed but the campaign itself could not be deleted: ${campaignDeleteError.message}`)
+      await fetchData()
+      return
+    }
 
     const weekStarts = [...new Set((affectedWeeks ?? []).map(w => w.week_start))]
     await Promise.all(weekStarts.map(weekStart => syncAllCampaignTotals(selectedClientId, weekStart, false)))

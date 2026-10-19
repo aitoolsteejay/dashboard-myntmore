@@ -1,3 +1,4 @@
+import { LOWER_IS_BETTER_METRIC_IDS } from '@/data/metricSemantics'
 import { supabase } from "@/integrations/supabase/client"
 import writeExcelFile from 'write-excel-file/browser'
 import { CONTENT_METRICS, LEADGEN_METRICS } from "@/data/metrics"
@@ -382,6 +383,21 @@ function buildHighScoresSheet(
     }))
 }
 
+// Reads every row of a query in pages (PostgREST returns at most 1000 per request).
+async function fetchAllRows(
+  build: (from: number, to: number) => PromiseLike<{ data: any[] | null; error: any }>,
+): Promise<any[]> {
+  const pageSize = 1000
+  const rows: any[] = []
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await build(from, from + pageSize - 1)
+    if (error) throw error
+    rows.push(...(data ?? []))
+    if (!data || data.length < pageSize) break
+  }
+  return rows
+}
+
 // ─── main export ─────────────────────────────────────────────────────────────
 
 export async function generateLifetimeExport(options: {
@@ -391,41 +407,36 @@ export async function generateLifetimeExport(options: {
 }) {
   const { upToDate, fromDate, clientId } = options
 
+  const from = fromDate ?? '2000-01-01'
   const [
-    { data: clients },
-    { data: weeklyData },
-    { data: healthScores },
-    { data: tjData },
-    { data: tjCustomMetrics },
-    { data: mmData },
-    { data: salesData },
-    { data: targets },
-    { data: highScores },
+    clientsRes,
+    weeklyData,
+    healthScores,
+    tjData,
+    tjCustomRes,
+    mmData,
+    salesData,
+    targets,
+    highScores,
   ] = await Promise.all([
     supabase
       .from('clients')
       .select('id, name, company, status')
       .order('name'),
 
-    supabase
-      .from('weekly_data')
-      .select('*')
-      .lte('week_start', upToDate)
-      .gte('week_start', fromDate ?? '2000-01-01')
-      .then(r => clientId ? { data: r.data?.filter(w => w.client_id === clientId) ?? [] } : r),
+    // PostgREST caps a plain select at 1000 rows, so every big table is read in
+    // ordered pages (and a failed page throws instead of exporting an empty sheet).
+    fetchAllRows((a, b) => {
+      let q = supabase.from('weekly_data').select('*').lte('week_start', upToDate).gte('week_start', from)
+      if (clientId) q = q.eq('client_id', clientId)
+      return q.order('week_start').order('id').range(a, b)
+    }),
 
-    supabase
-      .from('client_health_scores')
-      .select('*')
-      .lte('week_start', upToDate)
-      .gte('week_start', fromDate ?? '2000-01-01'),
+    fetchAllRows((a, b) => supabase.from('client_health_scores').select('*')
+      .lte('week_start', upToDate).gte('week_start', from).order('week_start').order('id').range(a, b)),
 
-    supabase
-      .from('tj_weekly_data')
-      .select('*')
-      .lte('week_start', upToDate)
-      .gte('week_start', fromDate ?? '2000-01-01')
-      .order('week_start'),
+    fetchAllRows((a, b) => supabase.from('tj_weekly_data').select('*')
+      .lte('week_start', upToDate).gte('week_start', from).order('week_start').range(a, b)),
 
     supabase
       .from('tj_custom_metrics')
@@ -434,30 +445,28 @@ export async function generateLifetimeExport(options: {
       .order('sort_order')
       .order('created_at'),
 
-    supabase
-      .from('mm_weekly_data')
-      .select('*')
-      .lte('week_start', upToDate)
-      .gte('week_start', fromDate ?? '2000-01-01')
-      .order('week_start'),
+    fetchAllRows((a, b) => supabase.from('mm_weekly_data').select('*')
+      .lte('week_start', upToDate).gte('week_start', from).order('week_start').range(a, b)),
 
-    supabase
-      .from('sales_weekly_data')
-      .select('*')
-      .lte('week_start', upToDate)
-      .gte('week_start', fromDate ?? '2000-01-01')
-      .order('week_start'),
+    fetchAllRows((a, b) => supabase.from('sales_weekly_data').select('*')
+      .lte('week_start', upToDate).gte('week_start', from).order('week_start').range(a, b)),
 
-    supabase
-      .from('targets')
-      .select('*')
-      .then(r => clientId ? { data: r.data?.filter(t => t.client_id === clientId) ?? [] } : r),
+    fetchAllRows((a, b) => {
+      let q = supabase.from('targets').select('*')
+      if (clientId) q = q.eq('client_id', clientId)
+      return q.order('id').range(a, b)
+    }),
 
-    supabase
-      .from('high_scores')
-      .select('*')
-      .then(r => clientId ? { data: r.data?.filter(h => h.client_id === clientId) ?? [] } : r),
+    fetchAllRows((a, b) => {
+      let q = supabase.from('high_scores').select('*')
+      if (clientId) q = q.eq('client_id', clientId)
+      return q.order('client_id').order('metric_id').range(a, b)
+    }),
   ])
+  if (clientsRes.error) throw clientsRes.error
+  if (tjCustomRes.error) throw tjCustomRes.error
+  const clients = clientsRes.data
+  const tjCustomMetrics = tjCustomRes.data
 
   const allClients = clients ?? []
   const displayClients = clientId ? allClients.filter(c => c.id === clientId) : allClients
@@ -544,7 +553,7 @@ export async function generateWeeklySummary(weekStart: string) {
     const health = healthScores?.find(h => h.client_id === client.id)
     const data = weeklyData?.find(w => w.client_id === client.id)
     const score = health?.health_score ?? '-'
-    const delta = health?.previous_score ? Number(score) - health.previous_score : 0
+    const delta = health?.previous_score != null && typeof health.health_score === 'number' ? health.health_score - health.previous_score : 0
     const deltaText = delta > 0 ? `↑${delta}` : delta < 0 ? `↓${Math.abs(delta)}` : `→0`
     const meetings = (data?.leadgen_metrics as any)?.L24?.value ?? 0
     const positiveReplies = (data?.leadgen_metrics as any)?.L15?.value ?? 0
@@ -574,10 +583,11 @@ export async function generateWeeklySummary(weekStart: string) {
   if (!alerts || alerts.length === 0) text += `No active alerts.\n`
 
   text += `\n🏆 NEW RECORDS THIS WEEK\n`
-  records?.forEach((record: any) => {
-    text += `${record.client_name} - ${record.metric_name}: ${record.lifetime_high} (prev best: ${record.previous_high || '-'})\n`
+  const clientNameById = new Map((clients ?? []).map(c => [c.id, c.name]))
+  records?.filter((r: any) => !LOWER_IS_BETTER_METRIC_IDS.has(r.metric_id)).forEach((record: any) => {
+    text += `${clientNameById.get(record.client_id) ?? 'Unknown client'} - ${record.metric_name}: ${record.lifetime_high} (prev best: ${record.previous_high || '-'})\n`
   })
-  if (!records || records.length === 0) text += `No new records set.\n`
+  if (!records || !records.some((r: any) => !LOWER_IS_BETTER_METRIC_IDS.has(r.metric_id))) text += `No new records set.\n`
 
   const openActions = actionables?.filter(a => a.status !== 'done').length ?? 0
   text += `\n✅ OPEN ACTIONABLES: ${openActions}\n\n`

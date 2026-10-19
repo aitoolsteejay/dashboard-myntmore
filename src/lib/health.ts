@@ -82,12 +82,14 @@ export async function updateClientHealth(
     // fetch here silently treated "target not re-entered this week" as "target
     // is 0", which drove every achievement% to 0 and cratered the stored
     // health score. Fetch the range and fall back to the most recent target.
-    const { data: targetsData } = await supabase
+    const { data: targetsData, error: targetsError } = await supabase
       .from('targets')
       .select('metric_id, target_value, period')
       .eq('client_id', clientId)
       .eq('target_type', 'weekly')
       .lte('period', weekStart)
+    // A failed read must abort — empty targets would store a collapsed score.
+    if (targetsError) throw targetsError
 
     const targets: Record<string, number> = {}
     ;['L15', 'L24', 'C09', 'C10'].forEach(metricId => {
@@ -96,11 +98,12 @@ export async function updateClientHealth(
     })
 
     // 2. Calculate score
-    const { data: settings } = await supabase
+    const { data: settings, error: settingsError } = await supabase
       .from('client_settings')
       .select('content_enabled, leadgen_enabled, active_content_metrics, active_leadgen_metrics')
       .eq('client_id', clientId)
       .maybeSingle()
+    if (settingsError) throw settingsError
 
     const { score, breakdown } = calculateHealthScore(contentMetrics, leadgenMetrics, targets, {
       contentEnabled: settings?.content_enabled ?? true,
@@ -110,7 +113,7 @@ export async function updateClientHealth(
     })
 
     // 3. Fetch previous score
-    const { data: prev } = await supabase
+    const { data: prev, error: prevError } = await supabase
       .from('client_health_scores')
       .select('health_score')
       .eq('client_id', clientId)
@@ -118,6 +121,7 @@ export async function updateClientHealth(
       .order('week_start', { ascending: false })
       .limit(1)
       .maybeSingle()
+    if (prevError) throw prevError
 
     // 4. Upsert score
     const { error } = await supabase
@@ -126,7 +130,7 @@ export async function updateClientHealth(
         client_id: clientId,
         week_start: weekStart,
         health_score: score,
-        previous_score: prev?.health_score || null,
+        previous_score: prev?.health_score ?? null,
         score_breakdown: breakdown,
         updated_at: new Date().toISOString()
       }, { onConflict: 'client_id,week_start' })

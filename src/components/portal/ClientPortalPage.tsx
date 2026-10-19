@@ -1,4 +1,4 @@
-import { CUMULATIVE_METRIC_IDS } from '@/data/metricSemantics'
+import { CUMULATIVE_METRIC_IDS, periodTotal } from '@/data/metricSemantics'
 import { nowAsIST } from '@/utils/dateUtils'
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
@@ -179,7 +179,12 @@ function aggregatePeriodMetrics(rows: any[], extraMetrics: Metric[] = []): Recor
 
   for (const metric of [...ALL_METRICS, ...extraMetrics]) {
     if (metric.type === 'auto' || metric.type === 'textarea' || metric.type === 'boolean') continue
-    const values = builtRows.map(row => Number(row[metric.id])).filter(Number.isFinite)
+    // Number(null) is 0 — a blank/unsubmitted week must not count as a real 0.
+    const values = builtRows
+      .map(row => row[metric.id])
+      .filter(v => v !== null && v !== undefined && v !== '')
+      .map(Number)
+      .filter(Number.isFinite)
     if (!values.length) {
       totals[metric.id] = null
     } else if (latestValueMetrics.has(metric.id)) {
@@ -1193,12 +1198,13 @@ export function ClientPortalPage() {
                                 const values = reportWeekList.map(w => getReportCellValue(w, m.id))
                                 const numVals = values.filter(v => v !== null) as number[]
                                 const isRate = !!RATE_DEPENDENCIES[m.id]
-                                const total = numVals.length > 0 ? numVals.reduce((a, b) => a + b, 0) : null
+                                const total = numVals.length > 0 ? periodTotal(m.id, numVals) : null
+                                const weekSum = numVals.reduce((a, b) => a + b, 0)
                                 // Rate metrics recompute one volume-weighted value from summed
                                 // raw fields instead of averaging each week's already-computed rate.
                                 const avg = isRate
                                   ? getReportVolumeWeightedRate(reportWeekList, m.id)
-                                  : total !== null && numVals.length > 0 ? total / numVals.length : null
+                                  : numVals.length > 0 ? weekSum / numVals.length : null
                                 const tgt = getReportTarget(m.id)
 
                                 return (
@@ -1293,8 +1299,9 @@ export function ClientPortalPage() {
                           const numVals = values.filter(v => v !== null) as number[]
                           if (numVals.length === 0) return null
                           const isRate = !!RATE_DEPENDENCIES[m.id]
-                          const total = numVals.reduce((a, b) => a + b, 0)
-                          const avg = isRate ? (getReportVolumeWeightedRate(reportWeekList, m.id) ?? total / numVals.length) : total / numVals.length
+                          const total = periodTotal(m.id, numVals)
+                          const weekSum = numVals.reduce((a, b) => a + b, 0)
+                          const avg = isRate ? (getReportVolumeWeightedRate(reportWeekList, m.id) ?? weekSum / numVals.length) : weekSum / numVals.length
                           const best = Math.max(...numVals)
                           const bestWeekIdx = values.findIndex(v => v === best)
                           const bestWeek = bestWeekIdx >= 0 ? fmtWeekShort(reportWeekList[bestWeekIdx]) : '-'

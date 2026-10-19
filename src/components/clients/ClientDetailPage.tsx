@@ -127,11 +127,18 @@ export function ClientDetailPage() {
     }
   }
 
+  const allMetricIdsFor = (category: 'content' | 'leadgen'): string[] => [
+    ...(category === 'content' ? CONTENT_METRICS : LEADGEN_METRICS),
+    ...customMetrics.filter(m => m.category === category),
+  ].map(m => m.id)
+
   const handleToggleMetric = async (metricId: string, category: 'content' | 'leadgen') => {
-    if (!isAdmin) return
+    if (!isAdmin || !settings) return
 
     const field = category === 'content' ? 'active_content_metrics' : 'active_leadgen_metrics'
-    const current = settings[field] || []
+    // A null allowlist means "every metric is active" — start from the full list so
+    // switching ONE metric off doesn't leave only that one id behind.
+    const current: string[] = settings[field] ?? allMetricIdsFor(category)
     const updated = current.includes(metricId)
       ? current.filter((m: string) => m !== metricId)
       : [...current, metricId]
@@ -417,7 +424,7 @@ export function ClientDetailPage() {
                       <p className="text-[10px] text-muted-foreground font-mono">{m.id} · {m.group}</p>
                     </div>
                     <Switch 
-                      checked={settings?.active_content_metrics?.includes(m.id)} 
+                      checked={(settings?.active_content_metrics ?? allMetricIdsFor('content')).includes(m.id)} 
                       onCheckedChange={() => handleToggleMetric(m.id, 'content')}
                     />
                   </div>
@@ -439,7 +446,7 @@ export function ClientDetailPage() {
                       <p className="text-[10px] text-muted-foreground font-mono">{m.id} · {m.group}</p>
                     </div>
                     <Switch 
-                      checked={settings?.active_leadgen_metrics?.includes(m.id)} 
+                      checked={(settings?.active_leadgen_metrics ?? allMetricIdsFor('leadgen')).includes(m.id)} 
                       onCheckedChange={() => handleToggleMetric(m.id, 'leadgen')}
                     />
                   </div>

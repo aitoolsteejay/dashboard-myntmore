@@ -45,5 +45,7 @@ export function computeVolumeWeightedRate(
     if (d !== null) { denSum += d; any = true }
   }
   if (!any) return null
-  return calcRateCapped(numSum, denSum) ?? 0
+  // null (zero denominator / numerator above denominator) must stay "no valid rate" —
+  // showing 0% for a month with e.g. 5 accepted of 4 sent was a false reading.
+  return calcRateCapped(numSum, denSum)
 }

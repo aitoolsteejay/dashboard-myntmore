@@ -263,10 +263,16 @@ export async function detectAndUpdateHighScores(
   if (Object.keys(values).length === 0) return []
 
   // Fetch all existing high scores for this client in ONE query
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from('high_scores')
     .select('metric_id, lifetime_high, achieved_week')
     .eq('client_id', clientId)
+  // A failed read would look like "no records yet" and overwrite every real
+  // record with this week's (possibly lower) value, so bail out instead.
+  if (existingError) {
+    console.error('High-score read failed:', existingError)
+    return []
+  }
 
   const existingMap: Record<string, { lifetime_high: number | null; achieved_week: string | null }> = {}
   existing?.forEach(s => { existingMap[s.metric_id] = s })

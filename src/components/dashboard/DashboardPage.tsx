@@ -665,9 +665,12 @@ export function DashboardPage() {
     // above produces for every field it doesn't know is a percentage).
     Object.keys(RATE_DEPENDENCIES).forEach(metricId => {
       const category = clientMetrics.find(m => m.id === metricId)?.category === 'content' ? 'content' : 'leadgen'
-      monthlyTotals[metricId] = computeVolumeWeightedRate(weeks, metricId, category) ?? 0
+      const rate = computeVolumeWeightedRate(weeks, metricId, category)
+      if (rate === null) delete monthlyTotals[metricId]
+      else monthlyTotals[metricId] = rate
     })
-    monthlyTotals['C26'] = monthlyTotals['C09'] > 0 ? monthlyTotals['C10'] / monthlyTotals['C09'] : 0
+    if (monthlyTotals['C09'] > 0 && monthlyTotals['C10'] !== undefined) monthlyTotals['C26'] = monthlyTotals['C10'] / monthlyTotals['C09']
+    else delete monthlyTotals['C26']
     // Any percentage-type metric (standard or custom) not already recomputed
     // via volume-weighting above is a per-week rate — average it across
     // weeks instead of leaving it as the raw sum the loop above produces. A
@@ -795,7 +798,7 @@ export function DashboardPage() {
         total.L18 = calcRateCapped(total.L16, total.L13) || 0
         total.L21 = calcRateCapped(total.L20, total.L19) || 0
         total.L26 = calcRateCapped(total.L25, total.L24) || 0
-        total.C26 = total.C09 > 0 ? total.C10 / total.C09 : 0
+        total.C26 = total.C09 > 0 && total.C10 !== undefined ? total.C10 / total.C09 : 0
         // Any percentage-type metric (standard or custom) not already
         // recomputed via calcRateCapped above is a per-week rate — average
         // it across weeks instead of leaving it as the raw sum the loop
@@ -821,9 +824,11 @@ export function DashboardPage() {
         setLoadingPrev(true)
         const { data } = await supabase
           .from('weekly_data')
-          .select('client_id, content_metrics, leadgen_metrics, content_submitted_at, leadgen_submitted_at')
+          .select('client_id, week_start, content_metrics, leadgen_metrics, content_submitted_at, leadgen_submitted_at')
           .gte('week_start', `${prevMonthStr}-01`)
           .lte('week_start', previousMonthEnd)
+          // ascending, so a running total (followers/subscribers) ends as the latest week's reading
+          .order('week_start', { ascending: true })
 
         setPrevMonthTotals(aggregateClientRows(data || []))
         setLoadingPrev(false)
@@ -1106,13 +1111,15 @@ export function DashboardPage() {
   const aggregateMmLinkedInRows = (rows: any[]) => {
     const out: Record<string, number> = {}
     let posts = 0
-    for (const row of rows) {
+    // Ascending by week so a running total (MML06 Total Followers) ends as the latest reading.
+    const orderedRows = [...rows].sort((a, b) => String(a.week_start).localeCompare(String(b.week_start)))
+    for (const row of orderedRows) {
       const ch = row['linkedin']
       if (!ch) continue
       for (const [k, v] of Object.entries(ch)) {
         if (k === 'MML02' || k === 'MML10' || k === 'MML11' || k === 'MML12') continue
         const n = typeof v === 'object' && v !== null && 'value' in (v as any) ? Number((v as any).value) : Number(v)
-        if (!isNaN(n)) out[k] = (out[k] ?? 0) + n
+        if (!isNaN(n)) out[k] = CUMULATIVE_METRIC_IDS.has(k) ? n : (out[k] ?? 0) + n
       }
       const inNetwork = tjVal(ch, 'MML10')
       const outOfNetwork = tjVal(ch, 'MML11')
@@ -1515,21 +1522,21 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (session) fetchTJLifetimeHighs().then(setTjLifetimeHighs)
-  }, [session])
+  }, [session?.user?.id])
 
   useEffect(() => {
     if (session) fetchMMLifetimeHighs().then(setMmLifetimeHighs)
-  }, [session])
+  }, [session?.user?.id])
 
   useEffect(() => {
     if (session) fetchSalesLifetimeHighs().then(setSalesLifetimeHighs)
-  }, [session])
+  }, [session?.user?.id])
 
   useEffect(() => {
     if (session && displayWeek) {
       loadAllDashboardData(displayWeek)
     }
-  }, [session, displayWeek])
+  }, [session?.user?.id, displayWeek])
 
   // --- Deliverable gap alerts - must be declared BEFORE early returns (Rules of Hooks) ---
   const deliverableAlerts = useMemo(() => {
@@ -2516,16 +2523,26 @@ function AhaMomentsAdmin({ clientId }: { clientId: string }) {
   const handlePost = async () => {
     if (!title.trim()) return
     setSaving(true)
-    const { data } = await (supabase as any).from('aha_moments').insert({
+    const { data, error } = await (supabase as any).from('aha_moments').insert({
       client_id: clientId, title: title.trim(), description: description.trim() || null, emoji,
     }).select().single()
+    setSaving(false)
+    if (error) {
+      // Keep the form open with what was typed so nothing is lost on a failed post.
+      toast.error(`Could not post aha moment: ${error.message}`)
+      return
+    }
     if (data) setMoments(prev => [data, ...prev])
-    setTitle(''); setDescription(''); setEmoji('🎉'); setShowForm(false); setSaving(false)
+    setTitle(''); setDescription(''); setEmoji('🎉'); setShowForm(false)
     toast.success('Aha moment posted!')
   }
 
   const handleDelete = async (id: string) => {
-    await (supabase as any).from('aha_moments').delete().eq('id', id)
+    const { error } = await (supabase as any).from('aha_moments').delete().eq('id', id)
+    if (error) {
+      toast.error(`Could not delete aha moment: ${error.message}`)
+      return
+    }
     setMoments(prev => prev.filter(m => m.id !== id))
   }
 

@@ -95,7 +95,18 @@ export function useAutoSave(options: AutoSaveOptions) {
       }
 
       saved = true
-      failedSaveRef.current = null
+      // A success only settles a failure for the SAME row: a later save of another
+      // week/client (or, for plain column patches, of other columns) must not make an
+      // earlier failed edit look saved.
+      const failed = failedSaveRef.current
+      if (failed && scopeKey(failed.cols) === scopeKey(request.cols)) {
+        if (callbacksRef.current.saveFn) {
+          failedSaveRef.current = null
+        } else {
+          const rest = Object.fromEntries(Object.entries(failed.data).filter(([k]) => !(k in request.data)))
+          failedSaveRef.current = Object.keys(rest).length > 0 ? { ...failed, data: rest } : null
+        }
+      }
       if (mountedRef.current && isCurrentScope(request.cols)) {
         setSaveStatus('saved')
         setLastSaved(new Date())
@@ -143,14 +154,23 @@ export function useAutoSave(options: AutoSaveOptions) {
       clearTimeout(timerRef.current)
       timerRef.current = null
     }
-    const pending = pendingRef.current
+    let pending = pendingRef.current
     pendingRef.current = null
+    // A save that already FAILED for this row is still unsaved data — flushing must
+    // retry it (and report failure if it fails again) instead of reporting "all saved",
+    // which let a week/client switch silently discard the edit.
+    const failed = failedSaveRef.current
+    const failedForScope = failed && scopeKey(failed.cols) === currentScopeKeyRef.current ? failed : null
     if (!pending) {
       const latest = latestSavePromiseRef.current
       if (latest?.key === currentScopeKeyRef.current && (isSavingRef.current || queuedSavesRef.current.length > 0)) {
-        return latest.promise
+        const result = await latest.promise
+        return result && failedForScope && failedSaveRef.current ? enqueueSave(failedSaveRef.current) : result
       }
-      return true
+      return failedForScope ? enqueueSave(failedForScope) : true
+    }
+    if (failedForScope && !callbacksRef.current.saveFn) {
+      pending = { ...pending, data: { ...failedForScope.data, ...pending.data } }
     }
     return enqueueSave(pending)
   }, [enqueueSave])
@@ -164,6 +184,9 @@ export function useAutoSave(options: AutoSaveOptions) {
     // fold the still-pending columns into this request when it targets the
     // same row — the newer value of any column wins.
     const pending = pendingRef.current
+    // An edit still waiting from a DIFFERENT row (week/client switched inside the
+    // debounce window) must be saved now — replacing it would drop it silently.
+    if (pending && scopeKey(pending.cols) !== scopeKey(cols)) void enqueueSave(pending)
     const merged = pending && !callbacksRef.current.saveFn && scopeKey(pending.cols) === scopeKey(cols)
       ? { ...pending.data, ...data }
       : data

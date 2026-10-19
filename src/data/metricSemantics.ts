@@ -35,3 +35,14 @@ export const LOWER_IS_BETTER_METRIC_IDS: ReadonlySet<string> = new Set([
   'MMA04', 'MMA06', 'MMA09', 'MMA10', 'MMW04',
   'SO08', 'SO17', 'SO28', 'SO34', 'SO42',
 ])
+
+// Rolls a list of per-week readings (oldest first, blanks already removed) up
+// to one "Total" for a reports table: a running total is the latest reading,
+// a per-post ratio (C26) is the mean (summing ratios means nothing), and
+// everything else is a plain sum.
+export function periodTotal(metricId: string, values: number[]): number {
+  if (values.length === 0) return 0
+  if (CUMULATIVE_METRIC_IDS.has(metricId)) return values[values.length - 1]
+  const sum = values.reduce((a, b) => a + b, 0)
+  return metricId === 'C26' ? sum / values.length : sum
+}
