@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { sortAlphabetically } from "@/utils/sort"
 import { CompanyMetric } from "@/data/company_metrics"
 import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
+import { CUMULATIVE_METRIC_IDS, AVERAGED_NUMBER_IDS } from "@/data/metricSemantics"
 import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from "@/data/company_metrics"
 
 interface TargetRowProps {
@@ -440,10 +441,10 @@ export function SettingsTargetsPage() {
     setMmTargetValues(Object.fromEntries((data || []).filter(r => r.target_value !== null).map(r => [r.metric_id, Number(r.target_value)])))
   }
   const loadMmActuals = async (type: 'weekly' | 'monthly', p: string) => {
-    const { data } = await supabase.from('mm_weekly_data').select('linkedin,instagram,website,quora,reddit,ads').in('week_start', type === 'weekly' ? [p] : weeksInMonth(p))
+    const { data } = await supabase.from('mm_weekly_data').select('week_start,linkedin,instagram,website,quora,reddit,ads').in('week_start', type === 'weekly' ? [p] : weeksInMonth(p)).order('week_start', { ascending: true })
     const sums: Record<string, number> = {}, counts: Record<string, number> = {}
-    ;(data || []).forEach(row => MM_TARGET_GROUPS.forEach(g => g.metrics.forEach(m => { const columns = g.title === 'LinkedIn' ? ['linkedin'] : g.title === 'Instagram' ? ['instagram'] : g.title === 'Website' || g.title === 'SEO' ? ['website'] : g.title === 'Other Channels' ? ['quora','reddit'] : ['ads']; const raw = columns.map(c => (row as any)[c]?.[m.id]?.value).find(v => v !== undefined && v !== null); if (raw !== undefined && !isNaN(Number(raw))) { sums[m.id] = (sums[m.id] || 0) + Number(raw); counts[m.id] = (counts[m.id] || 0) + 1 } })))
-    setMmActuals(Object.fromEntries(Object.keys(sums).map(id => [id, type === 'monthly' && MM_TARGET_GROUPS.flatMap(g => g.metrics).find(m => m.id === id)?.type === 'percentage' ? sums[id] / counts[id] : sums[id]])))
+    ;(data || []).forEach(row => MM_TARGET_GROUPS.forEach(g => g.metrics.forEach(m => { const columns = g.title === 'LinkedIn' ? ['linkedin'] : g.title === 'Instagram' ? ['instagram'] : g.title === 'Website' || g.title === 'SEO' ? ['website'] : g.title === 'Other Channels' ? ['quora','reddit'] : ['ads']; const raw = columns.map(c => (row as any)[c]?.[m.id]?.value).find(v => v !== undefined && v !== null); if (raw !== undefined && !isNaN(Number(raw))) { sums[m.id] = CUMULATIVE_METRIC_IDS.has(m.id) ? Number(raw) : (sums[m.id] || 0) + Number(raw); counts[m.id] = (counts[m.id] || 0) + 1 } })))
+    setMmActuals(Object.fromEntries(Object.keys(sums).map(id => [id, type === 'monthly' && (MM_TARGET_GROUPS.flatMap(g => g.metrics).find(m => m.id === id)?.type === 'percentage' || AVERAGED_NUMBER_IDS.has(id)) ? sums[id] / counts[id] : sums[id]])))
   }
   useEffect(() => { if (activeSection !== 'mm') return; const p = targetType === 'weekly' ? selectedWeekStart : selectedMonth; loadMmTargets(targetType, p); loadMmActuals(targetType, p) }, [activeSection, targetType, selectedWeekStart, selectedMonth, MM_TARGET_METRIC_IDS])
   const saveMmTargets = async () => {
@@ -455,8 +456,9 @@ export function SettingsTargetsPage() {
     const weekStarts = type === 'monthly' ? weeksInMonth(p) : [p]
     const { data } = await supabase
       .from('tj_weekly_data')
-      .select('instagram, youtube, email_newsletter, video_pipeline')
+      .select('week_start, instagram, youtube, email_newsletter, video_pipeline')
       .in('week_start', weekStarts)
+      .order('week_start', { ascending: true })
 
     const sums: Record<string, number> = {}
     const counts: Record<string, number> = {}
@@ -474,7 +476,8 @@ export function SettingsTargetsPage() {
           .find(value => value !== null && value !== undefined)
         const rawValue = typeof entry === 'object' && entry !== null ? entry.value : entry
         if (rawValue !== null && rawValue !== undefined && !isNaN(Number(rawValue))) {
-          sums[metricId] = (sums[metricId] ?? 0) + Number(rawValue)
+          // Running totals (total followers/subscribers) are the latest week's reading
+          sums[metricId] = CUMULATIVE_METRIC_IDS.has(metricId) ? Number(rawValue) : (sums[metricId] ?? 0) + Number(rawValue)
           counts[metricId] = (counts[metricId] ?? 0) + 1
         }
       })
@@ -644,7 +647,6 @@ export function SettingsTargetsPage() {
         <div className="space-y-6">
           <Card className="p-6 bg-muted/20 border-none shadow-none">
             <div className="flex flex-col md:flex-row gap-4 items-end">
-              <Tabs value={targetType} onValueChange={(v: any) => setTargetType(v)}><TabsList><TabsTrigger value="weekly">Weekly</TabsTrigger><TabsTrigger value="monthly">Monthly</TabsTrigger></TabsList></Tabs>
               <Tabs value={targetType} onValueChange={(v: any) => setTargetType(v)}>
                 <TabsList>
                   <TabsTrigger value="weekly">Weekly</TabsTrigger>
@@ -726,6 +728,7 @@ export function SettingsTargetsPage() {
         <div className="space-y-6">
           <Card className="p-6 bg-muted/20 border-none shadow-none">
             <div className="flex flex-col md:flex-row gap-4 items-end">
+              <Tabs value={targetType} onValueChange={(v: any) => setTargetType(v)}><TabsList><TabsTrigger value="weekly">Weekly</TabsTrigger><TabsTrigger value="monthly">Monthly</TabsTrigger></TabsList></Tabs>
               <div className="space-y-2 min-w-[260px]">
                 <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{targetType === 'weekly' ? 'Week' : 'Month'}</Label>
                 {targetType === 'weekly' ? <Select value={selectedWeekStart} onValueChange={setSelectedWeekStart}>
@@ -736,7 +739,7 @@ export function SettingsTargetsPage() {
                 </Select> : <Select value={selectedMonth} onValueChange={setSelectedMonth}><SelectTrigger className="bg-background font-bold h-11"><SelectValue /></SelectTrigger><SelectContent>{monthOptions.map(m => <SelectItem key={m.period} value={m.period}>{m.label}</SelectItem>)}</SelectContent></Select>}
               </div>
               <p className="text-xs text-muted-foreground pb-2">
-                These are internal weekly targets for the Cold Emailing section of Sales & Outreach.
+                These are internal {targetType} targets for the Cold Emailing section of Sales & Outreach.
               </p>
             </div>
           </Card>
