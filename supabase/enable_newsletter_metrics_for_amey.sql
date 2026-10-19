@@ -26,7 +26,7 @@ BEGIN;
 UPDATE myntmore.client_settings cs
 SET active_content_metrics = (
   SELECT array_agg(DISTINCT id)
-  FROM unnest(cs.active_content_metrics || ARRAY['C28','C32','C33','C34','C35','C38','C39','C40','C41','C42','C43']) AS id
+  FROM unnest(cs.active_content_metrics || ARRAY['C28','C32','C33','C34','C35','C38','C39','C40','C41','C42','C43','C44']) AS id
 )
 FROM myntmore.clients c
 WHERE cs.client_id = c.id

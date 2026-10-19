@@ -61,6 +61,7 @@ export const CONTENT_METRICS: Metric[] = [
   { id: 'C41', name: 'LinkedIn Newsletter Subscribers', type: 'number', category: 'content', group: 'LinkedIn Newsletter', hasTarget: true, hasNote: false },
   { id: 'C42', name: 'LinkedIn Newsletter Issues Published', type: 'number', category: 'content', group: 'LinkedIn Newsletter', hasTarget: true, hasNote: false },
   { id: 'C43', name: 'LinkedIn Newsletter Views', type: 'number', category: 'content', group: 'LinkedIn Newsletter', hasTarget: false, hasNote: false },
+  { id: 'C44', name: 'LinkedIn Newsletter Open Rate', type: 'percentage', category: 'content', group: 'LinkedIn Newsletter', hasTarget: false, hasNote: false, unit: '%' },
   // Qualitative
   { id: 'C24', name: "What's Working (Content)", type: 'textarea', category: 'content', group: 'Qualitative', hasTarget: false, hasNote: false },
   { id: 'C25', name: "What's Not Working (Content)", type: 'textarea', category: 'content', group: 'Qualitative', hasTarget: false, hasNote: false },
