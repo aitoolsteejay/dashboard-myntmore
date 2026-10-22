@@ -20,7 +20,8 @@ import {
   Globe,
   PlusCircle,
   TrendingUp,
-  Search
+  Search,
+  Trophy
 } from "lucide-react"
 import {
   MM_LINKEDIN_METRICS,
@@ -36,6 +37,8 @@ import { getWeekOptions, getWeekEnd, getWeekLabel } from "@/utils/weekUtils"
 import { useWorkspace } from "@/lib/workspace"
 import { useAutoSave } from "@/hooks/useAutoSave"
 import { SaveIndicator } from "@/components/ui/SaveIndicator"
+import { formatWeekDate } from "@/utils/dateUtils"
+import { fetchMMLifetimeHighs, type MMLifetimeHighs } from "@/utils/mmHighScores"
 
 export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
   const { user } = useAuth()
@@ -45,10 +48,33 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
   
   const weekOptions = useMemo(() => getWeekOptions(12), [])
   const { selectedWeek, setSelectedWeek } = useWorkspace()
+  // All-time best week per metric (computed on the fly from every saved week), shown
+  // as a trophy on each card — same as the TJ Personal Brand page.
+  const [lifetimeHighs, setLifetimeHighs] = useState<MMLifetimeHighs>({})
+  const refreshLifetimeHighs = () => { fetchMMLifetimeHighs().then(setLifetimeHighs).catch(err => console.error('MM highs failed:', err)) }
+  useEffect(() => { refreshLifetimeHighs() }, [])
+
+  // Channel owners live in tj_channel_assignments under 'mm_<channel>' keys.
+  const [channelOwners, setChannelOwners] = useState<Record<string, string>>({})
+  useEffect(() => {
+    const loadOwners = async () => {
+      const [{ data: assignments }, { data: profiles }] = await Promise.all([
+        supabase.from('tj_channel_assignments').select('channel, owner_id').like('channel', 'mm_%'),
+        supabase.from('profiles').select('id, full_name'),
+      ])
+      const names = new Map((profiles ?? []).map(p => [p.id, p.full_name]))
+      const map: Record<string, string> = {}
+      assignments?.forEach(a => { map[a.channel] = (a.owner_id ? names.get(a.owner_id) : null) ?? 'Unassigned' })
+      setChannelOwners(map)
+    }
+    loadOwners()
+  }, [])
+
   const { triggerSave, flushPendingSave, retrySave, saveStatus, lastSaved } = useAutoSave({
     table: 'mm_weekly_data',
     matchColumns: { week_start: selectedWeek },
     debounceMs: 1500,
+    onSaveSuccess: () => refreshLifetimeHighs(),
     onSaveError: message => toast.error(`MM Content save failed: ${message}`),
   })
 
@@ -153,6 +179,7 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
 
   const renderMetricCard = (section: string, metric: CompanyMetric) => {
     const data = formData[section][metric.id] || { value: '', target: '' }
+    const lifetimeHigh = metric.type !== 'boolean' ? lifetimeHighs[metric.id] : undefined
     const isLinkedInAuto = section === 'linkedin' && metric.id === 'MML12'
     const totalImpressions = Number(formData.linkedin.MML02?.value || 0)
     const posts = Number(formData.linkedin.MML01?.value || 0)
@@ -210,6 +237,13 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
               />
             </div>
           )}
+          {lifetimeHigh && (
+            <div className="flex items-center gap-1 text-[11px] text-gold font-bold pt-1 border-t border-border/30">
+              <Trophy className="w-3 h-3" />
+              <span>{Number(lifetimeHigh.value).toLocaleString('en-IN')}</span>
+              {lifetimeHigh.week && <span className="opacity-60 font-normal">· {formatWeekDate(lifetimeHigh.week)}</span>}
+            </div>
+          )}
         </CardContent>
       </Card>
     )
@@ -262,6 +296,37 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
             <TrendingUp className="w-4 h-4" /> Ads
           </TabsTrigger>
         </TabsList>
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '20px',
+          padding: '8px 12px',
+          background: '#F9F9F9',
+          borderRadius: '6px',
+          fontSize: '13px'
+        }}>
+          <span style={{ color: '#999' }}>Managed by:</span>
+          <span style={{
+            fontWeight: '600',
+            color: '#000',
+            background: '#FFC947',
+            padding: '2px 10px',
+            borderRadius: '20px',
+            fontSize: '12px'
+          }}>
+            {channelOwners[`mm_${activeTab}`] ?? 'Unassigned'}
+          </span>
+          {user && (
+            <a
+              href="/settings"
+              style={{ fontSize: '11px', color: '#999', marginLeft: 'auto', textDecoration: 'underline' }}
+            >
+              Change in Settings
+            </a>
+          )}
+        </div>
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">

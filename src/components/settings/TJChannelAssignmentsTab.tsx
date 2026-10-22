@@ -46,6 +46,16 @@ const CHANNELS = [
   { key: 'video_pipeline',      label: 'Video Pipeline',       icon: '🎬' },
 ]
 
+// MM Company Content channels — stored in the same assignments table under 'mm_<tab>'
+// keys (no custom metrics for these; ownership only).
+const MM_CHANNELS = [
+  { key: 'mm_linkedin',  label: 'LinkedIn',        icon: '💼' },
+  { key: 'mm_instagram', label: 'Instagram',       icon: '📱' },
+  { key: 'mm_website',   label: 'Website',         icon: '🌐' },
+  { key: 'mm_other',     label: 'Other Channels',  icon: '➕' },
+  { key: 'mm_ads',       label: 'Ads',             icon: '📈' },
+]
+
 // Static catalog names per channel — used to block a custom metric from
 // being named the same as an existing field (e.g. "Impressions", already
 // TJI05 on Instagram). buildTjSheet (src/lib/export.ts) keys the exported
@@ -215,15 +225,7 @@ export function TJChannelAssignmentsTab() {
     )
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h3 className="text-sm font-black tracking-widest uppercase">TJ Personal Brand - Channel Assignments</h3>
-        <p className="text-sm text-muted-foreground">
-          Assign a team member responsible for each channel. They will be shown as the owner in Monday Mode and the TJ Personal Brand page.
-        </p>
-      </div>
-
+  const renderAssignmentTable = (channels: typeof CHANNELS) => (
       <div className="rounded-xl border bg-card overflow-hidden">
         <Table>
           <TableHeader>
@@ -234,7 +236,7 @@ export function TJChannelAssignmentsTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {CHANNELS.map(ch => (
+            {channels.map(ch => (
               <TableRow key={ch.key}>
                 <TableCell>
                   <div className="flex items-center gap-2 font-medium">
@@ -277,6 +279,27 @@ export function TJChannelAssignmentsTab() {
           </TableBody>
         </Table>
       </div>
+  )
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <h3 className="text-sm font-black tracking-widest uppercase">TJ Personal Brand - Channel Assignments</h3>
+        <p className="text-sm text-muted-foreground">
+          Assign a team member responsible for each channel. They will be shown as the owner in Monday Mode and the TJ Personal Brand page.
+        </p>
+      </div>
+
+      {renderAssignmentTable(CHANNELS)}
+
+      <div className="space-y-1">
+        <h3 className="text-sm font-black tracking-widest uppercase">MM Company Content - Channel Assignments</h3>
+        <p className="text-sm text-muted-foreground">
+          Assign a team member responsible for each MM Company Content channel. They are shown as the owner on the MM Company Content page.
+        </p>
+      </div>
+
+      {renderAssignmentTable(MM_CHANNELS)}
 
       <div className="space-y-1">
         <h3 className="text-sm font-black tracking-widest uppercase">Custom Metrics</h3>

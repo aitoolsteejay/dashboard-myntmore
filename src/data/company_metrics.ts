@@ -93,7 +93,6 @@ export const MM_LINKEDIN_METRICS: CompanyMetric[] = [
 ]
 
 export const MM_INSTAGRAM_METRICS: CompanyMetric[] = [
-  { id: 'MMI01', name: 'Posts Published', type: 'number', hasTarget: true },
   { id: 'MMI02', name: 'Stories', type: 'number' },
   { id: 'MMI03', name: 'Reels', type: 'number' },
   { id: 'MMI04', name: 'Impressions', type: 'number' },
