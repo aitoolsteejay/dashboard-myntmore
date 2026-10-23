@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { getClientType, CLIENT_TYPE_LABELS, type ClientType } from "@/utils/clientType"
 import { Switch } from "@/components/ui/switch"
 import { Plus, Search, Edit2, Archive, RotateCcw, User, UserCheck } from "lucide-react"
 import { toast } from "sonner"
@@ -46,6 +47,7 @@ export function ClientsPage() {
   const [birthday, setBirthday] = useState<string | null>(null)
   const [startDate, setStartDate] = useState<string | null>(null)
   const [startingFollowers, setStartingFollowers] = useState<number>(0)
+  const [clientType, setClientType] = useState<ClientType>('external')
 
   const fetchData = async () => {
     setLoading(true)
@@ -122,6 +124,7 @@ export function ClientsPage() {
       setBirthday(client.birthday || null)
       setStartDate(client.myntmore_start_date || null)
       setStartingFollowers(client.starting_linkedin_followers || 0)
+      setClientType(getClientType(client))
     } else {
       setEditingClient(null)
       setName('')
@@ -132,6 +135,7 @@ export function ClientsPage() {
       setBirthday(null)
       setStartDate(null)
       setStartingFollowers(0)
+      setClientType('external')
     }
     setIsModalOpen(true)
   }
@@ -151,7 +155,10 @@ export function ClientsPage() {
         status,
         birthday,
         myntmore_start_date: startDate,
-        starting_linkedin_followers: startingFollowers
+        starting_linkedin_followers: startingFollowers,
+        // Only sent when it differs from what is stored, so saving other edits still works
+        // before the client_type column has been added (supabase/add_client_type.sql).
+        ...(clientType !== getClientType(editingClient) ? { client_type: clientType } : {}),
       }
 
       let clientId = editingClient?.id
@@ -293,8 +300,18 @@ export function ClientsPage() {
         </div>
       </div>
 
+      {(['internal', 'external'] as const).map(type => {
+        const group = filteredClients.filter(c => getClientType(c) === type)
+        if (group.length === 0) return null
+        return (
+      <div key={type} className="space-y-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">{CLIENT_TYPE_LABELS[type]}</h2>
+          <span className="text-[10px] font-bold text-muted-foreground/70">{group.length}</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filteredClients.map(client => (
+        {group.map(client => (
           <Card key={client.id} className="hover:shadow-md transition-shadow">
             <CardContent className="p-5 space-y-4">
               <div className="flex justify-between items-start">
@@ -371,6 +388,9 @@ export function ClientsPage() {
           </Card>
         ))}
       </div>
+      </div>
+        )
+      })}
 
       {/* Add / Edit Client Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -428,6 +448,16 @@ export function ClientsPage() {
             <div className="grid gap-2">
               <Label htmlFor="followers">Starting Followers</Label>
               <Input id="followers" type="number" value={startingFollowers} onChange={(e) => setStartingFollowers(Number(e.target.value))} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Client Type</Label>
+              <Select value={clientType} onValueChange={(v) => setClientType(v as ClientType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="external">External client</SelectItem>
+                  <SelectItem value="internal">Internal client (Myntmore's own)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="status">Active Status</Label>

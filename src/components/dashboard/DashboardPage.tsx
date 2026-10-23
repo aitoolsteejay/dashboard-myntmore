@@ -20,6 +20,7 @@ import { customMetricToMetric } from "@/hooks/useEffectiveMetrics"
 import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from "@/data/company_metrics"
 import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
 import { findTarget } from "@/utils/targets"
+import { getClientType, sortByClientType, CLIENT_TYPE_LABELS } from "@/utils/clientType"
 import { CUMULATIVE_METRIC_IDS, AVERAGED_NUMBER_IDS, LOWER_IS_BETTER_METRIC_IDS } from "@/data/metricSemantics"
 import { applySalesRates } from "@/utils/salesRates"
 import { RATE_DEPENDENCIES, computeVolumeWeightedRate } from "@/utils/rateAggregation"
@@ -1466,7 +1467,7 @@ export function DashboardPage() {
 
       if (requestId !== dashboardRequestRef.current) return
 
-      setClients(sortAlphabetically(clientsData || [], client => client.name))
+      setClients(sortByClientType(sortAlphabetically(clientsData || [], client => client.name)))
       setAlerts(alertsData || [])
       setWeeklyData(weeklyDataRes || [])
       setPrevWeeklyData(prevWeeklyDataRes || [])
@@ -1890,7 +1891,9 @@ export function DashboardPage() {
                 {!collapsedSections.has('clients') && (
                   isMonthlyView ? <MonthComparisonView /> : (
                   <div className="space-y-4">
-                    {clients.map(client => {
+                    {clients.map((client, clientIndex) => {
+                      const clientType = getClientType(client)
+                      const startsGroup = clientIndex === 0 || getClientType(clients[clientIndex - 1]) !== clientType
                       const currentData = weeklyData.find(w => w.client_id === client.id)
                       const prevData = prevWeeklyData.find(w => w.client_id === client.id)
                       const isExpanded = expandedClients.has(client.id)
@@ -1948,7 +1951,15 @@ export function DashboardPage() {
                       }
 
                       return (
-                        <Card key={client.id} className={cn("border shadow-sm overflow-hidden transition-all", isExpanded ? "ring-2 ring-gold/20" : "")}>
+                        <React.Fragment key={client.id}>
+                        {startsGroup && (
+                          <div className={cn("flex items-center gap-3 pt-2", clientIndex > 0 && "mt-6")}>
+                            <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground">{CLIENT_TYPE_LABELS[clientType]}</h3>
+                            <span className="text-[10px] font-bold text-muted-foreground/70">{clients.filter(c => getClientType(c) === clientType).length}</span>
+                            <div className="h-px flex-1 bg-border" />
+                          </div>
+                        )}
+                        <Card className={cn("border shadow-sm overflow-hidden transition-all", isExpanded ? "ring-2 ring-gold/20" : "")}>
                           {/* Collapsed Row */}
                           <div 
                             className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors flex-nowrap min-w-0 gap-4"
@@ -2241,6 +2252,7 @@ export function DashboardPage() {
                             </div>
                           )}
                         </Card>
+                        </React.Fragment>
                       )
                     })}
                   </div>

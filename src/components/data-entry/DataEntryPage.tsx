@@ -1,11 +1,12 @@
 import { getTodayIST } from '@/utils/dateUtils'
+import { getClientType, sortByClientType, CLIENT_TYPE_LABELS } from '@/utils/clientType'
 import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from "@/integrations/supabase/client"
 import { useAuth } from "@/lib/auth"
 import { ALL_METRICS, CONTENT_METRICS, LEADGEN_METRICS, Metric } from "@/data/metrics"
 import { EffectiveMetrics, customMetricToMetric } from "@/hooks/useEffectiveMetrics"
 import { findTarget } from "@/utils/targets"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -37,7 +38,7 @@ import { sortAlphabetically } from '@/utils/sort'
 import { useWorkspace } from '@/lib/workspace'
 import { parseWaalaxyExport, type WaalaxyImportSummary } from '@/utils/waalaxyImport'
 
-type ClientSummary = { id: string; name: string; company: string | null }
+type ClientSummary = { id: string; name: string; company: string | null; client_type?: string | null }
 
 function showHighScorePopup(metricNames: string[]) {
   toast.custom((toastId) => (
@@ -1680,10 +1681,10 @@ export function DataEntryPage() {
       // Always fetch all active clients for everyone
       const { data } = await supabase
         .from('clients')
-        .select('id, name, company')
+        .select('*')
         .eq('status', 'active')
         .order('name')
-      const sortedClients = sortAlphabetically(data || [], client => client.name)
+      const sortedClients = sortByClientType(sortAlphabetically(data || [], client => client.name))
       setClients(sortedClients)
       if (sortedClients.length > 0 && !selectedClientId) setSelectedClientId(sortedClients[0].id)
     }
@@ -2307,7 +2308,15 @@ export function DataEntryPage() {
                 <SelectValue placeholder="Choose client" />
               </SelectTrigger>
               <SelectContent>
-                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name} - {c.company}</SelectItem>)}
+                {(['internal', 'external'] as const).map(type => {
+                  const group = clients.filter(c => getClientType(c) === type)
+                  return group.length === 0 ? null : (
+                    <SelectGroup key={type}>
+                      <SelectLabel>{CLIENT_TYPE_LABELS[type]}</SelectLabel>
+                      {group.map(c => <SelectItem key={c.id} value={c.id}>{c.name} - {c.company}</SelectItem>)}
+                    </SelectGroup>
+                  )
+                })}
               </SelectContent>
             </Select>
           </div>

@@ -519,6 +519,7 @@ export type Database = {
       clients: {
         Row: {
           birthday: string | null
+          client_type: string
           company: string | null
           content_manager_id: string | null
           created_at: string | null
@@ -532,6 +533,7 @@ export type Database = {
         }
         Insert: {
           birthday?: string | null
+          client_type?: string
           company?: string | null
           content_manager_id?: string | null
           created_at?: string | null
@@ -545,6 +547,7 @@ export type Database = {
         }
         Update: {
           birthday?: string | null
+          client_type?: string
           company?: string | null
           content_manager_id?: string | null
           created_at?: string | null
