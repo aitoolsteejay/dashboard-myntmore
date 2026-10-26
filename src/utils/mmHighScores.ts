@@ -1,16 +1,16 @@
 import { supabase } from '@/integrations/supabase/client'
-import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from '@/data/company_metrics'
+import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS, MM_VIDEO_METRICS } from '@/data/company_metrics'
 import { CUMULATIVE_METRIC_IDS, AVERAGED_NUMBER_IDS } from '@/data/metricSemantics'
 import { computeLifetimeHighs, type LifetimeHighs, type RatePair } from './lifetimeHighs'
 
 // The JSON columns in mm_weekly_data that hold {metricId: {value, target}} maps —
 // scanned across every week's history. No highscores table exists for MM (unlike
 // per-client metrics), so this is computed on the fly.
-const MM_METRIC_COLUMNS = ['linkedin', 'instagram', 'website', 'quora', 'reddit', 'ads'] as const
+const MM_METRIC_COLUMNS = ['linkedin', 'instagram', 'website', 'quora', 'reddit', 'ads', 'video_pipeline'] as const
 
 export type MMLifetimeHighs = LifetimeHighs
 
-const ALL_MM_METRICS = [...MM_LINKEDIN_METRICS, ...MM_INSTAGRAM_METRICS, ...MM_WEBSITE_METRICS, ...MM_SEO_METRICS, ...MM_OTHER_METRICS, ...MM_ADS_METRICS]
+const ALL_MM_METRICS = [...MM_LINKEDIN_METRICS, ...MM_INSTAGRAM_METRICS, ...MM_WEBSITE_METRICS, ...MM_SEO_METRICS, ...MM_OTHER_METRICS, ...MM_ADS_METRICS, ...MM_VIDEO_METRICS]
 
 // A boolean field's Number(true) would register a fake numeric "high" of 1.
 const MM_BOOLEAN_IDS = new Set(ALL_MM_METRICS.filter(m => m.type === 'boolean').map(m => m.id))
@@ -23,7 +23,8 @@ const RATE_PAIRS: Record<string, RatePair> = { MML12: ['MML02', 'MML01', 1] }
 export async function fetchMMLifetimeHighs(): Promise<MMLifetimeHighs> {
   const { data } = await supabase
     .from('mm_weekly_data')
-    .select(`week_start, ${MM_METRIC_COLUMNS.join(', ')}`)
+    // '*' (not a column list): the highs must keep working before supabase/add_mm_video_pipeline.sql has run
+    .select('*')
   if (!data) return {}
 
   // Legacy weeks tracked Total Impressions as an In-Network + Out-of-Network

@@ -54,6 +54,7 @@ const MM_CHANNELS = [
   { key: 'mm_website',   label: 'Website',         icon: '🌐' },
   { key: 'mm_other',     label: 'Other Channels',  icon: '➕' },
   { key: 'mm_ads',       label: 'Ads',             icon: '📈' },
+  { key: 'mm_video',     label: 'Video Pipeline',  icon: '🎬' },
 ]
 
 // Static catalog names per channel — used to block a custom metric from

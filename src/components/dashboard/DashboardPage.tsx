@@ -18,7 +18,7 @@ import { CampaignMonthTable } from "../monday/CampaignMonthTable"
 import { EditCampaignModal } from "../monday/EditCampaignModal"
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from "@/data/metrics"
 import { customMetricToMetric } from "@/hooks/useEffectiveMetrics"
-import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS } from "@/data/company_metrics"
+import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS, MM_VIDEO_METRICS } from "@/data/company_metrics"
 import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
 import { findTarget } from "@/utils/targets"
 import { getClientType, sortByClientType, CLIENT_TYPE_LABELS } from "@/utils/clientType"
@@ -1145,6 +1145,7 @@ export function DashboardPage() {
     quora: aggregateChannelRows(mtdMmRows, 'quora', MM_OTHER_METRICS),
     reddit: aggregateChannelRows(mtdMmRows, 'reddit', MM_OTHER_METRICS),
     ads: aggregateChannelRows(mtdMmRows, 'ads', MM_ADS_METRICS),
+    video_pipeline: aggregateChannelRows(mtdMmRows, 'video_pipeline', MM_VIDEO_METRICS),
   }
 
   const withLinkedInImpressionTotals = (data: any) => {
@@ -2338,6 +2339,7 @@ export function DashboardPage() {
                         { title: 'SEO', icon: Search, metrics: MM_SEO_METRICS, raw: asDashboardRecord(mmData?.website), rawPrev: asDashboardRecord(prevMmData?.website), mtd: monthMmAgg.website },
                         { title: 'Other Channels', icon: MessageSquare, metrics: MM_OTHER_METRICS, raw: { ...asDashboardRecord(mmData?.quora), ...asDashboardRecord(mmData?.reddit) }, rawPrev: { ...asDashboardRecord(prevMmData?.quora), ...asDashboardRecord(prevMmData?.reddit) }, mtd: { ...monthMmAgg.quora, ...monthMmAgg.reddit } },
                         { title: 'Ads Performance', icon: TrendingUp, metrics: MM_ADS_METRICS, raw: asDashboardRecord((mmData as any)?.ads), rawPrev: asDashboardRecord((prevMmData as any)?.ads), mtd: monthMmAgg.ads },
+                        { title: 'Video Pipeline', icon: Mic, metrics: MM_VIDEO_METRICS, raw: asDashboardRecord((mmData as any)?.video_pipeline), rawPrev: asDashboardRecord((prevMmData as any)?.video_pipeline), mtd: monthMmAgg.video_pipeline },
                       ].map(ch => renderCompanyBlock({
                         key: ch.title,
                         title: ch.title,

@@ -64,6 +64,13 @@ export const MM_ADS_METRICS: CompanyMetric[] = [
   { id: 'MMA12', name: 'Meta Ads Lead Form Filled', type: 'number' },
 ]
 
+// MM Company Content's own video pipeline — mirrors TJ Personal Brand's (shot -> edited -> scheduled).
+export const MM_VIDEO_METRICS: CompanyMetric[] = [
+  { id: 'MMV01', name: 'Videos Shot', type: 'number' },
+  { id: 'MMV02', name: 'Videos Edited', type: 'number' },
+  { id: 'MMV03', name: 'Videos Scheduled', type: 'number' },
+]
+
 export const TJ_VIDEO_METRICS: CompanyMetric[] = [
   { id: 'TJV01', name: 'Videos Shot', type: 'number' },
   { id: 'TJV02', name: 'Videos Edited', type: 'number' },

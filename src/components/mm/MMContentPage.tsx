@@ -21,7 +21,8 @@ import {
   PlusCircle,
   TrendingUp,
   Search,
-  Trophy
+  Trophy,
+  Video
 } from "lucide-react"
 import {
   MM_LINKEDIN_METRICS,
@@ -30,6 +31,7 @@ import {
   MM_SEO_METRICS,
   MM_OTHER_METRICS,
   MM_ADS_METRICS,
+  MM_VIDEO_METRICS,
   CompanyMetric
 } from "@/data/company_metrics"
 import { BackButton } from "@/components/ui/BackButton"
@@ -84,7 +86,8 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
     website: {},
     quora: {},
     reddit: {},
-    ads: {}
+    ads: {},
+    video_pipeline: {}
   })
   const fetchRequestRef = React.useRef(0)
 
@@ -123,7 +126,8 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
           website: row.website || {},
           quora: row.quora || {},
           reddit: row.reddit || {},
-          ads: row.ads || {}
+          ads: row.ads || {},
+          video_pipeline: row.video_pipeline || {}
         })
       } else {
         setFormData({
@@ -132,7 +136,8 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
           website: {},
           quora: {},
           reddit: {},
-          ads: {}
+          ads: {},
+          video_pipeline: {}
         })
       }
     } catch (error: any) {
@@ -279,7 +284,7 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
       </header>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="bg-muted/50 p-1 h-auto grid grid-cols-5 max-w-3xl">
+        <TabsList className="bg-muted/50 p-1 h-auto grid grid-cols-6 max-w-4xl">
           <TabsTrigger value="linkedin" className="py-2.5 font-bold data-[state=active]:bg-gold data-[state=active]:text-black gap-2">
             <Linkedin className="w-4 h-4" /> LinkedIn
           </TabsTrigger>
@@ -294,6 +299,9 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
           </TabsTrigger>
           <TabsTrigger value="ads" className="py-2.5 font-bold data-[state=active]:bg-gold data-[state=active]:text-black gap-2">
             <TrendingUp className="w-4 h-4" /> Ads
+          </TabsTrigger>
+          <TabsTrigger value="video" className="py-2.5 font-bold data-[state=active]:bg-gold data-[state=active]:text-black gap-2">
+            <Video className="w-4 h-4" /> Video Pipeline
           </TabsTrigger>
         </TabsList>
 
@@ -381,6 +389,12 @@ export function MMContentPage({ embedded }: { embedded?: boolean } = {}) {
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {MM_ADS_METRICS.filter(m => ['MMA06','MMA10','MMA12'].includes(m.id)).map(m => renderMetricCard('ads', m))}
                   </div>
+                </div>
+            </TabsContent>
+
+            <TabsContent value="video" className="mt-0">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {MM_VIDEO_METRICS.map(m => renderMetricCard('video_pipeline', m))}
                 </div>
             </TabsContent>
 

@@ -4,7 +4,7 @@ import writeExcelFile from 'write-excel-file/browser'
 import { CONTENT_METRICS, LEADGEN_METRICS } from "@/data/metrics"
 import {
   TJ_INSTAGRAM_METRICS, TJ_YOUTUBE_METRICS, TJ_PODCAST_METRICS, TJ_VIDEO_METRICS,
-  MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS,
+  MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_VIDEO_METRICS,
 } from "@/data/company_metrics"
 import { readNum, readText, readBool, readTotalPosts } from "@/utils/readMetric"
 import { buildWeekMetrics } from "@/utils/metricCalculations"
@@ -193,6 +193,7 @@ function buildMmSheet(rows: any[]) {
       const web = asRecord(row.website)
       const qr  = asRecord(row.quora)
       const rd  = asRecord(row.reddit)
+      const vp  = asRecord(row.video_pipeline)
 
       const base: Record<string, unknown> = {
         'Week Start': row.week_start,
@@ -215,6 +216,7 @@ function buildMmSheet(rows: any[]) {
         const prefix = isMedium ? '[Medium]' : isQuora ? '[Quora]' : '[Reddit]'
         base[`${prefix} ${m.name}`] = readField(isQuora || isMedium ? qr : rd, m.id)
       }
+      for (const m of MM_VIDEO_METRICS)      base[`[Video] ${m.name}`] = readField(vp, m.id)
       return base
     })
 }

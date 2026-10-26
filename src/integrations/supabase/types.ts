@@ -985,6 +985,7 @@ export type Database = {
       mm_weekly_data: {
         Row: {
           ads: Json
+          video_pipeline: Json
           created_at: string | null
           id: string
           instagram: Json | null
@@ -999,6 +1000,7 @@ export type Database = {
         }
         Insert: {
           ads?: Json
+          video_pipeline?: Json
           created_at?: string | null
           id?: string
           instagram?: Json | null
@@ -1013,6 +1015,7 @@ export type Database = {
         }
         Update: {
           ads?: Json
+          video_pipeline?: Json
           created_at?: string | null
           id?: string
           instagram?: Json | null
