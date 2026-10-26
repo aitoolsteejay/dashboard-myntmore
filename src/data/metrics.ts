@@ -53,7 +53,7 @@ export const CONTENT_METRICS: Metric[] = [
   { id: 'C35', name: 'Newsletter Click Rate', type: 'percentage', category: 'content', group: 'Email Newsletter', hasTarget: false, hasNote: false, unit: '%' },
   { id: 'C38', name: 'Newsletter Delivery Rate', type: 'percentage', category: 'content', group: 'Email Newsletter', hasTarget: false, hasNote: false, unit: '%' },
   { id: 'C39', name: 'Newsletter CTOR (Click-to-Open Rate)', type: 'percentage', category: 'content', group: 'Email Newsletter', hasTarget: false, hasNote: false, unit: '%' },
-  { id: 'C40', name: 'Newsletter Unsubscribe Rate', type: 'number', category: 'content', group: 'Email Newsletter', hasTarget: false, hasNote: false },
+  { id: 'C40', name: 'Newsletter Unsubscribed', type: 'number', category: 'content', group: 'Email Newsletter', hasTarget: false, hasNote: false },
   // LinkedIn Newsletter — LinkedIn's own native newsletter feature, distinct
   // from an emailed newsletter (Mailchimp/etc.) above: no open/click/bounce
   // concept applies since it's not email, so this mirrors what LinkedIn's own
