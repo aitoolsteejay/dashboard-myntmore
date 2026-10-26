@@ -159,14 +159,14 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
         [id]: { ...(prev[section][id] || {}), value }
       }
 
-      // TJI04 ("Total Posts") is rendered as a read-only sum of TJI01-03
-      // (see renderMetricCard's 'auto-calc' branch below) but was never
+      // TJI04 ("Total Posts") is rendered as a read-only sum of the carousels (TJI02) and reels
+      // (TJI03) — stories (TJI01) are not posts and are NOT counted (see renderMetricCard's
+      // 'auto-calc' branch below). It was never
       // actually written to formData/saved — every other reader (the
       // dashboard, CSV export) read it back as permanently blank. Persist it
       // alongside whichever of its inputs just changed.
       if (section === 'instagram') {
-        const total = (parseFloat(updatedSection.TJI01?.value) || 0)
-          + (parseFloat(updatedSection.TJI02?.value) || 0)
+        const total = (parseFloat(updatedSection.TJI02?.value) || 0)
           + (parseFloat(updatedSection.TJI03?.value) || 0)
         updatedSection = { ...updatedSection, TJI04: { ...(updatedSection.TJI04 || {}), value: total } }
       }
@@ -208,8 +208,8 @@ export function TJPersonalBrandPage({ embedded }: { embedded?: boolean } = {}) {
 
     // Auto-calc for Total Posts
     if (metric.id === 'TJI04' && section === 'instagram') {
-        const total = (parseFloat(formData.instagram.TJI01?.value) || 0) + 
-                      (parseFloat(formData.instagram.TJI02?.value) || 0) + 
+        // Carousels + reels only — stories are not counted as posts.
+        const total = (parseFloat(formData.instagram.TJI02?.value) || 0) +
                       (parseFloat(formData.instagram.TJI03?.value) || 0)
         return (
             <Card key={metric.id} className="border-2 border-gold/20 bg-gold-soft/5">
