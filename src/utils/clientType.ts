@@ -12,9 +12,9 @@ export function getClientType(client: { client_type?: string | null } | null | u
   return client?.client_type === 'internal' ? 'internal' : 'external'
 }
 
-// Internal first, keeping the incoming (alphabetical) order inside each group.
+// External first, internal below, keeping the incoming (alphabetical) order inside each group.
 export function sortByClientType<T extends { client_type?: string | null }>(clients: T[]): T[] {
-  const rank = (c: T) => (getClientType(c) === 'internal' ? 0 : 1)
+  const rank = (c: T) => (getClientType(c) === 'internal' ? 1 : 0)
   return clients
     .map((c, i) => ({ c, i }))
     .sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i)

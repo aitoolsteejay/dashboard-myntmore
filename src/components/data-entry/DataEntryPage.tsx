@@ -2308,7 +2308,7 @@ export function DataEntryPage() {
                 <SelectValue placeholder="Choose client" />
               </SelectTrigger>
               <SelectContent>
-                {(['internal', 'external'] as const).map(type => {
+                {(['external', 'internal'] as const).map(type => {
                   const group = clients.filter(c => getClientType(c) === type)
                   return group.length === 0 ? null : (
                     <SelectGroup key={type}>

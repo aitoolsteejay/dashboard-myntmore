@@ -300,7 +300,7 @@ export function ClientsPage() {
         </div>
       </div>
 
-      {(['internal', 'external'] as const).map(type => {
+      {(['external', 'internal'] as const).map(type => {
         const group = filteredClients.filter(c => getClientType(c) === type)
         if (group.length === 0) return null
         return (
