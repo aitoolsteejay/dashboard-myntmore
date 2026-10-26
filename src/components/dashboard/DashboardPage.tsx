@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
+import { pagedSelect } from '@/utils/pagedSelect'
 import { Link } from "@tanstack/react-router"
 import { useAuth } from "@/lib/auth"
 import { syncClientNotifications, dismissClientNotification } from "@/lib/notifications"
@@ -1421,8 +1422,8 @@ export function DashboardPage() {
         // Fetch every past-and-current period, not just an exact match on the displayed
         // week/month — targets aren't re-entered every period, so callers fall back to the
         // most recently set target for a metric via findTarget() when the current one is missing.
-        supabase.from('targets').select('*').lte('period', weekStart).eq('target_type', 'weekly'),
-        supabase.from('targets').select('*').lte('period', weekStart.slice(0, 7)).eq('target_type', 'monthly'),
+        pagedSelect((a, b) => supabase.from('targets').select('*').lte('period', weekStart).eq('target_type', 'weekly').order('id').range(a, b)),
+        pagedSelect((a, b) => supabase.from('targets').select('*').lte('period', weekStart.slice(0, 7)).eq('target_type', 'monthly').order('id').range(a, b)),
         fetchAllHighScores().then(data => ({ data, error: null })),
         supabase.from('weekly_data').select('week_start, week_label, content_metrics, leadgen_metrics, client_id, content_submitted_at, leadgen_submitted_at')
           .gte('week_start', weekStart.slice(0, 7) + '-01')
@@ -1908,6 +1909,9 @@ export function DashboardPage() {
                         const lm = (row.leadgen_metrics as Record<string, any>) ?? {}
                         ;[...ALL_METRICS, ...(customMetricsByClient[client.id] ?? [])].forEach(m => {
                           if (m.type === 'textarea' || m.type === 'boolean' || m.type === 'slider' || m.type === 'auto') return
+                          // A saved-but-unsubmitted (draft) week reads as blank everywhere else on this page —
+                          // it must not count toward the month-to-date totals either.
+                          if (!(m.category === 'content' ? row.content_submitted_at : row.leadgen_submitted_at)) return
                           const col = m.category === 'content' ? cm : lm
                           const v = readNum(col, m.id)
                           if (v !== null) {

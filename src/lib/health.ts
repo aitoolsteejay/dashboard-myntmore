@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client"
+import { pagedSelect } from '@/utils/pagedSelect'
 import { readLinkedInImpressions, readTotalPosts, readAcceptanceRate } from "@/utils/readMetric"
 import { findTarget } from "@/utils/targets"
 
@@ -82,12 +83,13 @@ export async function updateClientHealth(
     // fetch here silently treated "target not re-entered this week" as "target
     // is 0", which drove every achievement% to 0 and cratered the stored
     // health score. Fetch the range and fall back to the most recent target.
-    const { data: targetsData, error: targetsError } = await supabase
+    const { data: targetsData, error: targetsError } = await pagedSelect((a, b) => supabase
       .from('targets')
       .select('metric_id, target_value, period')
       .eq('client_id', clientId)
       .eq('target_type', 'weekly')
       .lte('period', weekStart)
+      .order('id').range(a, b))
     // A failed read must abort — empty targets would store a collapsed score.
     if (targetsError) throw targetsError
 
@@ -189,12 +191,13 @@ export async function calculateStreaks(clientId: string, weekStart: string) {
         .order('week_start', { ascending: false })
         .limit(12)
 
-    const { data: weeklyTargets } = await supabase
+    const { data: weeklyTargets } = await pagedSelect((a, b) => supabase
         .from('targets')
         .select('metric_id, period, target_value')
         .eq('client_id', clientId)
         .eq('metric_id', 'C09')
         .eq('target_type', 'weekly')
+        .order('id').range(a, b))
 
     let postsStreak = 0
     for (const week of weeklyData ?? []) {

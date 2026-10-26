@@ -1,4 +1,5 @@
 import { periodTotal } from '@/data/metricSemantics'
+import { pagedSelect } from '@/utils/pagedSelect'
 import { nowAsIST } from '@/utils/dateUtils'
 import React, { useState, useEffect, useMemo } from 'react'
 import { supabase } from "@/integrations/supabase/client"
@@ -203,12 +204,13 @@ export function ReportsPage() {
         .gte('week_start', weekList[0])
         .lte('week_start', weekList[weekList.length - 1]),
       // Fetch weekly targets for every week in range
-      supabase.from('targets').select('*')
+      pagedSelect((a, b) => supabase.from('targets').select('*')
         .in('client_id', selectedClientIds)
         .eq('target_type', 'weekly')
         // Targets aren't re-entered every week — fetch everything up to the last
         // week so getTarget's most-recent fallback can see an earlier-set one.
-        .lte('period', weekList[weekList.length - 1]),
+        .lte('period', weekList[weekList.length - 1])
+        .order('id').range(a, b)),
     ]).then(([{ data: wd }, { data: tg }]) => {
       setWeeklyData(wd || [])
       setTargets(tg || [])

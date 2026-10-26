@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArchiveRestore,
   CalendarDays,
@@ -100,6 +100,9 @@ export function ProcessesPage({ embedded }: { embedded?: boolean } = {}) {
   const [creating, setCreating] = useState(false);
   const [updateText, setUpdateText] = useState<Record<string, string>>({});
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
+  // fetchData also runs after Complete / Create / Delete — it must not throw away updates typed but not yet saved.
+  const dirtyIdsRef = useRef(dirtyIds);
+  dirtyIdsRef.current = dirtyIds;
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -127,8 +130,12 @@ export function ProcessesPage({ embedded }: { embedded?: boolean } = {}) {
       for (const update of loadedUpdates) {
         if (update.week_start === selectedWeek && update.process_id) selectedUpdates[update.process_id] = update.update_text;
       }
-      setUpdateText(selectedUpdates);
-      setDirtyIds(new Set());
+      // Keep anything the user has typed but not saved yet (those ids stay marked dirty).
+      setUpdateText(prev => {
+        const next = { ...selectedUpdates };
+        dirtyIdsRef.current.forEach(id => { if (id in prev) next[id] = prev[id]; });
+        return next;
+      });
     } catch (error: any) {
       toast.error("Could not load processes: " + error.message);
     } finally {

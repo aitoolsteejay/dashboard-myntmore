@@ -1701,15 +1701,15 @@ export function DataEntryPage() {
     setLoading(true)
     try {
       const [
-        { data: settings },
-        { data: currentData },
+        { data: settings, error: settingsError },
+        { data: currentData, error: currentError },
         { data: prevData },
         { data: scores },
         { data: notesData },
         { data: targetsData },
-        { data: campaignsData },
-        { data: campaignWeeklyDataRes },
-        { data: customMetricsData },
+        { data: campaignsData, error: campaignsError },
+        { data: campaignWeeklyDataRes, error: campaignWeeklyError },
+        { data: customMetricsData, error: customMetricsError },
       ] = await Promise.all([
         supabase.from('client_settings').select('*').eq('client_id', selectedClientId).maybeSingle(),
         supabase.from('weekly_data').select('*').eq('client_id', selectedClientId).eq('week_start', selectedWeek).maybeSingle(),
@@ -1721,6 +1721,10 @@ export function DataEntryPage() {
         supabase.from('campaign_weekly_data').select('*').eq('client_id', selectedClientId).eq('week_start', selectedWeek),
         supabase.from('custom_metrics').select('*').eq('client_id', selectedClientId).eq('archived', false).order('sort_order', { ascending: true }),
       ])
+
+      // A failed read must say so — otherwise the form silently shows blank weeks / "no campaigns".
+      const readError = settingsError || currentError || campaignsError || campaignWeeklyError || customMetricsError
+      if (readError) throw readError
 
       const customMetrics = (customMetricsData ?? []).map(customMetricToMetric)
       const effective: EffectiveMetrics = {
