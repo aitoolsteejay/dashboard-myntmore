@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { AlertCircle, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Users, Target, Activity, Instagram, Youtube, Mail, Mic, ArrowRight, LayoutDashboard, Send, Handshake, IndianRupee, FileText, Star, Globe, Linkedin, ChevronDown, ChevronUp, MessageSquare, Trophy, Search } from "lucide-react"
+import { AlertCircle, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Users, Target, Activity, Instagram, Youtube, Mail, Mic, ArrowRight, LayoutDashboard, Send, Handshake, IndianRupee, FileText, Star, Globe, Linkedin, ChevronDown, ChevronUp, MessageSquare, Trophy, Search, Pin, PinOff } from "lucide-react"
 // Removed lib/notifications import
 import { Gift, Cake, Calendar, Bell, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -156,6 +156,41 @@ export function DashboardPage() {
     else next.add(id)
     return next
   })
+  // Client cards whose summary row stays pinned under the top bar while the card
+  // is open, so you still see whose numbers you are reading further down.
+  const [frozenClients, setFrozenClients] = useState<Set<string>>(new Set())
+  const toggleFrozenClient = (id: string) => setFrozenClients(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
+  const clientRowClass = (clientId: string, open: boolean) => cn(
+    "flex flex-wrap items-center justify-between p-4 cursor-pointer transition-colors min-w-0 gap-x-4 gap-y-3",
+    open && frozenClients.has(clientId)
+      ? "sticky top-14 z-30 bg-card border-b shadow-md"
+      : "hover:bg-muted/30",
+  )
+  const renderFreezeButton = (clientId: string) => {
+    const frozen = frozenClients.has(clientId)
+    return (
+      <button
+        type="button"
+        onClick={e => { e.stopPropagation(); toggleFrozenClient(clientId) }}
+        title={frozen ? 'Unfreeze this row' : 'Freeze this row while scrolling'}
+        aria-pressed={frozen}
+        className={cn(
+          'ml-auto flex shrink-0 items-center gap-1 rounded border px-2 py-1 text-[10px] font-semibold transition-colors',
+          frozen
+            ? 'border-primary bg-primary text-primary-foreground'
+            : 'border-border bg-background text-muted-foreground hover:border-primary hover:text-primary',
+        )}
+      >
+        {frozen ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+        {frozen ? 'Unfreeze' : 'Freeze'}
+      </button>
+    )
+  }
   const [salesLifetimeHighs, setSalesLifetimeHighs] = useState<SalesLifetimeHighs>({})
   const [salesData, setSalesData] = useState<SalesWeeklyData | null>(null)
   const [salesPrev, setSalesPrev] = useState<SalesWeeklyData | null>(null)
@@ -889,10 +924,10 @@ export function DashboardPage() {
           }
 
           return (
-            <Card key={client.id} className={cn("border shadow-sm overflow-hidden transition-all", isExpanded ? "ring-2 ring-gold/20" : "")}>
+            <Card key={client.id} className={cn("border shadow-sm overflow-clip transition-all", isExpanded ? "ring-2 ring-gold/20" : "")}>
               {/* Collapsed Row */}
               <div
-                className="flex flex-wrap items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors min-w-0 gap-x-4 gap-y-3"
+                className={clientRowClass(client.id, isExpanded)}
                 onClick={() => toggleClient(client.id)}
               >
                 <div className="flex items-center gap-4 basis-full min-w-0">
@@ -903,6 +938,7 @@ export function DashboardPage() {
                     <h3 className="font-black text-base break-words">{client.name}</h3>
                     <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">{client.company}</p>
                   </div>
+                  {renderFreezeButton(client.id)}
                 </div>
                 <div className="flex items-center gap-6 shrink-0 w-full justify-end">
                   {isServiceEnabled(client.id, 'content') && <div className="text-center w-16 shrink-0">
@@ -1964,10 +2000,10 @@ export function DashboardPage() {
                             <div className="h-px flex-1 bg-border" />
                           </div>
                         )}
-                        <Card className={cn("border shadow-sm overflow-hidden transition-all", isExpanded ? "ring-2 ring-gold/20" : "")}>
+                        <Card className={cn("border shadow-sm overflow-clip transition-all", isExpanded ? "ring-2 ring-gold/20" : "")}>
                           {/* Collapsed Row */}
                           <div 
-                            className="flex flex-wrap items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors min-w-0 gap-x-4 gap-y-3"
+                            className={clientRowClass(client.id, isExpanded)}
                             onClick={() => toggleClient(client.id)}
                           >
                             <div className="flex items-center gap-4 basis-full min-w-0">
@@ -1978,6 +2014,7 @@ export function DashboardPage() {
                                 <h3 className="font-black text-base break-words">{client.name}</h3>
                                 <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">{client.company}</p>
                               </div>
+                              {renderFreezeButton(client.id)}
                             </div>
                             <div className="flex items-center gap-4 shrink-0 w-full">
                               <Button 
