@@ -892,19 +892,19 @@ export function DashboardPage() {
             <Card key={client.id} className={cn("border shadow-sm overflow-hidden transition-all", isExpanded ? "ring-2 ring-gold/20" : "")}>
               {/* Collapsed Row */}
               <div
-                className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors flex-nowrap min-w-0 gap-4"
+                className="flex flex-wrap items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors min-w-0 gap-x-4 gap-y-3"
                 onClick={() => toggleClient(client.id)}
               >
-                <div className="flex items-center gap-4 flex-1 min-w-0 overflow-hidden">
+                <div className="flex items-center gap-4 basis-full min-w-0">
                   <div className="w-10 h-10 shrink-0 rounded bg-gold/10 flex items-center justify-center font-black text-gold">
                     {client.name.substring(0, 2).toUpperCase()}
                   </div>
-                  <div className="flex-1 min-w-0 overflow-hidden">
-                    <h3 className="font-black text-base truncate">{client.name}</h3>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-black text-base break-words">{client.name}</h3>
                     <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">{client.company}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-6 shrink-0">
+                <div className="flex items-center gap-6 shrink-0 w-full">
                   {isServiceEnabled(client.id, 'content') && <div className="text-center w-16 shrink-0">
                     <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">LI Drafting</p>
                     {renderMonthlySummaryValue('C03', cTotals.C03)}
@@ -1967,19 +1967,19 @@ export function DashboardPage() {
                         <Card className={cn("border shadow-sm overflow-hidden transition-all", isExpanded ? "ring-2 ring-gold/20" : "")}>
                           {/* Collapsed Row */}
                           <div 
-                            className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors flex-nowrap min-w-0 gap-4"
+                            className="flex flex-wrap items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors min-w-0 gap-x-4 gap-y-3"
                             onClick={() => toggleClient(client.id)}
                           >
-                            <div className="flex items-center gap-4 flex-1 min-w-0 overflow-hidden">
+                            <div className="flex items-center gap-4 basis-full min-w-0">
                               <div className="w-10 h-10 shrink-0 rounded bg-gold/10 flex items-center justify-center font-black text-gold">
                                 {client.name.substring(0, 2).toUpperCase()}
                               </div>
-                              <div className="flex-1 min-w-0 overflow-hidden">
-                                <h3 className="font-black text-base truncate">{client.name}</h3>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-black text-base break-words">{client.name}</h3>
                                 <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">{client.company}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-4 shrink-0">
+                            <div className="flex items-center gap-4 shrink-0 w-full justify-between">
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
