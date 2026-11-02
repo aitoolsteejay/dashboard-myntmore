@@ -904,7 +904,7 @@ export function DashboardPage() {
                     <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">{client.company}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-6 shrink-0 w-full">
+                <div className="flex items-center gap-6 shrink-0 w-full justify-end">
                   {isServiceEnabled(client.id, 'content') && <div className="text-center w-16 shrink-0">
                     <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">LI Drafting</p>
                     {renderMonthlySummaryValue('C03', cTotals.C03)}
@@ -1979,7 +1979,7 @@ export function DashboardPage() {
                                 <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">{client.company}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-4 shrink-0 w-full justify-between">
+                            <div className="flex items-center gap-4 shrink-0 w-full">
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
@@ -1992,7 +1992,7 @@ export function DashboardPage() {
                               >
                                 {weeklyBreakdownClients.has(client.id) ? '▲ Close Breakdown' : '▼ Weekly Breakdown'}
                               </Button>
-                              <div className="flex items-center gap-6 shrink-0">
+                              <div className="flex items-center gap-6 shrink-0 ml-auto">
                                 {(() => {
                                   const built = (buildWeekMetrics(currentData) ?? {}) as Record<string, any>
                                   const acceptanceRate = built.L12
