@@ -137,7 +137,7 @@ function AppLayout() {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
+      <div className="flex h-svh w-full bg-background">
         <AppSidebar />
         <main className="min-w-0 flex-1 overflow-auto">
           <AppTopbar pageLabel={pageLabel} />

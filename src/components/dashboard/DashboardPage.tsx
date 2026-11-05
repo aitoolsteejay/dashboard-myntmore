@@ -1753,7 +1753,7 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-          <main className="flex-1 overflow-y-auto">
+          <main className="flex-1">
             <div className="mx-auto max-w-[1200px] w-full box-border p-6 space-y-8 pb-20">
               
               {/* Header */}

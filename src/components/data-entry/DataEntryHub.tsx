@@ -22,7 +22,7 @@ export function DataEntryHub() {
   return (
     <div className="min-h-screen bg-background">
       {/* Section Switcher */}
-      <div className="border-b bg-card sticky top-0 z-10">
+      <div className="border-b bg-card sticky top-14 z-10">
         <div className="px-6 pt-5 pb-0">
           <h1 className="text-xl font-bold tracking-tight mb-4">Data Entry</h1>
           <div className="flex gap-1 flex-wrap">

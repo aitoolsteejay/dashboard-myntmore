@@ -609,7 +609,7 @@ export function ReportsPage() {
       </div>
 
       {/* ── Sticky filter bar ── */}
-      <div className="border-b bg-white/95 backdrop-blur sticky top-0 z-20 px-6 py-3 space-y-2.5 shadow-sm">
+      <div className="border-b bg-white/95 backdrop-blur sticky top-14 z-20 px-6 py-3 space-y-2.5 shadow-sm">
 
         {/* Row 1: Clients + Date presets */}
         <div className="flex flex-wrap gap-2 items-center">

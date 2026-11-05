@@ -2267,7 +2267,7 @@ export function DataEntryPage() {
       </div>
 
       {/* AutoSave Bar Sticky Below Header */}
-      <div className="sticky top-0 z-10 bg-background border-b px-4 py-2 flex justify-between items-center">
+      <div className="sticky top-14 z-10 bg-background border-b px-4 py-2 flex justify-between items-center">
         <SaveIndicator status={contentSaveStatus} lastSaved={contentLastSaved} onRetry={retryContentSave} />
         <div className="flex gap-2">
           <Button
