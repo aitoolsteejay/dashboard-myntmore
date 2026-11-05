@@ -9,6 +9,8 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    // The app shell scrolls inside <main>, not the window.
+    scrollToTopSelectors: ['[data-scroll-restoration-id="app-main"]'],
     defaultPreloadStaleTime: 0,
   });
 

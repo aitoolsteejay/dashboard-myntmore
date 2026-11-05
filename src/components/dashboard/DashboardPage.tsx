@@ -402,7 +402,7 @@ export function DashboardPage() {
         type="button"
         onClick={() => toggleBlock(id)}
         aria-expanded={!collapsed}
-        className="flex w-full items-center gap-2 pb-2 border-b border-muted sticky top-0 bg-background z-20 text-left cursor-pointer select-none"
+        className="flex w-full items-center gap-2 pb-2 border-b border-muted sticky top-14 bg-background z-20 text-left cursor-pointer select-none"
       >
         <Icon className="w-4 h-4 text-gold" />
         <h4 className="text-xs font-black uppercase tracking-widest">{title}</h4>

@@ -139,7 +139,7 @@ function AppLayout() {
     <SidebarProvider>
       <div className="flex h-svh w-full bg-background">
         <AppSidebar />
-        <main className="min-w-0 flex-1 overflow-auto">
+        <main data-scroll-restoration-id="app-main" className="min-w-0 flex-1 overflow-auto">
           <AppTopbar pageLabel={pageLabel} />
           <Outlet />
         </main>
