@@ -2372,8 +2372,8 @@ export function DashboardPage() {
                   (isMonthlyView ? monthMmRows.length > 0 : !!mmData) ? (
                     <div className="grid grid-cols-1 gap-8">
                       {[
-                        { title: 'LinkedIn Presence', icon: Linkedin, metrics: MM_LINKEDIN_METRICS, raw: asDashboardRecord(mmData?.linkedin), rawPrev: asDashboardRecord(prevMmData?.linkedin), mtd: monthMmAgg.linkedin, derive: true },
-                        { title: 'Instagram Presence', icon: Instagram, metrics: MM_INSTAGRAM_METRICS, raw: asDashboardRecord(mmData?.instagram), rawPrev: asDashboardRecord(prevMmData?.instagram), mtd: monthMmAgg.instagram },
+                        { title: 'MM LinkedIn', icon: Linkedin, metrics: MM_LINKEDIN_METRICS, raw: asDashboardRecord(mmData?.linkedin), rawPrev: asDashboardRecord(prevMmData?.linkedin), mtd: monthMmAgg.linkedin, derive: true },
+                        { title: 'MM Instagram', icon: Instagram, metrics: MM_INSTAGRAM_METRICS, raw: asDashboardRecord(mmData?.instagram), rawPrev: asDashboardRecord(prevMmData?.instagram), mtd: monthMmAgg.instagram },
                         { title: 'Website Analytics', icon: Globe, metrics: MM_WEBSITE_METRICS, raw: asDashboardRecord(mmData?.website), rawPrev: asDashboardRecord(prevMmData?.website), mtd: monthMmAgg.website },
                         { title: 'SEO', icon: Search, metrics: MM_SEO_METRICS, raw: asDashboardRecord(mmData?.website), rawPrev: asDashboardRecord(prevMmData?.website), mtd: monthMmAgg.website },
                         { title: 'Other Channels', icon: MessageSquare, metrics: MM_OTHER_METRICS, raw: { ...asDashboardRecord(mmData?.quora), ...asDashboardRecord(mmData?.reddit) }, rawPrev: { ...asDashboardRecord(prevMmData?.quora), ...asDashboardRecord(prevMmData?.reddit) }, mtd: { ...monthMmAgg.quora, ...monthMmAgg.reddit } },
