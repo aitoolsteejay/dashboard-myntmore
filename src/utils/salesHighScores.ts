@@ -4,7 +4,7 @@ import { SALES_RATE_DEPENDENCIES } from './salesRates'
 import { CUMULATIVE_METRIC_IDS, AVERAGED_NUMBER_IDS } from '@/data/metricSemantics'
 import { computeLifetimeHighs, type LifetimeHighs, type RatePair } from './lifetimeHighs'
 
-const SALES_COLUMNS = ['tj_outreach', 'jahnvi_outreach', 'shirin_outreach', 'cold_email', 'meeting_tracker'] as const
+const SALES_COLUMNS = ['tj_outreach', 'jahnvi_outreach', 'shirin_outreach', 'cold_email', 'enwil_meetings', 'tejas_meetings', 'meeting_tracker'] as const
 
 export type SalesLifetimeHighs = LifetimeHighs
 
@@ -18,7 +18,8 @@ const RATE_PAIRS: Record<string, RatePair> = {
 export async function fetchSalesLifetimeHighs(): Promise<SalesLifetimeHighs> {
   const { data } = await supabase
     .from('sales_weekly_data')
-    .select(`week_start, ${SALES_COLUMNS.join(', ')}`)
+    // '*' so this keeps working before the enwil/tejas meeting columns exist.
+    .select('*')
   if (!data) return {}
   const percentageIds = new Set(
     SALES_SECTIONS.flatMap(s => s.metrics).filter(m => m.type === 'percentage').map(m => m.id)

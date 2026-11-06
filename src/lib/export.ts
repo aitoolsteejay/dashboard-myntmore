@@ -277,7 +277,20 @@ function buildSalesSheet(rows: any[]) {
     SO53: 'Cold Emailing: Positive Replies',
     SO54: 'Cold Emailing: Positive Reply Rate %',
     SO55: 'Cold Emailing: Replied with OOO',
-    // Meeting Tracker
+    // Enwil / Tejas meetings by type
+    SE01: 'Enwil Meetings: Via LinkedIn',
+    SE02: 'Enwil Meetings: Via Cold Email',
+    SE03: 'Enwil Meetings: Via Referral',
+    SE04: 'Enwil Meetings: Via Other',
+    SE05: 'Enwil Meetings: Via Website | AI',
+    SE06: 'Enwil Meetings: Total Booked',
+    ST01: 'Tejas Meetings: Via LinkedIn',
+    ST02: 'Tejas Meetings: Via Cold Email',
+    ST03: 'Tejas Meetings: Via Referral',
+    ST04: 'Tejas Meetings: Via Other',
+    ST05: 'Tejas Meetings: Via Website | AI',
+    ST06: 'Tejas Meetings: Total Booked',
+    // Meeting Tracker (company total)
     SO36: 'Meetings: Via LinkedIn',
     SO37: 'Meetings: Via Cold Email',
     SO38: 'Meetings: Via Referral',
@@ -303,6 +316,8 @@ function buildSalesSheet(rows: any[]) {
         ...asRecord(row.jahnvi_outreach),
         ...asRecord(row.shirin_outreach),
         ...asRecord(row.cold_email),
+        ...asRecord(row.enwil_meetings),
+        ...asRecord(row.tejas_meetings),
         ...asRecord(row.meeting_tracker),
       }
 

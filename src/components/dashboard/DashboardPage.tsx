@@ -1136,6 +1136,8 @@ export function DashboardPage() {
     jahnvi_outreach: aggregateSalesSection(mtdSalesRows, 'jahnvi_outreach'),
     shirin_outreach: aggregateSalesSection(mtdSalesRows, 'shirin_outreach'),
     cold_email: aggregateSalesSection(mtdSalesRows, 'cold_email'),
+    enwil_meetings: aggregateSalesSection(mtdSalesRows, 'enwil_meetings'),
+    tejas_meetings: aggregateSalesSection(mtdSalesRows, 'tejas_meetings'),
     meeting_tracker: aggregateSalesSection(mtdSalesRows, 'meeting_tracker'),
   }
 
@@ -2344,7 +2346,7 @@ export function DashboardPage() {
                       {SALES_SECTIONS.map(section => renderCompanyBlock({
                         key: section.title,
                         title: section.title,
-                        icon: section.key === 'meeting_tracker' ? Handshake : section.key === 'cold_email' ? Mail : Send,
+                        icon: section.key === 'meeting_tracker' || section.key === 'enwil_meetings' || section.key === 'tejas_meetings' ? Handshake : section.key === 'cold_email' ? Mail : Send,
                         metrics: section.metrics,
                         current: isMonthlyView ? monthSalesAgg[section.key] : (salesData as any)?.[section.key],
                         prev: isMonthlyView ? null : (salesPrev as any)?.[section.key],

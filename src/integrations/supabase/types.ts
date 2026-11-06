@@ -1187,12 +1187,14 @@ export type Database = {
         Row: {
           cold_email: Json | null
           created_at: string | null
+          enwil_meetings: Json
           id: string
           jahnvi_outreach: Json | null
           meeting_tracker: Json | null
           shirin_outreach: Json | null
           submitted_by: string | null
           tj_outreach: Json | null
+          tejas_meetings: Json
           week_end: string
           week_label: string | null
           week_start: string
@@ -1200,12 +1202,14 @@ export type Database = {
         Insert: {
           cold_email?: Json | null
           created_at?: string | null
+          enwil_meetings?: Json
           id?: string
           jahnvi_outreach?: Json | null
           meeting_tracker?: Json | null
           shirin_outreach?: Json | null
           submitted_by?: string | null
           tj_outreach?: Json | null
+          tejas_meetings?: Json
           week_end: string
           week_label?: string | null
           week_start: string
@@ -1213,12 +1217,14 @@ export type Database = {
         Update: {
           cold_email?: Json | null
           created_at?: string | null
+          enwil_meetings?: Json
           id?: string
           jahnvi_outreach?: Json | null
           meeting_tracker?: Json | null
           shirin_outreach?: Json | null
           submitted_by?: string | null
           tj_outreach?: Json | null
+          tejas_meetings?: Json
           week_end?: string
           week_label?: string | null
           week_start?: string

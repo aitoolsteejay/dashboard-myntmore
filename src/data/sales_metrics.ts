@@ -7,7 +7,7 @@ import type { CompanyMetric } from './company_metrics'
 // any multi-week view (see utils/salesRates.ts).
 
 export interface SalesSection {
-  key: 'tj_outreach' | 'jahnvi_outreach' | 'shirin_outreach' | 'cold_email' | 'meeting_tracker'
+  key: 'tj_outreach' | 'jahnvi_outreach' | 'shirin_outreach' | 'cold_email' | 'enwil_meetings' | 'tejas_meetings' | 'meeting_tracker'
   title: string
   metrics: CompanyMetric[]
 }
@@ -60,7 +60,22 @@ export const SALES_SECTIONS: SalesSection[] = [
     ],
   },
   {
-    key: 'meeting_tracker', title: 'Meeting Tracker',
+    key: 'enwil_meetings', title: 'Enwil Meetings',
+    metrics: [
+      n('SE01', 'Booked via LinkedIn'), n('SE02', 'Booked via Cold Email'), n('SE03', 'Booked via Referral'),
+      n('SE04', 'Booked via Other'), n('SE05', 'Booked via Website | AI'), n('SE06', 'Total Meetings Booked'),
+    ],
+  },
+  {
+    key: 'tejas_meetings', title: 'Tejas Meetings',
+    metrics: [
+      n('ST01', 'Booked via LinkedIn'), n('ST02', 'Booked via Cold Email'), n('ST03', 'Booked via Referral'),
+      n('ST04', 'Booked via Other'), n('ST05', 'Booked via Website | AI'), n('ST06', 'Total Meetings Booked'),
+    ],
+  },
+  {
+    // Whole-company totals (Enwil + Tejas + everyone else), per meeting type.
+    key: 'meeting_tracker', title: 'Meeting Tracker (Company Total)',
     metrics: [
       n('SO36', 'Booked via LinkedIn'), n('SO37', 'Booked via Cold Email'), n('SO38', 'Booked via Referral'),
       n('SO39', 'Booked via Other'), n('SO56', 'Booked via Website | AI'), n('SO40', 'Total Meetings Booked'),

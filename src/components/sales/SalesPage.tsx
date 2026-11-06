@@ -66,6 +66,8 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
     jahnvi_outreach: {},
     shirin_outreach: {},
     cold_email: {},
+    enwil_meetings: {},
+    tejas_meetings: {},
     meeting_tracker: {}
   })
   const fetchRequestRef = React.useRef(0)
@@ -118,12 +120,14 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
       if (requestId !== fetchRequestRef.current) return
 
       if (data) {
-        const flat: Record<string, any> = { ...((data.tj_outreach as any) ?? {}), ...((data.jahnvi_outreach as any) ?? {}), ...((data.shirin_outreach as any) ?? {}), ...((data.cold_email as any) ?? {}), ...((data.meeting_tracker as any) ?? {}) }
+        const flat: Record<string, any> = { ...((data.tj_outreach as any) ?? {}), ...((data.jahnvi_outreach as any) ?? {}), ...((data.shirin_outreach as any) ?? {}), ...((data.cold_email as any) ?? {}), ...((data.enwil_meetings as any) ?? {}), ...((data.tejas_meetings as any) ?? {}), ...((data.meeting_tracker as any) ?? {}) }
         setFormData({
           tj_outreach: { SO01: flat.SO01, SO02: flat.SO02, SO03: flat.SO03, SO04: flat.SO04, SO05: flat.SO05, SO06: flat.SO06, SO07: flat.SO07, SO08: flat.SO08, SO09: flat.SO09 },
           jahnvi_outreach: { SO10: flat.SO10, SO11: flat.SO11, SO12: flat.SO12, SO13: flat.SO13, SO14: flat.SO14, SO15: flat.SO15, SO16: flat.SO16, SO17: flat.SO17 },
           shirin_outreach: { SO18: flat.SO18, SO19: flat.SO19, SO20: flat.SO20, SO21: flat.SO21, SO22: flat.SO22, SO23: flat.SO23, SO24: flat.SO24, SO25: flat.SO25, SO26: flat.SO26, SO27: flat.SO27, SO28: flat.SO28 },
           cold_email: { SO29: flat.SO29, SO30: flat.SO30, SO31: flat.SO31, SO32: flat.SO32, SO33: flat.SO33, SO34: flat.SO34, SO35: flat.SO35, SO50: flat.SO50, SO51: flat.SO51, SO53: flat.SO53, SO55: flat.SO55 },
+          enwil_meetings: { SE01: flat.SE01, SE02: flat.SE02, SE03: flat.SE03, SE04: flat.SE04, SE05: flat.SE05, SE06: flat.SE06 },
+          tejas_meetings: { ST01: flat.ST01, ST02: flat.ST02, ST03: flat.ST03, ST04: flat.ST04, ST05: flat.ST05, ST06: flat.ST06 },
           meeting_tracker: { SO36: flat.SO36, SO37: flat.SO37, SO38: flat.SO38, SO39: flat.SO39, SO56: flat.SO56, SO40: flat.SO40, SO41: flat.SO41, SO42: flat.SO42, SO43: flat.SO43, SO44: flat.SO44, SO45: flat.SO45, SO46: flat.SO46, SO47: flat.SO47, SO48: flat.SO48, SO49: flat.SO49 }
         })
       } else {
@@ -132,6 +136,8 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
           jahnvi_outreach: {},
           shirin_outreach: {},
           cold_email: {},
+          enwil_meetings: {},
+          tejas_meetings: {},
           meeting_tracker: {}
         })
       }
@@ -248,6 +254,8 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
       SO52: getRate(d.SO51, d.SO50),
       SO54: getRate(d.SO53, d.SO51),
     }),
+    enwil_meetings: d => ({ SE06: getSum(d.SE01, d.SE02, d.SE03, d.SE04, d.SE05) }),
+    tejas_meetings: d => ({ ST06: getSum(d.ST01, d.ST02, d.ST03, d.ST04, d.ST05) }),
     meeting_tracker: d => {
       const totalBooked = getSum(d.SO36, d.SO37, d.SO38, d.SO39, d.SO56)
       return {
@@ -437,7 +445,7 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
             </div>
           ) : (
             <>
-              <Accordion type="multiple" defaultValue={['tj', 'jj', 'shirin', 'email', 'cold_emailing', 'meetings']} className="space-y-4">
+              <Accordion type="multiple" defaultValue={['tj', 'jj', 'shirin', 'email', 'cold_emailing', 'enwil_meetings', 'tejas_meetings', 'meetings']} className="space-y-4">
                 {/* TJ Section */}
                 <AccordionItem value="tj" className="border rounded-lg bg-card overflow-hidden">
                   <AccordionTrigger className="px-4 py-3 hover:bg-muted/30 hover:no-underline font-bold text-lg">TJ Outreach</AccordionTrigger>
@@ -637,9 +645,75 @@ export function SalesOutreachPage({ embedded }: { embedded?: boolean } = {}) {
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* Meeting Tracker Section */}
+                {/* Enwil Meetings */}
+                <AccordionItem value="enwil_meetings" className="border rounded-lg bg-card overflow-hidden">
+                  <AccordionTrigger className="px-4 py-3 hover:bg-muted/30 hover:no-underline font-bold text-lg">Enwil Meetings</AccordionTrigger>
+                  <AccordionContent className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">SE01 - Booked via LinkedIn</Label>
+                      <Input type="number" value={formData.enwil_meetings.SE01 || ''} onChange={e => updateMetric('enwil_meetings', 'SE01', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">SE02 - Booked via Cold Email</Label>
+                      <Input type="number" value={formData.enwil_meetings.SE02 || ''} onChange={e => updateMetric('enwil_meetings', 'SE02', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">SE03 - Booked via Referral</Label>
+                      <Input type="number" value={formData.enwil_meetings.SE03 || ''} onChange={e => updateMetric('enwil_meetings', 'SE03', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">SE04 - Booked via Other</Label>
+                      <Input type="number" value={formData.enwil_meetings.SE04 || ''} onChange={e => updateMetric('enwil_meetings', 'SE04', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">SE05 - Booked via Website | AI</Label>
+                      <Input type="number" value={formData.enwil_meetings.SE05 || ''} onChange={e => updateMetric('enwil_meetings', 'SE05', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">SE06 - Total Meetings Booked</Label>
+                      <div className="h-10 bg-muted/50 rounded-md flex items-center px-3 font-bold text-lg">
+                        {getSum(formData.enwil_meetings.SE01, formData.enwil_meetings.SE02, formData.enwil_meetings.SE03, formData.enwil_meetings.SE04, formData.enwil_meetings.SE05)}
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Tejas Meetings */}
+                <AccordionItem value="tejas_meetings" className="border rounded-lg bg-card overflow-hidden">
+                  <AccordionTrigger className="px-4 py-3 hover:bg-muted/30 hover:no-underline font-bold text-lg">Tejas Meetings</AccordionTrigger>
+                  <AccordionContent className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">ST01 - Booked via LinkedIn</Label>
+                      <Input type="number" value={formData.tejas_meetings.ST01 || ''} onChange={e => updateMetric('tejas_meetings', 'ST01', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">ST02 - Booked via Cold Email</Label>
+                      <Input type="number" value={formData.tejas_meetings.ST02 || ''} onChange={e => updateMetric('tejas_meetings', 'ST02', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">ST03 - Booked via Referral</Label>
+                      <Input type="number" value={formData.tejas_meetings.ST03 || ''} onChange={e => updateMetric('tejas_meetings', 'ST03', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">ST04 - Booked via Other</Label>
+                      <Input type="number" value={formData.tejas_meetings.ST04 || ''} onChange={e => updateMetric('tejas_meetings', 'ST04', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">ST05 - Booked via Website | AI</Label>
+                      <Input type="number" value={formData.tejas_meetings.ST05 || ''} onChange={e => updateMetric('tejas_meetings', 'ST05', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold uppercase opacity-60">ST06 - Total Meetings Booked</Label>
+                      <div className="h-10 bg-muted/50 rounded-md flex items-center px-3 font-bold text-lg">
+                        {getSum(formData.tejas_meetings.ST01, formData.tejas_meetings.ST02, formData.tejas_meetings.ST03, formData.tejas_meetings.ST04, formData.tejas_meetings.ST05)}
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Meeting Tracker Section — whole-company totals */}
                 <AccordionItem value="meetings" className="border rounded-lg bg-card overflow-hidden">
-                  <AccordionTrigger className="px-4 py-3 hover:bg-muted/30 hover:no-underline font-bold text-lg">Meeting Tracker</AccordionTrigger>
+                  <AccordionTrigger className="px-4 py-3 hover:bg-muted/30 hover:no-underline font-bold text-lg">Meeting Tracker (Company Total)</AccordionTrigger>
                   <AccordionContent className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-bold uppercase opacity-60">SO36 - Booked via LinkedIn</Label>
