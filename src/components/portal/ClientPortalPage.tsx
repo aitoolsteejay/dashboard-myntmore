@@ -9,6 +9,7 @@ import { RATE_DEPENDENCIES, computeVolumeWeightedRate } from '@/utils/rateAggreg
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from '@/data/metrics'
 import { fetchEffectiveMetrics } from '@/hooks/useEffectiveMetrics'
 import { formatDashboardValue } from '@/utils/dataUtils'
+import { readMetricScalar } from '@/utils/readMetric'
 import { getWeekOptions, getPreviousWeekStart, getWeeksInSameMonth } from '@/utils/weekUtils'
 import { CampaignMonthTable } from '@/components/monday/CampaignMonthTable'
 import { CampaignDetailsDialog } from '@/components/portal/CampaignDetailsDialog'
@@ -1060,7 +1061,10 @@ export function ClientPortalPage() {
                       { id: 'L29', label: "What's Not Working / Blockers", cat: 'leadgen_metrics', icon: '⚠️' },
                     ].map(m => {
                       const raw = currentData?.[m.cat as keyof typeof currentData]
-                      const val = raw ? (raw as any)[m.id] : null
+                      // Notes are stored as { value, ... } objects, and a week that was never
+                      // submitted reads as blank like every other portal figure.
+                      const submitted = m.cat === 'content_metrics' ? currentData?.content_submitted_at : currentData?.leadgen_submitted_at
+                      const val = raw && submitted ? readMetricScalar((raw as any)[m.id]) : null
                       return (
                         <Card key={m.id} className="bg-white border shadow-sm">
                           <CardContent className="p-5">
@@ -1068,7 +1072,7 @@ export function ClientPortalPage() {
                               {m.icon} {m.label}
                             </p>
                             <p className="text-sm leading-relaxed text-foreground/80 italic">
-                              {val ? `"${val}"` : 'No input this week.'}
+                              {val !== null && val !== '' ? `"${String(val)}"` : 'No input this week.'}
                             </p>
                           </CardContent>
                         </Card>

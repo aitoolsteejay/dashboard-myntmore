@@ -845,7 +845,10 @@ export function DashboardPage() {
         // Rate) entirely and would silently sum any custom percentage metric.
         const clientMetrics = [...ALL_METRICS, ...(customMetricsByClient[clientId] ?? [])]
         clientMetrics.forEach(metric => {
-          if (metric.type === 'percentage' && !RATE_DEPENDENCIES[metric.id] && counts[clientId][metric.id] > 0) {
+          // A slider (the 0-10 Happiness Index) is a per-week score: a month of 8, 7, 9, 8
+          // is 8, not 32.
+          const averaged = metric.type === 'slider' || (metric.type === 'percentage' && !RATE_DEPENDENCIES[metric.id])
+          if (averaged && counts[clientId][metric.id] > 0) {
             total[metric.id] /= counts[clientId][metric.id]
           }
         })

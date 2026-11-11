@@ -453,8 +453,6 @@ Admins also get **Add Client**, **Edit** and **Archive / Restore**. The form: na
 - **Records:** that client's high scores.
 - **Settings:** switches for which metrics are active (same as Settings → Metric Fields).
 
-> See Part 11: the detail page may not open correctly. Test it before relying on it.
-
 ---
 
 ## 4.4 Actionables — `/actionables`
@@ -551,8 +549,6 @@ What a client sees when they log in. Read-only. Own data only.
 - **Hidden from clients:** health score, high scores, context notes, alerts, internal tasks, other clients, TJ/MM/Sales/Processes, and the Qualitative and Delivery & Reporting groups.
 - A safety check confirms every row returned really belongs to the signed-in client, and refuses to display anything otherwise.
 - Unsubmitted weeks read as blank. The page says "Data refreshes weekly".
-
-> See Part 11: the "This Week's Notes" card on the Highlights tab is likely broken.
 
 ## 4.11 Exports and the end-of-month report
 
@@ -1219,12 +1215,13 @@ New idempotent SQL file in `supabase/`; enable RLS and write policies before the
 
 # Part 11 — Known quirks and open problems
 
-This is an honest list. Items marked **Test** were flagged by reading the code and should be confirmed in a browser with a real login.
+This is an honest list, built from reading the code. The live app could not be signed into when it was written, so a few items are inferences.
 
-## Possibly broken — please test
+## Fixed on 11 November 2026 (kept here so you know they existed)
 
-1. **Client detail page may not open.** `/clients/$id` is registered as a child of `/clients`, but the Clients page does not contain a place to show child pages. "View Details" loads the URL with a full page load. If the list shows again instead of the detail page, the detail route needs to be un-nested. The same applies to the `/settings/targets`, `/settings/team` and `/settings/export` addresses (the Settings page uses internal tabs, not those URLs), so links that point at them land on the Settings page generally. **Test.**
-2. **Portal "This Week's Notes" may print `[object Object]`.** The portal reads the notes (C24, C25, L28, L29) as plain text, but Data Entry stores them as objects. The dashboard reads them correctly. This is client-facing. **Test with a real client login.**
+1. **Client detail page did not open.** `/clients/$id` was registered as a child of `/clients`, but the Clients page has no place to show a child, so "View Details" just showed the list again. The detail route now sits directly under the app root (file `clients_.$id.tsx`). The Monthly Targets link "Set targets in Settings" had the same problem for `/settings/targets`, fixed the same way (`settings_.targets.tsx`). `/settings/team` and `/settings/export` are still nested under Settings; they just show the Settings page and nothing links to them.
+2. **Month Comparison summed the Happiness Index** (a month of 8, 7, 9, 8 showed 32); it now averages it.
+3. **Portal "This Week's Notes" printed `[object Object]`.** The portal read the notes (C24, C25, L28, L29) as plain text but they are stored as `{ value }` objects. It now reads the text properly, and, like every other portal figure, shows a never-saved week as blank.
 
 ## Behaviours that surprise people
 
@@ -1253,7 +1250,7 @@ This is an honest list. Items marked **Test** were flagged by reading the code a
 22. `custom_targets` in client settings is read but never written.
 23. **Generated types are stale** (`src/integrations/supabase/types.ts` lacks `aha_moments`, `clients.user_id` and a few columns), so some code uses loose typing.
 24. Duplicate and unused code: an older metric catalogue in `src/lib/metrics.ts`, several copies of `fmt` / `readNum` helpers with small differences, and unused components (`StatusBadge`, `AutoSaveBar`).
-25. Month Comparison sums every non-text, non-yes/no metric, which may include sliders (such as Happiness). **Test.** Month-to-date on the client card does not recompute L05, L17, L18 and L26.
+25. Month-to-date on the client card does not recompute L05, L17, L18 and L26 (they are not shown with targets there).
 
 ## Deferred bugs from earlier checks
 
@@ -1322,6 +1319,7 @@ A short history of notable changes (newest first), from the commit history.
 
 | Date | Change |
 |---|---|
+| 11 Nov 2026 | Fixed the client detail page not opening (`/clients/$id`), the Monthly Targets link into Settings → Targets, the Happiness Index being summed in Month Comparison, and `[object Object]` in the portal's This Week's Notes |
 | 11 Nov 2026 | Data Entry field order now matches the dashboard (Lead Gen blocks, InMail and Existing Connections fields, campaign Hot Leads before Meetings); added this Bible |
 | 6 Nov 2026 | Dashboard blocks renamed **MM LinkedIn** and **MM Instagram** |
 | 6 Nov 2026 | **Enwil Meetings** and **Tejas Meetings** trackers (by meeting type) added above the company-total tracker; new `enwil_meetings` / `tejas_meetings` columns |

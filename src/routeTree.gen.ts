@@ -27,10 +27,10 @@ import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as SalesRouteImport } from './routes/sales'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TjPersonalBrandRouteImport } from './routes/tj-personal-brand'
-import { Route as ClientsIdRouteImport } from './routes/clients.$id'
+import { Route as ClientsIdRouteImport } from './routes/clients_.$id'
 import { Route as SettingsExportRouteImport } from './routes/settings.export'
-import { Route as SettingsTargetsRouteImport } from './routes/settings.targets'
 import { Route as SettingsTeamRouteImport } from './routes/settings.team'
+import { Route as SettingsTargetsRouteImport } from './routes/settings_.targets'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -123,18 +123,13 @@ const TjPersonalBrandRoute = TjPersonalBrandRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClientsIdRoute = ClientsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ClientsRoute,
+  id: '/clients_/$id',
+  path: '/clients/$id',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsExportRoute = SettingsExportRouteImport.update({
   id: '/export',
   path: '/export',
-  getParentRoute: () => SettingsRoute,
-} as any)
-const SettingsTargetsRoute = SettingsTargetsRouteImport.update({
-  id: '/targets',
-  path: '/targets',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsTeamRoute = SettingsTeamRouteImport.update({
@@ -142,13 +137,18 @@ const SettingsTeamRoute = SettingsTeamRouteImport.update({
   path: '/team',
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsTargetsRoute = SettingsTargetsRouteImport.update({
+  id: '/settings_/targets',
+  path: '/settings/targets',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/actionables': typeof ActionablesRoute
   '/client-leaderboard': typeof ClientLeaderboardRoute
-  '/clients': typeof ClientsRouteWithChildren
+  '/clients': typeof ClientsRoute
   '/dashboard': typeof DashboardRoute
   '/data-entry': typeof DataEntryRoute
   '/finance': typeof FinanceRoute
@@ -164,15 +164,15 @@ export interface FileRoutesByFullPath {
   '/tj-personal-brand': typeof TjPersonalBrandRoute
   '/clients/$id': typeof ClientsIdRoute
   '/settings/export': typeof SettingsExportRoute
-  '/settings/targets': typeof SettingsTargetsRoute
   '/settings/team': typeof SettingsTeamRoute
+  '/settings/targets': typeof SettingsTargetsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/actionables': typeof ActionablesRoute
   '/client-leaderboard': typeof ClientLeaderboardRoute
-  '/clients': typeof ClientsRouteWithChildren
+  '/clients': typeof ClientsRoute
   '/dashboard': typeof DashboardRoute
   '/data-entry': typeof DataEntryRoute
   '/finance': typeof FinanceRoute
@@ -188,8 +188,8 @@ export interface FileRoutesByTo {
   '/tj-personal-brand': typeof TjPersonalBrandRoute
   '/clients/$id': typeof ClientsIdRoute
   '/settings/export': typeof SettingsExportRoute
-  '/settings/targets': typeof SettingsTargetsRoute
   '/settings/team': typeof SettingsTeamRoute
+  '/settings/targets': typeof SettingsTargetsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -197,7 +197,7 @@ export interface FileRoutesById {
   '/accept-invite': typeof AcceptInviteRoute
   '/actionables': typeof ActionablesRoute
   '/client-leaderboard': typeof ClientLeaderboardRoute
-  '/clients': typeof ClientsRouteWithChildren
+  '/clients': typeof ClientsRoute
   '/dashboard': typeof DashboardRoute
   '/data-entry': typeof DataEntryRoute
   '/finance': typeof FinanceRoute
@@ -211,10 +211,10 @@ export interface FileRoutesById {
   '/sales': typeof SalesRoute
   '/settings': typeof SettingsRouteWithChildren
   '/tj-personal-brand': typeof TjPersonalBrandRoute
-  '/clients/$id': typeof ClientsIdRoute
+  '/clients_/$id': typeof ClientsIdRoute
   '/settings/export': typeof SettingsExportRoute
-  '/settings/targets': typeof SettingsTargetsRoute
   '/settings/team': typeof SettingsTeamRoute
+  '/settings_/targets': typeof SettingsTargetsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -239,8 +239,8 @@ export interface FileRouteTypes {
     | '/tj-personal-brand'
     | '/clients/$id'
     | '/settings/export'
-    | '/settings/targets'
     | '/settings/team'
+    | '/settings/targets'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -263,8 +263,8 @@ export interface FileRouteTypes {
     | '/tj-personal-brand'
     | '/clients/$id'
     | '/settings/export'
-    | '/settings/targets'
     | '/settings/team'
+    | '/settings/targets'
   id:
     | '__root__'
     | '/'
@@ -285,10 +285,10 @@ export interface FileRouteTypes {
     | '/sales'
     | '/settings'
     | '/tj-personal-brand'
-    | '/clients/$id'
+    | '/clients_/$id'
     | '/settings/export'
-    | '/settings/targets'
     | '/settings/team'
+    | '/settings_/targets'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -296,7 +296,7 @@ export interface RootRouteChildren {
   AcceptInviteRoute: typeof AcceptInviteRoute
   ActionablesRoute: typeof ActionablesRoute
   ClientLeaderboardRoute: typeof ClientLeaderboardRoute
-  ClientsRoute: typeof ClientsRouteWithChildren
+  ClientsRoute: typeof ClientsRoute
   DashboardRoute: typeof DashboardRoute
   DataEntryRoute: typeof DataEntryRoute
   FinanceRoute: typeof FinanceRoute
@@ -310,6 +310,8 @@ export interface RootRouteChildren {
   SalesRoute: typeof SalesRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   TjPersonalBrandRoute: typeof TjPersonalBrandRoute
+  ClientsIdRoute: typeof ClientsIdRoute
+  SettingsTargetsRoute: typeof SettingsTargetsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -440,25 +442,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TjPersonalBrandRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/clients/$id': {
-      id: '/clients/$id'
-      path: '/$id'
+    '/clients_/$id': {
+      id: '/clients_/$id'
+      path: '/clients/$id'
       fullPath: '/clients/$id'
       preLoaderRoute: typeof ClientsIdRouteImport
-      parentRoute: typeof ClientsRoute
+      parentRoute: typeof rootRouteImport
     }
     '/settings/export': {
       id: '/settings/export'
       path: '/export'
       fullPath: '/settings/export'
       preLoaderRoute: typeof SettingsExportRouteImport
-      parentRoute: typeof SettingsRoute
-    }
-    '/settings/targets': {
-      id: '/settings/targets'
-      path: '/targets'
-      fullPath: '/settings/targets'
-      preLoaderRoute: typeof SettingsTargetsRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/team': {
@@ -468,29 +463,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsTeamRouteImport
       parentRoute: typeof SettingsRoute
     }
+    '/settings_/targets': {
+      id: '/settings_/targets'
+      path: '/settings/targets'
+      fullPath: '/settings/targets'
+      preLoaderRoute: typeof SettingsTargetsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
-interface ClientsRouteChildren {
-  ClientsIdRoute: typeof ClientsIdRoute
-}
-
-const ClientsRouteChildren: ClientsRouteChildren = {
-  ClientsIdRoute: ClientsIdRoute,
-}
-
-const ClientsRouteWithChildren =
-  ClientsRoute._addFileChildren(ClientsRouteChildren)
-
 interface SettingsRouteChildren {
   SettingsExportRoute: typeof SettingsExportRoute
-  SettingsTargetsRoute: typeof SettingsTargetsRoute
   SettingsTeamRoute: typeof SettingsTeamRoute
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsExportRoute: SettingsExportRoute,
-  SettingsTargetsRoute: SettingsTargetsRoute,
   SettingsTeamRoute: SettingsTeamRoute,
 }
 
@@ -503,7 +492,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcceptInviteRoute: AcceptInviteRoute,
   ActionablesRoute: ActionablesRoute,
   ClientLeaderboardRoute: ClientLeaderboardRoute,
-  ClientsRoute: ClientsRouteWithChildren,
+  ClientsRoute: ClientsRoute,
   DashboardRoute: DashboardRoute,
   DataEntryRoute: DataEntryRoute,
   FinanceRoute: FinanceRoute,
@@ -517,6 +506,8 @@ const rootRouteChildren: RootRouteChildren = {
   SalesRoute: SalesRoute,
   SettingsRoute: SettingsRouteWithChildren,
   TjPersonalBrandRoute: TjPersonalBrandRoute,
+  ClientsIdRoute: ClientsIdRoute,
+  SettingsTargetsRoute: SettingsTargetsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

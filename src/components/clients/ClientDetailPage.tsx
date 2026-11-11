@@ -22,7 +22,7 @@ import { formatWeekDate } from '@/utils/dateUtils'
 
 
 export function ClientDetailPage() {
-  const { id } = useParams({ from: '/clients/$id' })
+  const { id } = useParams({ from: '/clients_/$id' })
   const { isAdmin } = useAuth()
   const [client, setClient] = useState<any>(null)
   const [weeklyData, setWeeklyData] = useState<any[]>([])
