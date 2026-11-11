@@ -377,13 +377,15 @@ Each metric appears as a **card** showing the input, target, weekly and monthly 
 
 **Lead Gen tab**
 
-In order:
+In order (this matches the order of the dashboard's Lead Gen table, so the two always read the same way):
 
-1. **Custom metrics** for this client.
-2. **Existing Connections:** messages sent (L19), replies (L20), hot leads (L22), notes, and an automatic response rate.
-3. **InMail Outreach:** sent (L02), accepted (L03), declined (L04), hot leads (L06), the ICP text (L01), and an automatic acceptance rate.
-4. **Active Campaigns** and **Weekly Totals**.
+1. **InMail Outreach:** the ICP text (L01), sent (L02), accepted (L03), declined (L04), an automatic acceptance rate (L05), hot leads (L06).
+2. **Active Campaigns** and **Weekly Totals** (the connection-request funnel and meetings, L10–L18 and L24).
+3. **Existing Connections:** messages sent (L19), replies (L20), an automatic response rate (L21), hot leads (L22), notes.
+4. **Custom metrics** for this client.
 5. **Qualitative:** what's working, what's blocking, Happiness Index.
+
+Meetings Attended (L25) and Leads Generated (L27) appear on the dashboard but have no input here.
 
 **Campaigns**
 
@@ -1320,6 +1322,7 @@ A short history of notable changes (newest first), from the commit history.
 
 | Date | Change |
 |---|---|
+| 11 Nov 2026 | Data Entry field order now matches the dashboard (Lead Gen blocks, InMail and Existing Connections fields, campaign Hot Leads before Meetings); added this Bible |
 | 6 Nov 2026 | Dashboard blocks renamed **MM LinkedIn** and **MM Instagram** |
 | 6 Nov 2026 | **Enwil Meetings** and **Tejas Meetings** trackers (by meeting type) added above the company-total tracker; new `enwil_meetings` / `tejas_meetings` columns |
 | 5 Nov 2026 | Sticky headers fixed: the app shell now scrolls inside `<main>`; scroll resets on navigation; block headers sit under the top bar |
