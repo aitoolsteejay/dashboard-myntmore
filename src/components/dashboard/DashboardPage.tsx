@@ -17,6 +17,7 @@ import { getPreviousWeekStart, getWeekLabel, getWeeksInSameMonth, isLastWeekOfMo
 import { CampaignMonthTable } from "../monday/CampaignMonthTable"
 import { EditCampaignModal } from "../monday/EditCampaignModal"
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from "@/data/metrics"
+import { orderMetricsByGroup } from "@/utils/metricOrder"
 import { customMetricToMetric } from "@/hooks/useEffectiveMetrics"
 import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS, MM_VIDEO_METRICS } from "@/data/company_metrics"
 import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
@@ -245,7 +246,7 @@ export function DashboardPage() {
     (customMetricsByClient[clientId] ?? []).filter(m => m.category === category)
 
   const activeMetricsFor = (clientId: string, category: 'content' | 'leadgen') => {
-    const metrics = [...(category === 'content' ? CONTENT_METRICS : LEADGEN_METRICS), ...customMetricsFor(clientId, category)]
+    const metrics = orderMetricsByGroup([...(category === 'content' ? CONTENT_METRICS : LEADGEN_METRICS), ...customMetricsFor(clientId, category)])
     const ids = category === 'content'
       ? clientSettings[clientId]?.active_content_metrics
       : clientSettings[clientId]?.active_leadgen_metrics
@@ -676,7 +677,7 @@ export function DashboardPage() {
 
   const WeeklyBreakdown = ({ client, weeks }: { client: any, weeks: any[] }) => {
     const customMetrics = customMetricsByClient[client.id] ?? []
-    const clientMetrics = [...ALL_METRICS, ...customMetrics]
+    const clientMetrics = orderMetricsByGroup([...ALL_METRICS, ...customMetrics])
     // Calculate Monthly Totals
     const monthlyTotals: Record<string, number> = {}
     const monthlyCounts: Record<string, number> = {}
@@ -1008,7 +1009,7 @@ export function DashboardPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {[...ALL_METRICS, ...(customMetricsByClient[client.id] ?? [])].filter(m => m.type !== 'textarea' && m.type !== 'boolean').map(m => (
+                      {orderMetricsByGroup([...ALL_METRICS, ...(customMetricsByClient[client.id] ?? [])]).filter(m => m.type !== 'textarea' && m.type !== 'boolean').map(m => (
                         <TableRow key={m.id} className="h-8">
                           <TableCell className="py-1 text-[11px] font-medium">{m.name}</TableCell>
                           <TableCell className="py-1 text-center text-[11px] text-muted-foreground">

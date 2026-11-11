@@ -759,95 +759,7 @@ function LeadGenCampaignEntry({
 
     return (
         <div className="space-y-6">
-            {/* CUSTOM METRICS — client-specific fields defined in Settings > Metric Fields */}
-            {customLeadgenMetrics.length > 0 && (
-              <div className="bg-white border rounded-xl shadow-sm overflow-hidden mb-8">
-                <div className="px-6 py-4 border-b bg-muted/10">
-                  <h3 className="font-bold text-lg uppercase tracking-tight">Custom Metrics</h3>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Specific to this client</p>
-                </div>
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {customLeadgenMetrics.map(m => (
-                    <MetricCard
-                      key={m.id}
-                      metric={m}
-                      value={formData[m.id]?.value}
-                      onChange={(v) => handleMetricChange(m.id, 'value', v)}
-                      onNoteChange={(n) => handleMetricChange(m.id, 'note', n)}
-                      note={formData[m.id]?.note}
-                      allValues={Object.entries(formData).reduce((acc, [k, v]: [string, any]) => ({ ...acc, [k]: v.value }), {})}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* EXISTING CONNECTIONS */}
-            <div className="bg-white border rounded-xl shadow-sm overflow-hidden mb-8">
-                <div className="px-6 py-4 border-b bg-muted/10 flex justify-between items-center">
-                    <div>
-                        <h3 className="font-bold text-lg uppercase tracking-tight">Existing Connections</h3>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Client Level Outreach</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {contentSaveStatus === 'saving' && <span className="text-xs text-muted-foreground">Saving…</span>}
-                        {contentSaveStatus === 'saved' && <span className="text-xs text-green-600 font-bold">✓ Saved</span>}
-                        {contentSaveStatus === 'error' && <span className="text-xs text-red-600 font-bold">⚠ Error</span>}
-                    </div>
-                </div>
-                <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Messages Sent</Label>
-                                    <Input
-                                        type="number"
-                                        placeholder="-"
-                                        value={existingConnSent}
-                                        onChange={(e) => handleExistingConnChange('sent', e.target.value)}
-                                        className="h-10"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Replies</Label>
-                                    <Input
-                                        type="number"
-                                        placeholder="-"
-                                        value={existingConnReplied}
-                                        onChange={(e) => handleExistingConnChange('replied', e.target.value)}
-                                        className="h-10"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Existing Connections Hot Leads</Label>
-                                    <Input
-                                        type="number"
-                                        placeholder="-"
-                                        value={existingConnHotLeads}
-                                        onChange={(e) => handleExistingConnChange('hotLeads', e.target.value)}
-                                        className="h-10"
-                                    />
-                                </div>
-                            </div>
-                            <div style={{ background: '#F9F9F9', border: '1px solid #E5E5E5', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', color: '#666', fontStyle: 'italic' }}>
-                                Response Rate: <strong style={{ color: '#000' }}>{existingRespRate}</strong>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Notes</Label>
-                            <Textarea 
-                                placeholder="Notes about existing connections outreach..." 
-                                value={existingConnNotes} 
-                                onChange={(e: any) => handleExistingConnChange('notes', e.target.value)}
-                                className="h-[120px] resize-none"
-                            />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* INMAIL OUTREACH */}
+            {/* INMAIL OUTREACH — same field order as the dashboard: ICP, sent, accepted, declined, acceptance rate, hot leads */}
             <div className="bg-white border rounded-xl shadow-sm overflow-hidden mb-8">
                 <div className="px-6 py-4 border-b bg-muted/10 flex justify-between items-center">
                     <div>
@@ -860,63 +772,36 @@ function LeadGenCampaignEntry({
                         {contentSaveStatus === 'error' && <span className="text-xs text-red-600 font-bold">⚠ Error</span>}
                     </div>
                 </div>
-                <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">InMails Sent</Label>
-                                    <Input
-                                        type="number"
-                                        placeholder="-"
-                                        value={inmailSent}
-                                        onChange={(e) => handleInmailChange('sent', e.target.value)}
-                                        className="h-10"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">InMails Accepted</Label>
-                                    <Input
-                                        type="number"
-                                        placeholder="-"
-                                        value={inmailAccepted}
-                                        onChange={(e) => handleInmailChange('accepted', e.target.value)}
-                                        className="h-10"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">InMails Declined</Label>
-                                    <Input
-                                        type="number"
-                                        placeholder="-"
-                                        value={inmailDeclined}
-                                        onChange={(e) => handleInmailChange('declined', e.target.value)}
-                                        className="h-10"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">InMail Hot Leads</Label>
-                                    <Input
-                                        type="number"
-                                        placeholder="-"
-                                        value={inmailHotLeads}
-                                        onChange={(e) => handleInmailChange('hotLeads', e.target.value)}
-                                        className="h-10"
-                                    />
-                                </div>
-                            </div>
-                            <div style={{ background: '#F9F9F9', border: '1px solid #E5E5E5', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', color: '#666', fontStyle: 'italic' }}>
-                                Acceptance Rate: <strong style={{ color: '#000' }}>{inmailAcceptRate}</strong>
-                            </div>
+                <div className="p-6 space-y-6">
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">ICP Targeted</Label>
+                        <Textarea
+                            placeholder="Describe the ICP targeted for InMail outreach..."
+                            value={inmailTargeted}
+                            onChange={(e: any) => handleInmailChange('targeted', e.target.value)}
+                            className="h-[90px] resize-none"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">InMails Sent</Label>
+                            <Input type="number" placeholder="-" value={inmailSent} onChange={(e) => handleInmailChange('sent', e.target.value)} className="h-10" />
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">ICP Targeted</Label>
-                            <Textarea
-                                placeholder="Describe the ICP targeted for InMail outreach..."
-                                value={inmailTargeted}
-                                onChange={(e: any) => handleInmailChange('targeted', e.target.value)}
-                                className="h-[120px] resize-none"
-                            />
+                            <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">InMails Accepted</Label>
+                            <Input type="number" placeholder="-" value={inmailAccepted} onChange={(e) => handleInmailChange('accepted', e.target.value)} className="h-10" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">InMails Declined</Label>
+                            <Input type="number" placeholder="-" value={inmailDeclined} onChange={(e) => handleInmailChange('declined', e.target.value)} className="h-10" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Acceptance Rate</Label>
+                            <div className="h-10 rounded-md border bg-muted/30 px-3 flex items-center text-sm font-black">{inmailAcceptRate}</div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">InMail Hot Leads</Label>
+                            <Input type="number" placeholder="-" value={inmailHotLeads} onChange={(e) => handleInmailChange('hotLeads', e.target.value)} className="h-10" />
                         </div>
                     </div>
                 </div>
@@ -1311,12 +1196,12 @@ function LeadGenCampaignEntry({
                                                     <Label className="text-[10px] font-bold uppercase text-muted-foreground">Results</Label>
                                                     <div className="grid grid-cols-2 gap-2">
                                                         <div className="space-y-1">
-                                                            <Label className="text-[9px] uppercase">Meetings</Label>
-                                                            <Input type="number" placeholder="-" value={data.meetings_booked ?? ''} onChange={(e) => handleCampaignChange(campaign.id, 'meetings_booked', e.target.value)} />
-                                                        </div>
-                                                        <div className="space-y-1">
                                                             <Label className="text-[9px] uppercase">Hot Leads</Label>
                                                             <Input type="number" placeholder="-" value={data.hot_leads ?? ''} onChange={(e) => handleCampaignChange(campaign.id, 'hot_leads', e.target.value)} />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[9px] uppercase">Meetings</Label>
+                                                            <Input type="number" placeholder="-" value={data.meetings_booked ?? ''} onChange={(e) => handleCampaignChange(campaign.id, 'meetings_booked', e.target.value)} />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1390,6 +1275,73 @@ function LeadGenCampaignEntry({
                     </div>
                 </div>
               </>
+            )}
+
+            {/* EXISTING CONNECTIONS — same field order as the dashboard: sent, answered, response rate, hot leads, notes */}
+            <div className="bg-white border rounded-xl shadow-sm overflow-hidden mb-8">
+                <div className="px-6 py-4 border-b bg-muted/10 flex justify-between items-center">
+                    <div>
+                        <h3 className="font-bold text-lg uppercase tracking-tight">Existing Connections</h3>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Client Level Outreach</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {contentSaveStatus === 'saving' && <span className="text-xs text-muted-foreground">Saving…</span>}
+                        {contentSaveStatus === 'saved' && <span className="text-xs text-green-600 font-bold">✓ Saved</span>}
+                        {contentSaveStatus === 'error' && <span className="text-xs text-red-600 font-bold">⚠ Error</span>}
+                    </div>
+                </div>
+                <div className="p-6 space-y-6">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Messages Sent</Label>
+                            <Input type="number" placeholder="-" value={existingConnSent} onChange={(e) => handleExistingConnChange('sent', e.target.value)} className="h-10" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Replies</Label>
+                            <Input type="number" placeholder="-" value={existingConnReplied} onChange={(e) => handleExistingConnChange('replied', e.target.value)} className="h-10" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Response Rate</Label>
+                            <div className="h-10 rounded-md border bg-muted/30 px-3 flex items-center text-sm font-black">{existingRespRate}</div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Existing Connections Hot Leads</Label>
+                            <Input type="number" placeholder="-" value={existingConnHotLeads} onChange={(e) => handleExistingConnChange('hotLeads', e.target.value)} className="h-10" />
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Notes</Label>
+                        <Textarea
+                            placeholder="Notes about existing connections outreach..."
+                            value={existingConnNotes}
+                            onChange={(e: any) => handleExistingConnChange('notes', e.target.value)}
+                            className="h-[90px] resize-none"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* CUSTOM METRICS — client-specific fields defined in Settings > Metric Fields */}
+            {customLeadgenMetrics.length > 0 && (
+              <div className="bg-white border rounded-xl shadow-sm overflow-hidden mb-8">
+                <div className="px-6 py-4 border-b bg-muted/10">
+                  <h3 className="font-bold text-lg uppercase tracking-tight">Custom Metrics</h3>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Specific to this client</p>
+                </div>
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {customLeadgenMetrics.map(m => (
+                    <MetricCard
+                      key={m.id}
+                      metric={m}
+                      value={formData[m.id]?.value}
+                      onChange={(v) => handleMetricChange(m.id, 'value', v)}
+                      onNoteChange={(n) => handleMetricChange(m.id, 'note', n)}
+                      note={formData[m.id]?.note}
+                      allValues={Object.entries(formData).reduce((acc, [k, v]: [string, any]) => ({ ...acc, [k]: v.value }), {})}
+                    />
+                  ))}
+                </div>
+              </div>
             )}
 
             <Dialog open={calibrateOpen} onOpenChange={setCalibrateOpen}>
