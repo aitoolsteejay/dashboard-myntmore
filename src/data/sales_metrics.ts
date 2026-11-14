@@ -1,4 +1,5 @@
 import type { CompanyMetric } from './company_metrics'
+import { MEETING_TRACKERS, meetingTrackerFields } from './meetingTrackers'
 
 // Sales & Outreach metric catalog. Ids/labels mirror the inputs on SalesPage.tsx
 // (the source of truth for what each SO## field means). Each section maps to one
@@ -59,20 +60,12 @@ export const SALES_SECTIONS: SalesSection[] = [
       p('SO54', 'Positive Reply Rate'), n('SO55', 'Replied with OOO', { hasTarget: true }),
     ],
   },
-  {
-    key: 'enwil_meetings', title: 'Enwil Meetings',
-    metrics: [
-      n('SE01', 'Booked via LinkedIn'), n('SE02', 'Booked via Cold Email'), n('SE03', 'Booked via Referral'),
-      n('SE04', 'Booked via Other'), n('SE05', 'Booked via Website | AI'), n('SE06', 'Total Meetings Booked'),
-    ],
-  },
-  {
-    key: 'tejas_meetings', title: 'Tejas Meetings',
-    metrics: [
-      n('ST01', 'Booked via LinkedIn'), n('ST02', 'Booked via Cold Email'), n('ST03', 'Booked via Referral'),
-      n('ST04', 'Booked via Other'), n('ST05', 'Booked via Website | AI'), n('ST06', 'Total Meetings Booked'),
-    ],
-  },
+  ...MEETING_TRACKERS.map(cfg => ({
+    key: cfg.key,
+    title: cfg.title,
+    metrics: meetingTrackerFields(cfg).map(f =>
+      f.kind === 'rate' ? p(f.id, f.label) : n(f.id, f.label, f.unit ? { unit: f.unit } : {})),
+  })),
   {
     // Whole-company totals (Enwil + Tejas + everyone else), per meeting type.
     key: 'meeting_tracker', title: 'Meeting Tracker (Company Total)',

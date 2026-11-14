@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client'
 import { SALES_SECTIONS } from '@/data/sales_metrics'
 import { SALES_RATE_DEPENDENCIES } from './salesRates'
+import { MEETING_TRACKER_AVG_DEAL } from '@/data/meetingTrackers'
 import { CUMULATIVE_METRIC_IDS, AVERAGED_NUMBER_IDS } from '@/data/metricSemantics'
 import { computeLifetimeHighs, type LifetimeHighs, type RatePair } from './lifetimeHighs'
 
@@ -13,6 +14,7 @@ export type SalesLifetimeHighs = LifetimeHighs
 const RATE_PAIRS: Record<string, RatePair> = {
   ...Object.fromEntries(Object.entries(SALES_RATE_DEPENDENCIES).map(([id, [num, den]]) => [id, [num, den, 100] as RatePair])),
   SO48: ['SO49', 'SO46', 1],
+  ...Object.fromEntries(MEETING_TRACKER_AVG_DEAL.map(([avg, revenue, conversions]) => [avg, [revenue, conversions, 1] as RatePair])),
 }
 
 export async function fetchSalesLifetimeHighs(): Promise<SalesLifetimeHighs> {

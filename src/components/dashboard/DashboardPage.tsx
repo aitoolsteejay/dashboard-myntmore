@@ -18,6 +18,7 @@ import { CampaignMonthTable } from "../monday/CampaignMonthTable"
 import { EditCampaignModal } from "../monday/EditCampaignModal"
 import { CONTENT_METRICS, LEADGEN_METRICS, ALL_METRICS, Metric } from "@/data/metrics"
 import { orderMetricsByGroup } from "@/utils/metricOrder"
+import { MEETING_TRACKERS } from "@/data/meetingTrackers"
 import { customMetricToMetric } from "@/hooks/useEffectiveMetrics"
 import { MM_LINKEDIN_METRICS, MM_INSTAGRAM_METRICS, MM_WEBSITE_METRICS, MM_SEO_METRICS, MM_OTHER_METRICS, MM_ADS_METRICS, MM_VIDEO_METRICS } from "@/data/company_metrics"
 import { useEffectiveTjMetrics } from "@/hooks/useEffectiveTjMetrics"
@@ -1106,6 +1107,19 @@ export function DashboardPage() {
           out.SO40 = (out.SO40 ?? 0) + ['SO36', 'SO37', 'SO38', 'SO39', 'SO56'].reduce((sum, id) => sum + num(id), 0)
         }
         if (!has('SO49') && (has('SO46') || has('SO48'))) out.SO49 = (out.SO49 ?? 0) + num('SO46') * num('SO48')
+      }
+      // Same for the Enwil / Tejas trackers: derive the total and revenue for a week that has
+      // the raw inputs but no stored derived value.
+      const tracker = MEETING_TRACKERS.find(t => t.key === section)
+      if (tracker) {
+        const num = (id: string) => { const v = Number((sec as any)[id]); return isNaN(v) ? 0 : v }
+        const has = (id: string) => (sec as any)[id] !== undefined && (sec as any)[id] !== null && (sec as any)[id] !== ''
+        if (!has(tracker.totalId) && tracker.sources.some(s => has(s.id))) {
+          out[tracker.totalId] = (out[tracker.totalId] ?? 0) + tracker.sources.reduce((sum, s) => sum + num(s.id), 0)
+        }
+        if (!has(tracker.revenueId) && (has(tracker.conversionsId) || has(tracker.avgDealId))) {
+          out[tracker.revenueId] = (out[tracker.revenueId] ?? 0) + num(tracker.conversionsId) * num(tracker.avgDealId)
+        }
       }
     }
     // Weekly rate fields (acceptance/reply/completion/conversion %) were being

@@ -318,7 +318,7 @@ Blocks, in order:
 7. **Tejas Meetings**
 8. **Meeting Tracker (Company Total)**
 
-The three meeting blocks sit together. Enwil and Tejas each show meetings booked by type (LinkedIn, Cold Email, Referral, Other, Website | AI) plus a total. The **Company Total** block is the whole company's meetings by type, plus Completed, No-Show, Completion Rate, Proposals, Follow-ups, Conversions, Conversion Rate, Average Deal Size and Total Revenue (₹). The company total is **entered by hand**; it is not calculated from the Enwil and Tejas blocks.
+The three meeting blocks sit together. **Enwil** and **Tejas** each have the same fields as the Company Total tracker (below), with their own meeting sources: Enwil = LinkedIn, Cold Email, Referral, Website | AI, WA; Tejas = LinkedIn, Cold Email, Referral, Website | AI, WA, TJ. The **Company Total** block is the whole company's meetings by source (LinkedIn, Cold Email, Referral, Other, Website | AI), plus Completed, No-Show, Completion Rate, Proposals, Follow-ups, Conversions, Conversion Rate, Average Deal Size and Total Revenue (₹). The company total is **entered by hand**; it is not calculated from the Enwil and Tejas blocks.
 
 Only the Cold Emailing counts (SO50, SO51, SO53, SO55) have targets.
 
@@ -735,11 +735,11 @@ Stored once per week in `sales_weekly_data`, one column per section. Values are 
 | **Shirin Outreach** (`shirin_outreach`) | SO18 InMail ICP (text) · SO19 InMails Sent · SO20 InMails Accepted · SO21 InMail Acceptance Rate % · SO22 LinkedIn Conn Requests Sent · SO23 LinkedIn Accepted · SO24 LinkedIn Acceptance Rate % · SO25 Answered · SO26 Response Rate % · SO27 Hot Leads · SO28 Negative Replies |
 | **Cold Email — Waalaxy** (`cold_email`) | SO29 Emails Sent · SO30 Emails Opened · SO31 Open Rate % · SO32 Replies Received · SO33 Positive Replies (Hot Leads) · SO34 Negative Replies · SO35 Response Rate % |
 | **Cold Emailing** (also `cold_email`) | SO50 Emails Sent (Week) · SO51 Replies · SO52 Reply Rate % · SO53 Positive Replies · SO54 Positive Reply Rate % · SO55 Replied with OOO — these four counts (SO50, 51, 53, 55) can have targets |
-| **Enwil Meetings** (`enwil_meetings`) | SE01 Booked via LinkedIn · SE02 via Cold Email · SE03 via Referral · SE04 via Other · SE05 via Website \| AI · SE06 Total (auto) |
-| **Tejas Meetings** (`tejas_meetings`) | ST01–ST05 (same five sources) · ST06 Total (auto) |
+| **Enwil Meetings** (`enwil_meetings`) | SE01 Booked via LinkedIn · SE02 via Cold Email · SE03 via Referral · SE05 via Website \| AI · SE07 via WA · SE06 Total Meetings Booked (auto) · SE08 Meetings Completed · SE09 No-Show / Rescheduled · SE10 Completion Rate % (auto) · SE11 Proposals Sent · SE12 Follow-ups Sent · SE13 Conversions (New Clients) · SE14 Conversion Rate % (auto) · SE15 Average Deal Size ₹ · SE16 Total Revenue Closed ₹ (auto = SE13 × SE15). *SE04 "Booked via Other" is retired: kept in old rows, no longer shown or counted.* |
+| **Tejas Meetings** (`tejas_meetings`) | ST01 Booked via LinkedIn · ST02 via Cold Email · ST03 via Referral · ST05 via Website \| AI · ST07 via WA · ST08 via TJ · ST06 Total Meetings Booked (auto) · ST09 Meetings Completed · ST10 No-Show / Rescheduled · ST11 Completion Rate % (auto) · ST12 Proposals Sent · ST13 Follow-ups Sent · ST14 Conversions (New Clients) · ST15 Conversion Rate % (auto) · ST16 Average Deal Size ₹ · ST17 Total Revenue Closed ₹ (auto = ST14 × ST16). *ST04 "Booked via Other" is retired.* |
 | **Meeting Tracker (Company Total)** (`meeting_tracker`) | SO36 via LinkedIn · SO37 via Cold Email · SO38 via Referral · SO39 via Other · SO56 via Website \| AI · SO40 Total Booked (auto) · SO41 Completed · SO42 No-Show / Rescheduled · SO43 Completion Rate % (auto) · SO44 Proposals Sent · SO45 Follow-ups Sent · SO46 Conversions (New Clients) · SO47 Conversion Rate % (auto) · SO48 Average Deal Size ₹ · SO49 Total Revenue Closed ₹ (auto = SO46 × SO48) |
 
-The meeting "types" are the five sources: **LinkedIn, Cold Email, Referral, Other, Website | AI.**
+The meeting "types" are the sources. Company Total: **LinkedIn, Cold Email, Referral, Other, Website | AI.** Enwil: LinkedIn, Cold Email, Referral, Website | AI, **WA**. Tejas: LinkedIn, Cold Email, Referral, Website | AI, **WA, TJ**. (The definitions for Enwil and Tejas live in `src/data/meetingTrackers.ts`.)
 
 ## 5.6 Which metrics does a client get?
 
@@ -936,6 +936,7 @@ Run SQL in the **Supabase SQL editor**. Almost all files are safe to re-run; the
 | `add_custom_metrics.sql` | Creates the per-client custom metrics table |
 | `add_tj_custom_metrics.sql` | Creates the TJ custom metrics table |
 | `add_enwil_tejas_meetings.sql` | Adds the Enwil and Tejas meeting columns to the sales table |
+| `enwil_tejas_meetings_new_fields.sql` | After the Enwil/Tejas trackers got the full field set and new sources: shows weeks with a number under the retired "Other", then recalculates stored totals (choose to move "Other" into WA or drop it) |
 | `add_mm_ads_column.sql` | Adds the MM Ads column |
 | `add_mm_video_pipeline.sql` | Adds the MM Video Pipeline column |
 | `add_monthly_high_scores.sql` | Adds best-month columns to high scores |
@@ -1233,7 +1234,7 @@ This is an honest list, built from reading the code. The live app could not be s
 8. **Cleared targets save as 0**, not blank. Company targets (Sales/TJ/MM) are saved by deleting and re-inserting.
 9. **Records are never lowered** (Part 6.5), so a wrong record stays until corrected in the database. The dashboard also re-scans every client's whole history on each load (slower as data grows).
 10. **Sales tab "Dashboard"** uses the real current month and ignores the Enwil and Tejas blocks.
-11. **The Company Total meeting tracker is typed in**, not the sum of Enwil + Tejas + others.
+11. **The Company Total meeting tracker is typed in**, not the sum of Enwil + Tejas + others. It still has the source "Other" and does not have WA or TJ.
 12. **Team Submission Status** only lists people who have assigned clients.
 13. **The week picker uses the browser time zone** for the Monday calculation; "today" logic uses IST.
 14. **Clients page seeds 8 sample clients** automatically if the clients table is ever empty.
@@ -1319,6 +1320,7 @@ A short history of notable changes (newest first), from the commit history.
 
 | Date | Change |
 |---|---|
+| 14 Nov 2026 | Enwil and Tejas meeting trackers now have the full Company-Total field set (completed, no-show, rates, proposals, conversions, deal size, revenue); "Other" retired; Enwil gains **WA**, Tejas gains **WA** and **TJ** |
 | 11 Nov 2026 | Fixed the client detail page not opening (`/clients/$id`), the Monthly Targets link into Settings → Targets, the Happiness Index being summed in Month Comparison, and `[object Object]` in the portal's This Week's Notes |
 | 11 Nov 2026 | Data Entry field order now matches the dashboard (Lead Gen blocks, InMail and Existing Connections fields, campaign Hot Leads before Meetings); added this Bible |
 | 6 Nov 2026 | Dashboard blocks renamed **MM LinkedIn** and **MM Instagram** |

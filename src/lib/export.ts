@@ -1,4 +1,5 @@
 import { LOWER_IS_BETTER_METRIC_IDS } from '@/data/metricSemantics'
+import { MEETING_TRACKERS, meetingTrackerFields } from '@/data/meetingTrackers'
 import { supabase } from "@/integrations/supabase/client"
 import writeExcelFile from 'write-excel-file/browser'
 import { CONTENT_METRICS, LEADGEN_METRICS } from "@/data/metrics"
@@ -277,19 +278,11 @@ function buildSalesSheet(rows: any[]) {
     SO53: 'Cold Emailing: Positive Replies',
     SO54: 'Cold Emailing: Positive Reply Rate %',
     SO55: 'Cold Emailing: Replied with OOO',
-    // Enwil / Tejas meetings by type
-    SE01: 'Enwil Meetings: Via LinkedIn',
-    SE02: 'Enwil Meetings: Via Cold Email',
-    SE03: 'Enwil Meetings: Via Referral',
-    SE04: 'Enwil Meetings: Via Other',
-    SE05: 'Enwil Meetings: Via Website | AI',
-    SE06: 'Enwil Meetings: Total Booked',
-    ST01: 'Tejas Meetings: Via LinkedIn',
-    ST02: 'Tejas Meetings: Via Cold Email',
-    ST03: 'Tejas Meetings: Via Referral',
-    ST04: 'Tejas Meetings: Via Other',
-    ST05: 'Tejas Meetings: Via Website | AI',
-    ST06: 'Tejas Meetings: Total Booked',
+    // Enwil / Tejas meeting trackers (same fields as the company total). SE04 / ST04 are the retired "Other" source.
+    SE04: 'Enwil Meetings: Via Other (retired)',
+    ST04: 'Tejas Meetings: Via Other (retired)',
+    ...Object.fromEntries(MEETING_TRACKERS.flatMap(cfg =>
+      meetingTrackerFields(cfg).map(f => [f.id, `${cfg.title}: ${f.label}${f.unit && f.kind === 'input' ? ` (${f.unit})` : ''}`]))),
     // Meeting Tracker (company total)
     SO36: 'Meetings: Via LinkedIn',
     SO37: 'Meetings: Via Cold Email',

@@ -34,6 +34,8 @@ export const LOWER_IS_BETTER_METRIC_IDS: ReadonlySet<string> = new Set([
   'TJP13',
   'MMA04', 'MMA06', 'MMA09', 'MMA10', 'MMW04',
   'SO08', 'SO17', 'SO28', 'SO34', 'SO42',
+  // No-Show / Rescheduled in the Enwil and Tejas meeting trackers (MEETING_TRACKER_NO_SHOW_IDS)
+  'SE09', 'ST10',
 ])
 
 // Rolls a list of per-week readings (oldest first, blanks already removed) up

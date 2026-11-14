@@ -3,6 +3,8 @@
 // must recompute them from the summed raw fields — summing the weekly rates
 // themselves (the previous behavior) reads far above 100% for a month.
 // Ids are unique across sections, so one flat map covers all of them.
+import { MEETING_TRACKER_RATE_PAIRS, MEETING_TRACKER_AVG_DEAL } from '@/data/meetingTrackers'
+
 export const SALES_RATE_DEPENDENCIES: Record<string, [string, string]> = {
   SO04: ['SO03', 'SO02'],
   SO06: ['SO05', 'SO03'],
@@ -17,7 +19,12 @@ export const SALES_RATE_DEPENDENCIES: Record<string, [string, string]> = {
   SO54: ['SO53', 'SO51'],
   SO43: ['SO41', 'SO40'],
   SO47: ['SO46', 'SO40'],
+  ...MEETING_TRACKER_RATE_PAIRS,
 }
+
+// [average deal id, revenue id, conversions id]: a multi-week average deal size is
+// total revenue ÷ total conversions, never a sum of weekly averages.
+const AVG_DEAL_PAIRS: [string, string, string][] = [['SO48', 'SO49', 'SO46'], ...MEETING_TRACKER_AVG_DEAL]
 
 // Mutates and returns `totals` (a summed section): replaces each rate with
 // numerator/denominator from the summed raw fields. Same rounding as the
@@ -31,11 +38,12 @@ export function applySalesRates(totals: Record<string, number>): Record<string, 
   }
   // Average deal size summed across weeks is meaningless; derive it from
   // total revenue (SO49) / total conversions (SO46) instead.
-  if (totals.SO48 !== undefined) {
-    if ((totals.SO46 ?? 0) > 0 && totals.SO49 !== undefined) {
-      totals.SO48 = Math.round(totals.SO49 / totals.SO46)
+  for (const [avgId, revenueId, conversionsId] of AVG_DEAL_PAIRS) {
+    if (totals[avgId] === undefined) continue
+    if ((totals[conversionsId] ?? 0) > 0 && totals[revenueId] !== undefined) {
+      totals[avgId] = Math.round(totals[revenueId] / totals[conversionsId])
     } else {
-      delete totals.SO48
+      delete totals[avgId]
     }
   }
   return totals
